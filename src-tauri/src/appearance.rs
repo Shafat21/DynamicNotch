@@ -73,9 +73,9 @@ pub const THEMES: [Theme; 7] = [
     th("Pure black", "#000000", "#000000", "#1a1a1a", "#4f8cff"),
 ];
 
-pub const TAB_IDS: &[&str] = &["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes"];
-pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes"];
-const HOME_DEFAULT_VISIBLE: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "notes"];
+pub const TAB_IDS: &[&str] = &["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders"];
+pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders"];
+const HOME_DEFAULT_VISIBLE: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "notes", "reminders"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LayoutItem {
@@ -237,8 +237,9 @@ mod tests {
         assert_eq!(l.home.len(), HOME_IDS.len());
         // a stored layout without newer ids gets them appended with their default visibility
         let old = normalize_layout(Layout { tabs: vec![LayoutItem { id: "home".into(), visible: true }], home: vec![LayoutItem { id: "clock".into(), visible: true }] });
-        assert!(old.tabs.last().unwrap().visible && old.tabs.last().unwrap().id == "notes");
+        assert!(old.tabs.last().unwrap().visible && old.tabs.last().unwrap().id == "reminders");
         assert!(old.home.iter().find(|h| h.id == "notes").unwrap().visible);
+        assert!(old.home.iter().find(|h| h.id == "reminders").unwrap().visible);
         assert!(!old.home.iter().find(|h| h.id == "system").unwrap().visible); // other ids keep their (hidden) default
     }
     #[test]
@@ -253,7 +254,7 @@ mod tests {
         let (a, l) = load(&db);
         assert_eq!(a.shape, "notch");
         assert!(l.tabs.iter().all(|t| t.visible));
-        assert_eq!(l.home.iter().filter(|h| h.visible).count(), 7);
+        assert_eq!(l.home.iter().filter(|h| h.visible).count(), 8);
         db.set("appearance", "{not json").unwrap();
         assert_eq!(load(&db).0, Appearance::default());
         let a2 = merge_patch(&a, &json!({"theme": "Rose"}));

@@ -9,6 +9,7 @@ import {
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
 import { initNotes, showNotes } from "./notes";
+import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
@@ -21,9 +22,9 @@ type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: stri
 type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
-type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean };
+type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
 type Display = { uiScale: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
-type State = "idle" | "hover" | "notify" | "prompt";
+type State = "idle" | "hover" | "notify" | "prompt" | "reminder";
 
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
@@ -81,6 +82,7 @@ function targetSize(): [number, number] {
   if (ui.state === "idle") return [idleWidth(), a.collapsedH];
   if (ui.state === "notify") return [380, a.collapsedH];
   if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
+  if (ui.state === "reminder") return [640, 76];
   return [a.openW, a.openH]; // every tab shares the open size; long pages scroll
 }
 
@@ -166,7 +168,7 @@ function setState(s: State): void {
 }
 
 function showEvent(title: string, text: string, ms: number, mood: PalMood | null = null): void {
-  if (ui.hidden || ui.state === "prompt") return; // pops are dropped, not queued; a prompt wins
+  if (ui.hidden || ui.state === "prompt" || ui.state === "reminder") return; // pops are dropped, not queued; a prompt / reminder wins
   ui.event = { title, text, mood };
   clearTimeout(revertTimer);
   if (ui.state === "notify") transition();
@@ -226,8 +228,11 @@ function renderCalendar(): void {
 function renderView(): void {
   const hover = ui.state === "hover";
   const prompt = ui.state === "prompt";
+  const reminder = ui.state === "reminder";
   const t = ui.tab;
-  $("header").hidden = hover || prompt;
+  $("header").hidden = hover || prompt || reminder;
+  $("reminder").hidden = !reminder;
+  chime(reminder ? currentDue()?.id ?? null : null);
   $("open").hidden = !hover && !prompt;
   $("prompt").hidden = !prompt;
   $("pages").hidden = prompt; // the prompt state is sized for the prompt alone
@@ -242,6 +247,7 @@ function renderView(): void {
   if (hover && (t === "tasks" || t === "home")) renderTasks(ui.tasks);
   if (hover && t === "month") renderMonth();
   if (hover && t === "notes") showNotes();
+  if (hover && t === "reminders") showReminders();
   renderHeader();
   renderClock();
 }
@@ -418,7 +424,7 @@ function onFullscreen(hidden: boolean): void {
   ui.hovering = false;
   setPinned(false);
   closeMore();
-  ui.state = "idle";
+  ui.state = !hidden && currentDue() ? "reminder" : "idle"; // reminders due meanwhile show once it's back
   if (look().openOn === "home") ui.tab = "home";
   transition(); // also sends the (empty or normal) hit rect
 }
@@ -426,7 +432,7 @@ function onFullscreen(hidden: boolean): void {
 function onHover(inside: boolean): void {
   if (ui.hidden) return;
   ui.hovering = inside;
-  if (ui.state === "notify" || ui.state === "prompt") return;
+  if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder") return;
   clearTimeout(revertTimer);
   if (inside) setState("hover");
   else if (ui.state === "hover" && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 1200);
@@ -449,8 +455,22 @@ function onPrompt(p: Prompt): void {
 
 function onPromptClosed(id: number): void {
   if (!closePrompt(id) || ui.state !== "prompt") return;
-  if (currentPrompt()) transition(); // the next queued one
-  else setState(ui.hovering || ui.pinned ? "hover" : "idle");
+  settle();
+}
+
+/** After a prompt or reminder is answered: the next prompt, then the next reminder, then hover/idle. */
+function settle(): void {
+  const next: State = currentPrompt() ? "prompt" : currentDue() ? "reminder" : ui.hovering || ui.pinned ? "hover" : "idle";
+  if (next === ui.state) transition(); // the next queued one
+  else setState(next);
+}
+
+// ---------- reminders ----------
+/** Banner stays until Snooze / Done; below a Claude Code prompt, and held back while hidden. */
+function onReminderDue(d: Due): void {
+  if (!addDue(d) || ui.hidden || ui.state === "prompt") return; // shown when the prompt closes / fullscreen ends
+  clearTimeout(revertTimer);
+  setState("reminder");
 }
 
 function openLocationEditor(): void {
@@ -575,6 +595,7 @@ function wireInput(): void {
   wirePlayer();
 
   initNotes();
+  initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });
 
   // tasks
   const toggleEditor = () => {
@@ -692,6 +713,7 @@ async function boot(): Promise<void> {
     listen<Prompt>("prompt", (e) => onPrompt(e.payload)),
     listen<{ id: number }>("prompt-closed", (e) => onPromptClosed(e.payload.id)),
     listen<boolean>("fullscreen", (e) => onFullscreen(e.payload)),
+    listen<Due>("reminder-due", (e) => onReminderDue(e.payload)),
     listen("charging", onCharging),
     listen<LauncherApp[]>("apps", (e) => updateApps(Promise.resolve(e.payload))), // changed in the Settings window
   ]);
@@ -713,6 +735,7 @@ async function boot(): Promise<void> {
 
   ui.tasks = await invoke<Task[]>("list_tasks");
   onSettings(await invoke<Settings>("get_settings"));
+  for (const d of await overdue()) onReminderDue(d); // missed while closed, or emitted before this page listened
 
   window.setInterval(() => {
     if (ui.state === "idle") renderHeader();

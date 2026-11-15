@@ -2,6 +2,7 @@
 //! Schema version lives in `PRAGMA user_version`; add a new `if version < N` block to migrate.
 
 use crate::notes::Note;
+use crate::reminders::{Reminder, Repeat};
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::Serialize;
 use std::path::Path;
@@ -32,6 +33,7 @@ pub struct Settings {
     pub display: String,
     pub island_size: String,
     pub hide_fullscreen: bool,
+    pub reminder_sound: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -133,6 +135,22 @@ impl Db {
                  COMMIT;",
             )?;
         }
+        if version < 4 {
+            self.conn.execute_batch(
+                "BEGIN;
+                 CREATE TABLE reminders (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     text TEXT NOT NULL,
+                     due_at INTEGER NOT NULL,
+                     repeat TEXT NOT NULL DEFAULT 'none' CHECK (repeat IN ('none','daily','weekdays','weekly')),
+                     done INTEGER NOT NULL DEFAULT 0,
+                     snooze_until INTEGER,
+                     done_at INTEGER
+                 );
+                 PRAGMA user_version = 4;
+                 COMMIT;",
+            )?;
+        }
         Ok(())
     }
 
@@ -200,6 +218,59 @@ impl Db {
         Ok(())
     }
 
+    const REMINDER_COLS: &'static str = "SELECT id, text, due_at, repeat, done, snooze_until, done_at FROM reminders";
+
+    fn reminder_row(r: &rusqlite::Row) -> Result<Reminder> {
+        Ok(Reminder {
+            id: r.get(0)?,
+            text: r.get(1)?,
+            due_at: r.get(2)?,
+            repeat: Repeat::parse(&r.get::<_, String>(3)?),
+            done: r.get::<_, i64>(4)? != 0,
+            snooze_until: r.get(5)?,
+            done_at: r.get(6)?,
+        })
+    }
+
+    /// Upcoming (not done) soonest first, then those done at or after `done_since` (epoch ms).
+    pub fn reminders(&self, done_since: i64) -> Result<Vec<Reminder>> {
+        let sql = format!(
+            "{} WHERE done = 0 OR done_at >= ?1 ORDER BY done, COALESCE(snooze_until, due_at), id",
+            Self::REMINDER_COLS
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([done_since], Self::reminder_row)?;
+        rows.collect()
+    }
+
+    pub fn reminder(&self, id: i64) -> Result<Option<Reminder>> {
+        self.conn.query_row(&format!("{} WHERE id = ?1", Self::REMINDER_COLS), [id], Self::reminder_row).optional()
+    }
+
+    pub fn add_reminder(&self, text: &str, due_at: i64, repeat: Repeat) -> Result<i64> {
+        self.conn.execute("INSERT INTO reminders (text, due_at, repeat) VALUES (?1, ?2, ?3)", params![text, due_at, repeat.as_str()])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn snooze_reminder(&self, id: i64, until: i64) -> Result<()> {
+        self.conn.execute("UPDATE reminders SET snooze_until = ?2 WHERE id = ?1", params![id, until])?;
+        Ok(())
+    }
+
+    /// Done: a repeat moves to `next`, a one-off (`next` = None) is marked done. Either way the snooze ends.
+    pub fn finish_reminder(&self, id: i64, next: Option<i64>, now: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE reminders SET due_at = COALESCE(?2, due_at), done = (?2 IS NULL), snooze_until = NULL, done_at = ?3 WHERE id = ?1",
+            params![id, next, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_reminder(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM reminders WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
     pub fn bridge_port(&self) -> Result<u16> {
         Ok(self.get("bridge_port")?.and_then(|v| v.parse().ok()).unwrap_or(47863))
     }
@@ -242,6 +313,7 @@ impl Db {
             display: text("display", "primary")?,
             island_size: text("island_size", "Auto")?,
             hide_fullscreen: text("hide_fullscreen", "true")? != "false",
+            reminder_sound: text("reminder_sound", "true")? != "false",
         })
     }
 
@@ -287,7 +359,7 @@ mod tests {
         let s = db.settings().unwrap();
         assert_eq!(s.island_style, "Liquid Glass");
         assert_eq!(s.animation_style, "Fluid Blobs");
-        assert_eq!((s.display.as_str(), s.island_size.as_str(), s.hide_fullscreen), ("primary", "Auto", true));
+        assert_eq!((s.display.as_str(), s.island_size.as_str(), s.hide_fullscreen, s.reminder_sound), ("primary", "Auto", true, true));
     }
 
     fn v1_conn(style: &str) -> Connection {
@@ -368,7 +440,7 @@ mod tests {
 
     fn v2_conn() -> Connection {
         let conn = Db::open_in_memory().unwrap().conn;
-        conn.execute_batch("DROP TABLE notes; PRAGMA user_version = 2;").unwrap();
+        conn.execute_batch("DROP TABLE notes; DROP TABLE reminders; PRAGMA user_version = 2;").unwrap();
         conn
     }
 
@@ -401,6 +473,53 @@ mod tests {
         assert_eq!(hits("hello wor"), ["Hello World"]);
         assert_eq!(hits("\\"), [r"back\slash"]);
         assert_eq!(hits("").len(), 5);
+    }
+
+    fn v3_conn() -> Connection {
+        let conn = Db::open_in_memory().unwrap().conn;
+        conn.execute_batch("DROP TABLE reminders; PRAGMA user_version = 3;").unwrap();
+        conn
+    }
+
+    #[test]
+    fn reminders_crud_snooze_and_finish() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(db.reminders(0).unwrap().is_empty());
+        let a = db.add_reminder("Stand-up", 2_000, Repeat::Daily).unwrap();
+        let b = db.add_reminder("Call", 1_000, Repeat::None).unwrap();
+        let ids = |since| db.reminders(since).unwrap().into_iter().map(|r| r.id).collect::<Vec<_>>();
+        assert_eq!(ids(0), [b, a]); // soonest first
+        db.snooze_reminder(b, 5_000).unwrap();
+        let r = db.reminder(b).unwrap().unwrap();
+        assert_eq!((r.due_at, r.snooze_until, r.at()), (1_000, Some(5_000), 5_000));
+        assert_eq!(ids(0), [a, b]);
+        // repeating: rolls forward, snooze cleared, stays upcoming
+        db.snooze_reminder(a, 3_000).unwrap();
+        db.finish_reminder(a, Some(9_000), 4_000).unwrap();
+        let r = db.reminder(a).unwrap().unwrap();
+        assert_eq!((r.due_at, r.snooze_until, r.done, r.done_at, r.repeat), (9_000, None, false, Some(4_000), Repeat::Daily));
+        // one-off: marked done; listed only when done since the cut-off
+        db.finish_reminder(b, None, 6_000).unwrap();
+        let r = db.reminder(b).unwrap().unwrap();
+        assert!(r.done && r.done_at == Some(6_000) && r.snooze_until.is_none());
+        assert_eq!(ids(6_000), [a, b]);
+        assert_eq!(ids(6_001), [a]);
+        assert_eq!(ids(i64::MAX), [a]); // the scheduler's view: not done only
+        db.delete_reminder(a).unwrap();
+        assert!(db.reminder(a).unwrap().is_none());
+        assert!(db.reminder(9999).unwrap().is_none());
+    }
+
+    #[test]
+    fn v3_upgrades_to_v4_keeping_notes() {
+        let conn = v3_conn();
+        conn.execute("INSERT INTO notes (body, updated_at) VALUES ('kept', 1)", []).unwrap();
+        let db = Db::init(conn).unwrap();
+        assert_eq!(db.notes("").unwrap().len(), 1);
+        db.add_reminder("x", 1, Repeat::Weekly).unwrap();
+        db.migrate().unwrap();
+        assert_eq!(db.reminders(0).unwrap().len(), 1);
+        assert!(db.conn.execute("INSERT INTO reminders (text, due_at, repeat) VALUES ('y', 1, 'hourly')", []).is_err());
     }
 
     #[test]

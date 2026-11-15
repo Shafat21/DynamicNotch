@@ -1,8 +1,9 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, window, AppState};
+use crate::{actions, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, window, AppState};
 use crate::notes::Note;
+use crate::reminders::{Reminder, Repeat};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -49,6 +50,7 @@ pub enum General {
     IslandSize(String),
     HideFullscreen(bool),
     Autostart(bool),
+    ReminderSound(bool),
 }
 
 pub fn parse_general(key: &str, value: &Value) -> Res<General> {
@@ -57,7 +59,8 @@ pub fn parse_general(key: &str, value: &Value) -> Res<General> {
         ("island_size", Value::String(s)) => Ok(General::IslandSize(s.clone())),
         ("hide_fullscreen", Value::Bool(b)) => Ok(General::HideFullscreen(*b)),
         ("autostart", Value::Bool(b)) => Ok(General::Autostart(*b)),
-        ("display" | "island_size" | "hide_fullscreen" | "autostart", _) => Err(format!("invalid value for {key}")),
+        ("reminder_sound", Value::Bool(b)) => Ok(General::ReminderSound(*b)),
+        ("display" | "island_size" | "hide_fullscreen" | "autostart" | "reminder_sound", _) => Err(format!("invalid value for {key}")),
         _ => Err(format!("unknown setting {key}")),
     }
 }
@@ -73,6 +76,7 @@ pub fn set_general(app: AppHandle, key: String, value: Value) -> Res<db::Setting
             let al = app.autolaunch();
             if on { al.enable() } else { al.disable() }.map_err(err)
         }
+        General::ReminderSound(on) => app.state::<AppState>().db.lock().unwrap().set("reminder_sound", &on.to_string()).map_err(err),
     }?;
     emit_settings(&app);
     crate::current_settings(&app)
@@ -208,6 +212,61 @@ pub fn delete_note(state: State<AppState>, id: i64) -> Res<Vec<Note>> {
     let db = state.db.lock().unwrap();
     db.delete_note(id).map_err(err)?;
     db.notes("").map_err(err)
+}
+
+/// Reminders: each command returns the upcoming + done-today list.
+fn reminder_list(db: &db::Db) -> Res<Vec<Reminder>> {
+    db.reminders(reminders::today_start()).map_err(err)
+}
+
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
+#[tauri::command]
+pub fn list_reminders(state: State<AppState>) -> Res<Vec<Reminder>> {
+    reminder_list(&state.db.lock().unwrap())
+}
+
+/// Due time of a New-reminder chip (`10m|30m|1h|evening|tomorrow`), in local time.
+#[tauri::command]
+pub fn quick_due(chip: String) -> Res<i64> {
+    reminders::quick_due(&chip, chrono::Local::now()).ok_or_else(|| format!("unknown chip {chip}"))
+}
+
+#[tauri::command]
+pub fn add_reminder(state: State<AppState>, text: String, due_at: i64, repeat: Repeat) -> Res<Vec<Reminder>> {
+    let text = reminders::clean_text(&text)?;
+    if due_at < now_ms() - 60_000 {
+        return Err("Pick a time in the future".into());
+    }
+    let db = state.db.lock().unwrap();
+    db.add_reminder(text, due_at, repeat).map_err(err)?;
+    reminder_list(&db)
+}
+
+#[tauri::command]
+pub fn snooze_reminder(state: State<AppState>, id: i64) -> Res<Vec<Reminder>> {
+    let db = state.db.lock().unwrap();
+    db.snooze_reminder(id, reminders::snoozed(now_ms())).map_err(err)?;
+    reminder_list(&db)
+}
+
+/// A repeat rolls to its next occurrence after now (or after this one, when pressed early); a one-off is done.
+#[tauri::command]
+pub fn done_reminder(state: State<AppState>, id: i64) -> Res<Vec<Reminder>> {
+    let db = state.db.lock().unwrap();
+    let r = db.reminder(id).map_err(err)?.ok_or("unknown reminder")?;
+    let now = now_ms();
+    db.finish_reminder(id, reminders::next_due(r.due_at, r.repeat, now.max(r.due_at), &chrono::Local), now).map_err(err)?;
+    reminder_list(&db)
+}
+
+#[tauri::command]
+pub fn delete_reminder(state: State<AppState>, id: i64) -> Res<Vec<Reminder>> {
+    let db = state.db.lock().unwrap();
+    db.delete_reminder(id).map_err(err)?;
+    reminder_list(&db)
 }
 
 /// Geocode a city name, store it, refresh the weather. Returns the resolved "City, Country".
@@ -366,6 +425,8 @@ mod tests {
         assert_eq!(parse_general("island_size", &json!("Large")), Ok(General::IslandSize("Large".into())));
         assert_eq!(parse_general("hide_fullscreen", &json!(false)), Ok(General::HideFullscreen(false)));
         assert_eq!(parse_general("autostart", &json!(true)), Ok(General::Autostart(true)));
+        assert_eq!(parse_general("reminder_sound", &json!(false)), Ok(General::ReminderSound(false)));
+        assert!(parse_general("reminder_sound", &json!("off")).is_err());
         assert!(parse_general("autostart", &json!("yes")).is_err()); // wrong type
         assert!(parse_general("display", &json!(1)).is_err());
         assert!(parse_general("bridge_token", &json!("x")).is_err()); // not allow-listed

@@ -35,6 +35,9 @@ pub fn tick(app: &AppHandle) {
             }
         }
         publish(app, "fullscreen", hide);
+        if !hide {
+            crate::reminders::tick(app); // reminders held back while hidden go out now
+        }
     }
 }
 

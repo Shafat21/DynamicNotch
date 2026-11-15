@@ -24,7 +24,7 @@ function animate(fr: (now: number) => boolean): void {
 }
 
 // ---------- mood owner: pals created without a mood follow it ----------
-const input: MoodInput = { bridgeOnline: true, connected: false, statuses: [], promptPending: false, listening: false, greeting: false, doneRecently: false, quietForMs: 0 };
+const input: MoodInput = { bridgeOnline: true, connected: false, statuses: [], promptPending: false, reminderDue: false, listening: false, greeting: false, doneRecently: false, quietForMs: 0 };
 let current = moodFor(input);
 const followers = new Set<Pal>();
 

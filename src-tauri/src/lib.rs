@@ -11,6 +11,7 @@ mod launcher;
 mod menu;
 mod monitors;
 mod notes;
+mod reminders;
 mod window;
 
 use serde::Serialize;
@@ -90,6 +91,7 @@ pub fn run() {
             window::setup(app.handle(), &win)?;
             display::spawn_watcher(app.handle().clone());
             fullscreen::spawn_watcher(app.handle().clone());
+            reminders::spawn_scheduler(app.handle().clone());
             #[cfg(windows)]
             glass_spike::run(&win); // SPIKE: remove
 
@@ -120,6 +122,12 @@ pub fn run() {
             commands::update_note,
             commands::pin_note,
             commands::delete_note,
+            commands::list_reminders,
+            commands::quick_due,
+            commands::add_reminder,
+            commands::snooze_reminder,
+            commands::done_reminder,
+            commands::delete_reminder,
             commands::set_location,
             commands::set_calendar_url,
             commands::open_join,

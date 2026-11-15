@@ -2,7 +2,7 @@
 // Launcher and focus live in the bottom strip, everything else in the 4-column grid.
 import type { LayoutItem } from "./theme";
 
-const STRIP = new Set(["launcher", "focus", "notes"]);
+const STRIP = new Set(["launcher", "focus", "notes", "reminders"]);
 
 export function renderHome(items: LayoutItem[]): void {
   const grid = document.getElementById("home-grid")!;

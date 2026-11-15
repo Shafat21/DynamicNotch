@@ -26,6 +26,9 @@
             <span class="title" id="status-text"></span>
           </div>
 
+          <!-- Reminder banner (state "reminder", reminders.ts): stays until Snooze / Done -->
+          <div class="reminder" id="reminder" role="alert" hidden></div>
+
           <!-- Open island: tab bar + one page per tab (spec §22.1) -->
           <div id="open" hidden>
             <div class="topbar">
@@ -104,6 +107,10 @@
                     <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
                     <input id="notes-quick" placeholder="Jot something down…" maxlength="20000" autocomplete="off" spellcheck="false" />
                   </div>
+                  <button class="strip-rem" id="card-reminders" data-goto="reminders" title="Reminders">
+                    <span class="card-ic" data-badge="reminders" data-icon="bell" data-size="14"></span>
+                    <span class="ell" id="rem-next"></span>
+                  </button>
                   <button class="focus-chip" id="card-focus" title="Click to start/pause, scroll to change"></button>
                 </div>
               </section>
@@ -260,6 +267,38 @@
                     </div>
                   </div>
                 </div>
+              </section>
+
+              <!-- Reminders: upcoming + done today, or the new-reminder form (reminders.ts) -->
+              <section class="page" id="tab-reminders" hidden>
+                <div id="rem-view">
+                  <div class="panel-head">
+                    <span class="panel-title">Reminders</span>
+                    <span class="muted" id="rem-count"></span>
+                    <button class="action-btn" id="rem-new" data-icon="plus" data-size="16" title="New reminder"></button>
+                  </div>
+                  <div class="rem-cols">
+                    <div class="rem-list" id="rem-upcoming"></div>
+                    <div class="rem-list"><span class="lbl">DONE TODAY</span><div class="rem-list" id="rem-done"></div></div>
+                  </div>
+                </div>
+                <form class="rem-form" id="rem-form" hidden>
+                  <div class="rem-form-head">
+                    <span class="rem-ic" data-icon="bell" data-size="14"></span>
+                    <b>New reminder</b>
+                    <span class="muted small ell">The island tells you when it's time.</span>
+                  </div>
+                  <input id="rem-text" placeholder="Remind me to…" maxlength="200" autocomplete="off" spellcheck="false" />
+                  <div class="rem-chips"><span class="lbl">WHEN</span><div class="opts" id="rem-when"></div></div>
+                  <div class="rem-chips"><span class="lbl">REPEAT</span><div class="opts" id="rem-repeat"></div></div>
+                  <div class="rem-foot">
+                    <input type="datetime-local" id="rem-pick" aria-label="Reminder time" hidden />
+                    <span class="muted ell" id="rem-summary"></span>
+                    <span class="spacer"></span>
+                    <button type="button" class="btn" id="rem-cancel">Cancel</button>
+                    <button type="submit" class="btn primary">Set reminder</button>
+                  </div>
+                </form>
               </section>
 
               <!-- Month progress -->

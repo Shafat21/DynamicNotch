@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { LauncherApp } from "../../panels";
-import { store } from "../store";
-import { button, h, page, report, row, section } from "../ui";
+import { setGeneral, store } from "../store";
+import { button, h, page, report, row, section, toggle } from "../ui";
 
 type Bridge = { online: boolean; connected?: boolean; error?: string };
 type Calendar = { configured: boolean; error: string | null };
@@ -83,6 +83,14 @@ export function renderFeatures(root: HTMLElement): () => void {
   p.append(
     section("Claude Code", row("Claude Code", "Show sessions and answer prompts from the island.", h("div", { className: "stack" }, claudeBtn, claudeState))),
     section("Calendar", row("Calendar link", "Paste a private iCal (.ics) link from Google or Outlook.", h("div", { className: "stack" }, calForm, calState))),
+    section(
+      "Reminders",
+      row(
+        "Reminder sound",
+        "Play a soft chime when a reminder is due (up to 3 times, 30 s apart).",
+        toggle("Reminder sound", store.settings.reminderSound, (on) => setGeneral("reminder_sound", on).catch(() => {})),
+      ),
+    ),
     section("Weather", row("Location", "City used for the weather card.", h("div", { className: "stack" }, locForm, locState))),
     section("Launcher apps", apps, h("div", { className: "section-actions" }, addApp)),
   );

@@ -258,6 +258,38 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .notes-actions .action-btn:disabled { opacity: 0.35; }
 .notes-actions .action-btn.on { color: var(--accent); }
 .notes-actions .action-btn.danger { background: #d0342c; color: #fff; }
+/* ---------- reminders: banner (state "reminder"), tab, form, Home strip chip ---------- */
+.reminder { height: calc(var(--h) / var(--ui)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 16px; font-size: var(--t13); }
+.rem-ic { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 14px; background: color-mix(in srgb, #ff9f0a 24%, transparent); color: #ffb340; }
+.rem-text { flex: 1; gap: 2px; }
+.rem-title { font-size: calc(16px * var(--text-scale)); font-weight: 700; letter-spacing: -0.01em; }
+.pill { flex: none; border: none; border-radius: 999px; padding: 8px 16px; font-size: var(--t13); font-weight: 600; background: rgba(255, 255, 255, 0.12); color: var(--text); }
+.pill:hover { background: rgba(255, 255, 255, 0.18); }
+.pill.light { background: #fff; color: #111; }
+.pill.light:hover { background: #e6e6ea; }
+.pill:disabled { opacity: 0.5; cursor: default; }
+.rem-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.rem-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rem-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 8px 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.rem-row .col { flex: 1; }
+.rem-row .action-btn { width: 26px; height: 26px; }
+.rem-row.done .rem-name { text-decoration: line-through; color: var(--muted); }
+.rem-empty { padding: 4px 2px; font-size: var(--t12); }
+.rem-form { display: flex; flex-direction: column; gap: 7px; }
+.rem-form-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rem-form-head .rem-ic { width: 24px; height: 24px; border-radius: 8px; }
+#rem-text { padding: 6px 12px; }
+.rem-chips { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rem-chips .lbl { width: 52px; flex: none; }
+.rem-chips .opts { margin-top: 0; }
+.rem-chips .opt.on { background: #fff; color: #111; box-shadow: none; }
+.rem-foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rem-foot .btn { flex: none; padding: 5px 14px; font-size: var(--t12); }
+#rem-pick { flex: none; padding: 4px 8px; font-size: var(--t12); color-scheme: dark; }
+.rem-err { color: #ff8a8a; }
+.strip-rem { flex: 0 1 170px; min-width: 90px; display: flex; align-items: center; gap: 6px; border: none; background: transparent; padding: 4px 6px; border-radius: 10px; font-size: var(--t12); text-align: left; }
+.strip-rem:hover { background: rgba(255, 255, 255, 0.06); }
+.strip-rem .card-ic { display: grid; flex: none; }
 .strip-notes { flex: 0 1 190px; min-width: 120px; display: flex; align-items: center; gap: 8px; }
 .strip-notes input { flex: 1; padding: 5px 10px; font-size: var(--t12); }
 

@@ -6,6 +6,7 @@ export type MoodInput = {
   connected: boolean;
   statuses: Array<"idle" | "working" | "needs-you" | "done" | "error">;
   promptPending: boolean;
+  reminderDue: boolean; // a reminder banner waits for Snooze / Done
   listening: boolean;
   greeting: boolean;
   doneRecently: boolean;
@@ -15,7 +16,7 @@ export type MoodInput = {
 /** Priority: broke > needs-you > listening > thinking > done > happy > calm > napping. */
 export function moodFor(i: MoodInput): PalMood {
   if (!i.bridgeOnline || i.statuses.includes("error")) return "broke";
-  if (i.promptPending || i.statuses.includes("needs-you")) return "needs-you";
+  if (i.promptPending || i.reminderDue || i.statuses.includes("needs-you")) return "needs-you";
   if (i.listening) return "listening";
   if (i.statuses.includes("working")) return "thinking";
   if (i.doneRecently) return "done";
