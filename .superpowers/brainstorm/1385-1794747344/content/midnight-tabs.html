@@ -1,0 +1,81 @@
+<style>
+  .stage{background:linear-gradient(180deg,#2b3150,#3a4166);border-radius:14px;padding:0 22px 26px;display:flex;justify-content:center}
+  .isl{color:#e9ecf5;font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;width:780px;border-radius:0 0 34px 34px;padding:10px 16px 16px;
+       background:linear-gradient(180deg,#1b2033,#20263b);box-shadow:0 18px 40px rgba(8,10,24,.55),inset 0 -1px 0 rgba(255,255,255,.06);font-size:13px}
+  .row{display:flex;align-items:center}.grow{flex:1}.muted{color:rgba(233,236,245,.55)}
+  .ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .tabs{gap:2px}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 9px;border-radius:12px;font-size:11px;color:rgba(233,236,245,.75)}
+  .tab.on{background:rgba(110,140,255,.18);color:#8fb0ff;box-shadow:inset 0 0 0 1px rgba(143,176,255,.25)}
+  .quick{gap:2px;padding:4px 6px;border-radius:999px;background:rgba(255,255,255,.06)}
+  .qb{width:30px;height:28px;display:grid;place-items:center;color:#e9ecf5}
+  .grid{display:grid;grid-template-columns:1fr 1.25fr 1fr 1fr;gap:12px;margin-top:12px}
+  .card{background:rgba(255,255,255,.055);border-radius:20px;padding:14px 16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  .lbl{font-size:11px;letter-spacing:.06em;color:rgba(233,236,245,.5);font-weight:600}
+  .big{font-size:22px;font-weight:600;letter-spacing:-.01em}
+  .pal{width:46px;height:46px;border-radius:50%;background:#0b0d16;display:grid;place-items:center;font-size:24px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .art{width:54px;height:54px;border-radius:12px;background:linear-gradient(180deg,#ff5fa2,#7b2ff7 70%)}
+  .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.15);position:relative}
+  .bar i{position:absolute;left:0;top:0;height:100%;width:35%;border-radius:2px;background:#8fb0ff}
+  .ctrl{gap:16px;justify-content:center;margin-top:8px}
+  .join{background:#22c55e;color:#06210f;border-radius:999px;padding:3px 10px;font-weight:600;font-size:12px}
+  .evt{background:rgba(255,255,255,.06);border-radius:12px;padding:8px 10px;margin-top:8px;gap:8px}
+  .app{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-weight:600}
+  .lyrics{background:rgba(255,255,255,.05);border-radius:20px;display:grid;place-items:center;color:rgba(233,236,245,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+</style>
+
+<h2>Redesign foundation: Midnight theme + tab bar (our content)</h2>
+<p class="subtitle">Hover opens the island on the Home tab; tabs switch pages. Right side: date/time + quick buttons (Pal status, pin open, settings, collapse). Below: the Music tab.</p>
+
+<div class="section"><div class="stage"><div class="isl">
+  <div class="row">
+    <div class="row tabs">
+      <div class="tab on"><svg class="ic" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>Music</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Calendar</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="9.5" cy="11" r=".8"/><circle cx="14.5" cy="11" r=".8"/><path d="M9.5 14.5a3.5 3.5 0 0 0 5 0"/></svg>Pal</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v4h4M8 12h8M8 16h5"/></svg>Notes</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/></svg>Clipboard</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Shelf</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>Timer</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>Launcher</div>
+      <div class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>More ▾</div>
+    </div>
+    <span class="grow"></span>
+    <span class="muted" style="margin-right:10px">Wed, 4 Nov&nbsp; 14:36</span>
+    <div class="row quick">
+      <div class="qb">🙂</div>
+      <div class="qb"><svg class="ic" viewBox="0 0 24 24"><path d="M14 4l6 6-4 1-3 3 1 4-2 2-4-4-4 4M10 10 4 4"/></svg></div>
+      <div class="qb"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+      <div class="qb"><svg class="ic" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="big">14:36</div><div class="muted">Wednesday, 4 Nov</div><div class="row" style="gap:8px;margin-top:12px"><svg class="ic" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11 3.5 3.5 0 0 0 7 18z"/></svg><div><div>21° Partly cloudy</div><div class="muted" style="font-size:12px">H 24° · L 15° · Dhaka</div></div></div></div>
+    <div class="card"><div class="row" style="gap:12px"><div class="pal">🙂</div><div class="grow" style="min-width:0"><div class="row" style="gap:6px"><b>webshop</b><span class="muted">Claude Code</span><span class="grow"></span><span class="muted">2/2</span></div><div style="color:#4ade80">● Done</div></div></div><div class="muted ell" style="margin-top:10px;background:rgba(0,0,0,.2);border-radius:12px;padding:9px 11px">Stripe checkout is live, 40 tests pass</div></div>
+    <div class="card"><div class="lbl">NOW PLAYING</div><div class="row" style="gap:10px;margin-top:8px"><div class="art" style="width:40px;height:40px;border-radius:10px"></div><div style="min-width:0"><div class="ell"><b>Midnight Drive</b></div><div class="muted ell">NotchX</div></div></div><div class="row ctrl"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 9 12l9 6zM6 6v12"/></svg><svg class="ic" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><svg class="ic" viewBox="0 0 24 24"><path d="m6 6 9 6-9 6zM18 6v12"/></svg></div></div>
+    <div class="card"><div class="row"><span class="lbl" style="color:#ff7a7a">WED, 4 NOV</span><span class="grow"></span><span class="muted">＋</span></div><div style="margin-top:6px"><b>1 event left today</b></div><div class="row evt"><span style="width:4px;height:28px;border-radius:2px;background:#c084fc"></span><div class="grow" style="min-width:0"><div class="ell">Design review</div><div class="muted" style="font-size:12px">Now · until 15:30</div></div><span class="join">Join</span></div></div>
+  </div>
+  <div class="row" style="gap:10px;margin-top:12px"><span class="lbl">LAUNCHER</span><div class="app" style="color:#8fb0ff">C</div><div class="app">F</div><div class="app">T</div><div class="app">S</div><div class="app">＋</div><span class="grow"></span><span class="muted">Focus 25:00 ▶</span></div>
+</div></div></div>
+
+<div class="section"><div class="stage"><div class="isl">
+  <div class="row"><div class="row tabs"><div class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</div><div class="tab on"><svg class="ic" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>Music</div><div class="tab"><svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Calendar</div><div class="tab">…</div></div><span class="grow"></span><span class="muted">Wed, 4 Nov&nbsp; 14:36</span></div>
+  <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:12px">
+    <div class="row" style="gap:16px;align-items:flex-start">
+      <div class="art" style="width:120px;height:120px;border-radius:16px;flex:none"></div>
+      <div class="grow">
+        <div class="big" style="font-size:20px">Midnight Drive</div><div>NotchX</div><div class="muted" style="font-size:12px">Spotify <span style="color:#ff6fae">·ılıılı·</span></div>
+        <div class="bar" style="margin-top:12px"><i></i></div><div class="row muted" style="font-size:11px;margin-top:4px"><span>0:28</span><span class="grow"></span><span>-1:18</span></div>
+        <div class="row ctrl" style="gap:22px"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 9 12l9 6zM6 6v12"/></svg><svg class="ic" style="width:26px;height:26px" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><svg class="ic" viewBox="0 0 24 24"><path d="m6 6 9 6-9 6zM18 6v12"/></svg></div>
+      </div>
+    </div>
+    <div class="lyrics" style="min-height:150px">♪ Driving through the neon light…</div>
+  </div>
+</div></div></div>
+
+<div class="options">
+  <div class="option" data-choice="ok" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>This direction</h3><p>Build the foundation like this</p></div></div>
+  <div class="option" data-choice="change" onclick="toggleSelect(this)"><div class="letter">✎</div><div class="content"><h3>Change something</h3><p>Tell me in the terminal</p></div></div>
+</div>

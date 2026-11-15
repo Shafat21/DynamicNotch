@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "targets": ["deb", "rpm", "appimage"],
+    "linux": {
+      "deb": { "depends": ["libgtk-layer-shell0"] },
+      "rpm": { "depends": ["gtk-layer-shell"] }
+    }
+  }
+}
