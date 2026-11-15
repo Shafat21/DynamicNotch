@@ -29,6 +29,7 @@ const ui = {
   state: "idle" as State,
   view: "dashboard" as View,
   hovering: false,
+  hidden: false, // a fullscreen app is in front: island slid away, click-through
   charging: false,
   editingTasks: false,
   editingLocation: false,
@@ -135,7 +136,7 @@ function updateFx(): void {
 /** Tell Rust where the island is so it can toggle click-through. */
 function sendHitRect(w: number, h: number, k: number): void {
   const left = (window.innerWidth - w) / 2;
-  const rect = { x: left - 15 * k, y: 0, w: w + 30 * k, h: pillTop() + h + 30 * k };
+  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : { x: left - 15 * k, y: 0, w: w + 30 * k, h: pillTop() + h + 30 * k };
   invoke("set_hit_rect", { rect }).catch(console.error);
 }
 
@@ -148,6 +149,7 @@ function setState(s: State): void {
 }
 
 function showEvent(title: string, text: string, ms: number): void {
+  if (ui.hidden) return; // pops are dropped, not queued
   ui.event = { title, text };
   clearTimeout(revertTimer);
   if (ui.state === "notify") transition();
@@ -337,7 +339,19 @@ function onCharging(): void {
   }, 3100);
 }
 
+/** Fullscreen app in front: slide away and go click-through; come back to the idle pill afterwards. */
+function onFullscreen(hidden: boolean): void {
+  ui.hidden = hidden;
+  shell.classList.toggle("away", hidden);
+  clearTimeout(revertTimer);
+  ui.hovering = false;
+  ui.state = "idle";
+  ui.view = "dashboard";
+  transition(); // also sends the (empty or normal) hit rect
+}
+
 function onHover(inside: boolean): void {
+  if (ui.hidden) return;
   ui.hovering = inside;
   if (ui.state === "notify") return;
   clearTimeout(revertTimer);
@@ -564,6 +578,7 @@ async function boot(): Promise<void> {
       const { app, title, text } = e.payload;
       showEvent(app, title ? `${title}: ${text}` : text, 3500);
     }),
+    listen<boolean>("fullscreen", (e) => onFullscreen(e.payload)),
     listen("charging", onCharging),
     listen("edit-location", openLocationEditor),
   ]);
@@ -578,6 +593,7 @@ async function boot(): Promise<void> {
   if (snap.lyric) onLyric(snap.lyric as string);
   if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
   if (snap["media-art"]) onArt(snap["media-art"] as { art: string });
+  if (snap.fullscreen) onFullscreen(true);
   if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
 
   ui.tasks = await invoke<Task[]>("list_tasks");

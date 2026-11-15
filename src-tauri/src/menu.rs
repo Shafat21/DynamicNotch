@@ -1,7 +1,7 @@
 //! Right-click menu (native popup). Item ids: "anim:<style>", "style:<style>", "display:<name|primary>",
-//! "size:<size>", "autostart", "location", "claude", "quit".
+//! "size:<size>", "hide_fullscreen", "autostart", "location", "claude", "quit".
 
-use crate::{bridge, db, display, emit_settings, AppState};
+use crate::{bridge, db, display, emit_settings, fullscreen, AppState};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow, Wry};
 use tauri_plugin_autostart::ManagerExt;
@@ -39,6 +39,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             &screens,
             &size,
             &PredefinedMenuItem::separator(app)?,
+            &check("hide_fullscreen".into(), "Hide in fullscreen apps", s.hide_fullscreen)?,
             &check("autostart".into(), "Start with Windows", s.autostart)?,
             &MenuItem::with_id(app, "location", "Change Location", true, None::<&str>)?,
             &MenuItem::with_id(app, "claude", claude, true, None::<&str>)?,
@@ -68,6 +69,10 @@ pub fn handle(app: &AppHandle, id: &str) {
                 let al = app.autolaunch();
                 let r = if al.is_enabled().unwrap_or(false) { al.disable() } else { al.enable() };
                 r.map_err(|e| e.to_string())
+            }
+            "hide_fullscreen" => {
+                let on = state.db.lock().unwrap().settings().map(|s| s.hide_fullscreen).unwrap_or(true);
+                fullscreen::set_hide_fullscreen(app, !on)
             }
             "location" => {
                 let _ = app.emit("edit-location", ());

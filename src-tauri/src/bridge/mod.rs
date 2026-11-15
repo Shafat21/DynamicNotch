@@ -171,7 +171,9 @@ fn on_hook(app: &AppHandle, ev: Value) -> Value {
         Some("PreToolUse") if ANSWERING && ANSWER_QUESTIONS && tool == "AskUserQuestion" => "question",
         _ => return json!({}),
     };
-    // Task 22: while the island is hidden for a fullscreen app, return {} here (terminal asks) and drop the pop above.
+    if crate::fullscreen::is_hidden(app) {
+        return json!({}); // fullscreen app in front: let the terminal ask
+    }
     let input = &ev["tool_input"];
     let session_id = ev["session_id"].as_str().unwrap_or("").to_string();
     let project = state.sessions.lock().unwrap().list().into_iter().find(|s| s.id == session_id).map(|s| s.project);

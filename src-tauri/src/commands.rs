@@ -1,7 +1,7 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, bridge, db, emit_settings, launcher, menu, monitors, window, AppState};
+use crate::{actions, appearance, bridge, db, emit_settings, launcher, menu, monitors, window, AppState};
 use serde_json::Value;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
@@ -16,6 +16,52 @@ fn err(e: impl std::fmt::Display) -> String {
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Res<db::Settings> {
     crate::current_settings(&app)
+}
+
+/// Run `f` on the stored appearance + layout, persist the result and publish it (sticky `appearance`).
+fn update_appearance(
+    app: &AppHandle,
+    f: impl FnOnce(appearance::Appearance, appearance::Layout) -> (appearance::Appearance, appearance::Layout),
+) -> Res<Value> {
+    let state = app.state::<AppState>();
+    let db = state.db.lock().unwrap();
+    let (a, l) = appearance::load(&db);
+    let (a, l) = f(a, l);
+    let (a, l) = (appearance::sanitize(a), appearance::normalize_layout(l));
+    appearance::save(&db, &a, &l)?;
+    drop(db);
+    let payload = appearance::payload(&a, &l);
+    crate::publish(app, "appearance", payload.clone());
+    Ok(payload)
+}
+
+#[tauri::command]
+pub fn get_appearance(state: State<AppState>) -> Value {
+    let (a, l) = appearance::load(&state.db.lock().unwrap());
+    appearance::payload(&a, &l)
+}
+
+#[tauri::command]
+pub fn set_appearance(app: AppHandle, patch: Value) -> Res<Value> {
+    update_appearance(&app, |a, l| (appearance::merge_patch(&a, &patch), l))
+}
+
+#[tauri::command]
+pub fn apply_theme(app: AppHandle, name: String) -> Res<Value> {
+    if !appearance::THEMES.iter().any(|t| t.name == name) {
+        return Err(format!("unknown theme: {name}"));
+    }
+    update_appearance(&app, |a, l| (appearance::Appearance { theme: name, accent: String::new(), ..a }, l))
+}
+
+#[tauri::command]
+pub fn reset_appearance(app: AppHandle) -> Res<Value> {
+    update_appearance(&app, |_, l| (appearance::Appearance::default(), l))
+}
+
+#[tauri::command]
+pub fn set_layout(app: AppHandle, layout: appearance::Layout) -> Res<Value> {
+    update_appearance(&app, |a, _| (a, layout))
 }
 
 /// Latest perf/media/lyric/weather/accent payloads, for when the page (re)loads after monitors started.

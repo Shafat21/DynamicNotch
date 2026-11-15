@@ -34,8 +34,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   width: var(--w);
   height: var(--h);
   translate: -50% 0;
-  transition: width 0.85s var(--ease), height 0.85s var(--ease), top 0.3s ease;
+  transition: width 0.85s var(--ease), height 0.85s var(--ease), top 0.3s ease, translate 0.4s ease, opacity 0.4s ease;
 }
+#shell.away { translate: -50% -150%; opacity: 0; }
 #shell[data-style="Notch Nook"] { --top: 0px; }
 
 #island {

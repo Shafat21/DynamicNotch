@@ -1,8 +1,10 @@
 mod actions;
+mod appearance;
 mod bridge;
 mod commands;
 mod db;
 mod display;
+mod fullscreen;
 #[cfg(windows)]
 mod glass_spike; // SPIKE: remove
 mod launcher;
@@ -13,6 +15,7 @@ mod window;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
@@ -27,6 +30,8 @@ pub struct AppState {
     pub sessions: Mutex<bridge::sessions::Sessions>,
     /// Permission / question prompts waiting for an answer in the island.
     pub prompts: bridge::Prompts,
+    /// True while a fullscreen app hides the island (spec §18).
+    pub hidden: AtomicBool,
 }
 
 /// Emit an event to the frontend and remember it for `get_snapshot`.
@@ -74,11 +79,16 @@ pub fn run() {
                 hit: Mutex::new(window::Rect::default()),
                 sessions: Mutex::default(),
                 prompts: bridge::Prompts::default(),
+                hidden: AtomicBool::new(false),
             });
+
+            let (a, l) = appearance::load(&app.state::<AppState>().db.lock().unwrap());
+            publish(app.handle(), "appearance", appearance::payload(&a, &l));
 
             let win = app.get_webview_window("main").expect("main window");
             window::setup(app.handle(), &win)?;
             display::spawn_watcher(app.handle().clone());
+            fullscreen::spawn_watcher(app.handle().clone());
             #[cfg(windows)]
             glass_spike::run(&win); // SPIKE: remove
 
@@ -91,6 +101,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
+            commands::get_appearance,
+            commands::set_appearance,
+            commands::apply_theme,
+            commands::reset_appearance,
+            commands::set_layout,
             commands::get_snapshot,
             commands::list_tasks,
             commands::add_task,

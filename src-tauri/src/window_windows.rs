@@ -23,9 +23,28 @@ pub fn set_hit_rect(app: &AppHandle, rect: Rect) {
     *app.state::<AppState>().hit.lock().unwrap() = rect;
 }
 
+#[derive(Debug, PartialEq)]
+enum Action {
+    None,
+    ForceIgnore,
+    Set(bool),
+}
+
+/// While hidden: force click-through once per hidden period. Otherwise: toggle on change only.
+fn hover_action(hidden: bool, forced: bool, prev: Option<bool>, now: bool) -> Action {
+    if hidden {
+        if forced { Action::None } else { Action::ForceIgnore }
+    } else if prev != Some(now) {
+        Action::Set(now)
+    } else {
+        Action::None
+    }
+}
+
 fn spawn(app: AppHandle) {
     thread::spawn(move || {
         let mut inside: Option<bool> = None;
+        let mut forced = false;
         loop {
             thread::sleep(Duration::from_millis(25));
             let Some(win) = app.get_webview_window("main") else { continue };
@@ -35,11 +54,41 @@ fn spawn(app: AppHandle) {
             };
             let rect = *app.state::<AppState>().hit.lock().unwrap();
             let now = rect.contains((cursor.x - pos.x as f64) / scale, (cursor.y - pos.y as f64) / scale);
-            if inside != Some(now) {
-                inside = Some(now);
-                let _ = win.set_ignore_cursor_events(!now);
-                let _ = app.emit("hover", now);
+            let hidden = crate::fullscreen::is_hidden(&app);
+            match hover_action(hidden, forced, inside, now) {
+                Action::ForceIgnore => {
+                    let _ = win.set_ignore_cursor_events(true);
+                    forced = true;
+                    inside = None; // re-evaluate once visible again
+                }
+                Action::Set(v) => {
+                    // the watcher may have hidden us since the read above: never undo its click-through
+                    if crate::fullscreen::is_hidden(&app) {
+                        continue;
+                    }
+                    inside = Some(v);
+                    let _ = win.set_ignore_cursor_events(!v);
+                    let _ = app.emit("hover", v);
+                }
+                Action::None => {}
+            }
+            if !hidden {
+                forced = false;
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hover_action_respects_hidden() {
+        assert_eq!(hover_action(true, false, Some(true), true), Action::ForceIgnore); // inside the rect when hidden
+        assert_eq!(hover_action(true, true, None, true), Action::None); // once per hidden period
+        assert_eq!(hover_action(false, true, None, true), Action::Set(true)); // visible again
+        assert_eq!(hover_action(false, false, Some(true), true), Action::None);
+        assert_eq!(hover_action(false, false, Some(true), false), Action::Set(false));
+    }
 }
