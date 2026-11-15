@@ -182,9 +182,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* idle pill / notification header (unchanged look, theme colours) */
-.header { height: var(--ch); display: flex; align-items: center; gap: 10px; padding: 0 25px; box-sizing: border-box; }
+.header { height: var(--ch); display: flex; align-items: center; gap: 10px; padding: 0 25px; box-sizing: border-box; justify-content: center; }
 .icon { width: 22px; height: 22px; display: grid; place-items: center; flex: none; }
-.title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title { flex: 0 1 auto; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* shared bits */
 .spacer { flex: 1; }

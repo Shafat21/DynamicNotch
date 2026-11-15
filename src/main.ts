@@ -2,6 +2,7 @@
 // this file decides the island's size/state and which tab is visible.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { idlePillWidth } from "./idle-width";
 import {
   addPrompt, anyWorking, closePrompt, currentPrompt, dismissAll, dismissPrompt, initAssistant, popMood, promptHeight, setBridge, setSessions, setTyping,
   type Bridge, type Prompt, type Session,
@@ -70,13 +71,11 @@ const spinning = () => ui.state === "idle" && anyWorking();
 
 /** Idle pill: clock width, or wide enough for the playing song title (never lyrics); + the working spinner. */
 function idleWidth(): number {
-  const min = look().collapsedW + (anyWorking() ? 22 : 0); // 12px spinner + 10px gap
   const title = playingTitle();
-  if (!title) return min;
+  if (!title) return idlePillWidth(null, look().collapsedW, anyWorking());
   measureCtx ??= document.createElement("canvas").getContext("2d")!;
   measureCtx.font = getComputedStyle($("status-text")).font;
-  // 2x25px padding + 22px icon + 10px gap
-  return Math.min(Math.max(420, min), Math.max(min, Math.ceil(measureCtx.measureText(title).width) + 82));
+  return idlePillWidth(measureCtx.measureText(title).width, look().collapsedW, anyWorking());
 }
 
 /** Base px at 1080p (appearance sizes); geometry() multiplies by the display scale. */
