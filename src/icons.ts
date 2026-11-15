@@ -1,6 +1,6 @@
 // Material Design Icons as inline SVG.
 import {
-  mdiChartBubble, mdiChevronUp, mdiCircle, mdiClose, mdiCogOutline, mdiConsole, mdiCpu64Bit, mdiEmail, mdiFolderOutline,
+  mdiChartBubble, mdiChevronUp, mdiCircle, mdiClose, mdiCommentQuoteOutline, mdiDotsHorizontal, mdiCogOutline, mdiConsole, mdiCpu64Bit, mdiEmail, mdiFolderOutline,
   mdiGoogleChrome, mdiHarddisk, mdiHome, mdiLightningBolt, mdiMemory, mdiMusic, mdiOpenInNew, mdiPause,
   mdiPencil, mdiPlay, mdiPlus, mdiPower, mdiRefresh, mdiSkipNext, mdiSkipPrevious, mdiSleep, mdiSpeedometer, mdiTimerOutline,
   mdiWeatherCloudy, mdiWeatherFog, mdiWeatherLightning, mdiWeatherPartlyCloudy, mdiWeatherPouring,
@@ -12,6 +12,7 @@ const ICONS: Record<string, string> = {
   speed: mdiSpeedometer, bolt: mdiLightningBolt, email: mdiEmail, cpu: mdiCpu64Bit, memory: mdiMemory,
   disk: mdiHarddisk, web: mdiWeb, open: mdiOpenInNew, pencil: mdiPencil,
   home: mdiHome, plus: mdiPlus, chevronUp: mdiChevronUp, timer: mdiTimerOutline, close: mdiClose,
+  lyrics: mdiCommentQuoteOutline, dots: mdiDotsHorizontal,
   // weather keys come from the Rust weather monitor
   sunny: mdiWeatherSunny, partly: mdiWeatherPartlyCloudy, cloudy: mdiWeatherCloudy, fog: mdiWeatherFog,
   rainy: mdiWeatherRainy, pouring: mdiWeatherPouring, snowy: mdiWeatherSnowy, lightning: mdiWeatherLightning,

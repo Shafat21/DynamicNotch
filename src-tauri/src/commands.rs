@@ -1,5 +1,6 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
+use crate::monitors::calendar;
 use crate::{actions, db, emit_settings, launcher, menu, monitors, window, AppState};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -66,9 +67,51 @@ pub async fn set_location(app: AppHandle, city: String) -> Res<String> {
     Ok(name)
 }
 
+/// Store the calendar link after one successful fetch ("" removes it); returns the new `calendar` payload.
+/// A failed fetch leaves the stored link unchanged. The link never goes back to the webview.
+#[tauri::command]
+pub async fn set_calendar_url(app: AppHandle, url: String) -> Res<Value> {
+    let url = calendar::normalize_url(&url)?;
+    let started = calendar::begin(); // supersedes older saves and the monitor's in-flight fetch
+    let Some(url) = url else {
+        return calendar::commit(&app, started, false, Some(Vec::new()), None, Some(""));
+    };
+    let fetch_url = url.clone();
+    let (events, note) = tauri::async_runtime::spawn_blocking(move || calendar::load(&fetch_url)).await.map_err(err)??;
+    calendar::commit(&app, started, true, Some(events), note, Some(&url))
+}
+
+/// Open the join link of event `id` from the last published `calendar` payload (no URL from the webview).
+#[tauri::command]
+pub fn open_join(state: State<AppState>, id: String) -> Res<()> {
+    let url = {
+        let last = state.last.lock().unwrap();
+        let p = last.get("calendar").ok_or("No calendar loaded")?;
+        let mut events = p["today"].as_array().into_iter().flatten().chain([&p["tomorrowFirst"]]);
+        events.find(|e| e["id"] == id.as_str()).and_then(|e| e["join"].as_str()).ok_or("No join link for this event")?.to_string()
+    };
+    launcher::os::shell_open(&url)
+}
+
 #[tauri::command]
 pub async fn media_control(action: String) -> Res<()> {
     tauri::async_runtime::spawn_blocking(move || monitors::media::control(&action)).await.map_err(err)?
+}
+
+/// Seek the current track; bounds come from the last published `media-progress` duration.
+#[tauri::command]
+pub async fn media_seek(app: AppHandle, seconds: f64) -> Res<()> {
+    let state = app.state::<AppState>();
+    let duration = state.last.lock().unwrap().get("media-progress").and_then(|p| p["duration"].as_f64()).unwrap_or(0.0);
+    let seconds = monitors::media::validate_seek(seconds, duration)?;
+    tauri::async_runtime::spawn_blocking(move || monitors::media::seek(seconds)).await.map_err(err)??;
+    crate::publish(&app, "media-progress", serde_json::json!({ "position": seconds, "duration": duration }));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn media_open_player() -> Res<()> {
+    tauri::async_runtime::spawn_blocking(monitors::media::open_player).await.map_err(err)?
 }
 
 #[tauri::command]

@@ -104,6 +104,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #island[data-bg="weather"] .bg-weather,
 #island[data-bg="perf"] .bg-perf,
 #island[data-bg="calendar"] .bg-calendar,
+#island[data-bg="agenda"] .bg-calendar,
 #island[data-bg="month"] .bg-month { opacity: 1; }
 
 /* ---------- media animations (tinted by album art) ---------- */
@@ -203,7 +204,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .header { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 25px; box-sizing: border-box; }
 .icon { width: 22px; height: 22px; display: grid; place-items: center; flex: none; }
 .title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.media-controls { display: flex; gap: 2px; flex: none; }
 .media-btn { width: 28px; height: 28px; border: none; border-radius: 14px; background: transparent; display: grid; place-items: center; padding: 0; }
 .media-btn:hover { background: rgba(255, 255, 255, 0.12); }
 .media-btn:active { background: rgba(255, 255, 255, 0.2); }
@@ -311,7 +311,7 @@ select option { background: #1a1a1a; }
   background: rgba(255, 255, 255, 0.07);
   text-align: left;
 }
-button.tile:hover { background: rgba(255, 255, 255, 0.12); }
+button.tile:hover, #tile-clock:hover { background: rgba(255, 255, 255, 0.12); }
 .tile-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tile-title i, .tile-title svg { flex: none; display: grid; }
@@ -343,10 +343,32 @@ button.tile:hover { background: rgba(255, 255, 255, 0.12); }
 @keyframes pal-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.94); } }
 @keyframes pal-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8%); } 40%, 80% { transform: translateX(8%); } }
 @media (prefers-reduced-motion: reduce) { .pal, .pal * { animation: none !important; } }
-#tile-media { --accent: #000; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, transparent), rgba(255, 255, 255, 0.06)); }
-.focus-time, .clock-time { font-size: 16px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; }
+#tile-media { --accent: #000; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, transparent), rgba(255, 255, 255, 0.06)); flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; }
+.tile-art { width: 38px; height: 38px; flex: none; border-radius: 8px; object-fit: cover; }
+.focus-time { font-size: 16px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; }
 #tile-focus.running .focus-time { color: #ffb340; }
-.clock-bar { display: block; margin-top: 3px; }
+
+/* calendar card (spec §15.3) */
+#tile-clock { cursor: pointer; justify-content: flex-start; gap: 3px; padding: 5px 8px 5px 12px; }
+#tile-clock:focus-visible { outline: 2px solid var(--sys-accent); outline-offset: -2px; }
+.cal-head { display: flex; align-items: center; gap: 6px; height: 18px; flex: none; }
+.cal-date { flex: none; color: var(--sys-accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+.cal-count { flex: 1; min-width: 0; font-size: 10px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-add { width: 18px; height: 18px; flex: none; margin-left: auto; }
+.cal-row, .agenda-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cal-bar { width: 3px; align-self: stretch; border-radius: 1px; flex: none; background: var(--sys-accent); }
+.cal-det { flex: 1; min-width: 0; }
+.cal-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-when { font-size: 10px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-note { font-size: 9px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-join { flex: none; border: none; border-radius: 10px; padding: 3px 10px; background: #30d158; color: #000; font-size: 11px; font-weight: 700; }
+.cal-join:hover { background: #4ade72; }
+.cal-prompt { margin: 0; padding: 0; text-align: left; }
+.agenda-month { margin-left: 0; }
+#agenda-list { display: flex; flex-direction: column; gap: 8px; max-height: 270px; overflow-y: auto; }
+.agenda-row { min-height: 28px; }
+.agenda-row .cal-title { font-size: 13px; }
+.agenda-row .cal-when { font-size: 11px; }
 
 #launcher { flex: none; height: 40px; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; }
 .app {
@@ -360,3 +382,41 @@ button.tile:hover { background: rgba(255, 255, 255, 0.12); }
 .app img { width: 24px; height: 24px; pointer-events: none; }
 .app:hover { background: rgba(255, 255, 255, 0.14); }
 .app.armed { background: #a01818; border-color: #ff5050; }
+
+/* music player card (spec §14.1); --accent comes from #island */
+#panel-media { padding: 12px 20px 10px; }
+.player-top { display: flex; align-items: center; gap: 12px; height: 60px; }
+.player-art {
+  width: 60px; height: 60px; flex: none; overflow: hidden; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 35%, #1a0030));
+}
+.player-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.player-info { flex: 1; min-width: 0; }
+.player-title-row { display: flex; align-items: center; gap: 10px; }
+.player-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-artist { margin-top: 2px; font-size: 12px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-top .bar-btn { align-self: flex-start; }
+
+.eq { display: flex; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
+.eq i { width: 3px; height: 35%; border-radius: 1px; background: #ff375f; animation: eq 0.8s ease-in-out infinite alternate paused; }
+.eq i:nth-child(2) { animation-duration: 0.55s; animation-delay: -0.2s; }
+.eq i:nth-child(3) { animation-duration: 0.7s; animation-delay: -0.45s; }
+.eq i:nth-child(4) { animation-duration: 0.95s; animation-delay: -0.3s; }
+.eq.on i { animation-play-state: running; }
+@keyframes eq { from { height: 20%; } to { height: 100%; } }
+@media (prefers-reduced-motion: reduce) { .eq i { animation: none; height: 60%; } }
+
+.player-progress { display: flex; align-items: center; gap: 10px; height: 14px; margin-top: 8px; font-size: 10px; color: #999; font-variant-numeric: tabular-nums; }
+.player-progress span { flex: none; min-width: 30px; }
+#player-remaining { text-align: right; }
+.player-track { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+.player-track.readonly { cursor: default; }
+.player-line { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+#player-fill { height: 100%; width: 0; background: #fff; border-radius: 2px; }
+
+.player-controls { display: flex; align-items: center; gap: 6px; height: 36px; margin-top: 4px; }
+.player-controls .spacer { flex: 1; }
+.media-btn.big { width: 36px; height: 36px; border-radius: 18px; }
+#btn-lyrics { color: #999; }
+#btn-lyrics.on { color: #fff; background: rgba(255, 255, 255, 0.12); }
+.player-lyric { height: 20px; margin-top: 2px; font-size: 12px; font-weight: 600; text-align: center; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

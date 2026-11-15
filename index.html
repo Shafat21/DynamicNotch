@@ -21,18 +21,42 @@
         <div class="shine"></div>
 
         <div id="content"><div id="view">
-          <!-- Header: idle clock, media title/lyric, notifications -->
+          <!-- Header: idle clock / playing title, notifications -->
           <div class="header" id="header">
             <span class="icon" id="status-pal"></span>
             <span class="icon" id="status-icon" hidden></span>
             <span class="title" id="status-text"></span>
-            <div class="media-controls" id="media-controls" hidden>
-              <button class="media-btn" data-view="dashboard" data-icon="home" title="Home"></button>
-              <button class="media-btn" data-media="prev" data-icon="prev"></button>
-              <button class="media-btn" data-media="toggle" id="btn-play" data-icon="play"></button>
-              <button class="media-btn" data-media="next" data-icon="next"></button>
-            </div>
           </div>
+
+          <!-- Music player card (spec §14.1) -->
+          <section class="panel" id="panel-media" hidden>
+            <div class="player-top">
+              <div class="player-art"><img id="player-art" alt="" hidden /></div>
+              <div class="player-info">
+                <div class="player-title-row">
+                  <span class="player-title" id="player-title"></span>
+                  <span class="eq" id="player-eq"><i></i><i></i><i></i><i></i></span>
+                </div>
+                <div class="player-artist" id="player-artist"></div>
+              </div>
+              <button class="bar-btn" data-view="dashboard" data-icon="home" data-size="16" title="Home"></button>
+            </div>
+            <div class="player-progress" id="player-progress">
+              <span id="player-elapsed">0:00</span>
+              <div class="player-track" id="player-track"><div class="player-line"><div id="player-fill"></div></div></div>
+              <span id="player-remaining">-0:00</span>
+            </div>
+            <div class="player-controls">
+              <button class="media-btn" id="btn-lyrics" data-icon="lyrics" title="Lyrics" aria-pressed="false"></button>
+              <span class="spacer"></span>
+              <button class="media-btn big" data-media="prev" data-icon="prev" data-size="26" title="Previous"></button>
+              <button class="media-btn big" data-media="toggle" id="btn-play" data-icon="play" data-size="32" title="Play/Pause"></button>
+              <button class="media-btn big" data-media="next" data-icon="next" data-size="26" title="Next"></button>
+              <span class="spacer"></span>
+              <button class="media-btn" id="btn-open-player" data-icon="dots" title="Open player"></button>
+            </div>
+            <div class="player-lyric" id="player-lyric" hidden></div>
+          </section>
 
           <!-- Dashboard: hover home -->
           <section class="panel" id="panel-dashboard" hidden>
@@ -51,15 +75,22 @@
                 <span class="tile-col"><span class="tile-title">Claude Code</span><span class="tile-sub">Offline</span></span>
               </div>
               <button class="tile" id="tile-media" data-view="media">
-                <span class="tile-title"><i data-icon="music" data-size="16"></i><span id="tile-media-title">Nothing playing</span></span>
-                <span class="tile-sub" id="tile-media-artist"></span>
+                <img class="tile-art" id="tile-media-art" alt="" hidden />
+                <span class="tile-col">
+                  <span class="tile-title"><i data-icon="music" data-size="16"></i><span id="tile-media-title">Nothing playing</span></span>
+                  <span class="tile-sub" id="tile-media-artist"></span>
+                </span>
               </button>
               <button class="tile" id="tile-focus" title="Click to start/pause, scroll to change"></button>
-              <button class="tile" id="tile-clock" data-view="calendar">
-                <span class="tile-title clock-time" id="clock-time"></span>
-                <span class="tile-sub" id="clock-date"></span>
-                <span class="bar clock-bar"><span id="clock-bar"></span></span>
-              </button>
+              <!-- Calendar card (was the clock tile); a div because it holds the +/Join buttons. Click → agenda. -->
+              <div class="tile" id="tile-clock" role="button" tabindex="0" title="Today's agenda">
+                <div class="cal-head">
+                  <span class="cal-date" id="cal-date"></span>
+                  <span class="cal-count" id="cal-count"></span>
+                  <button class="bar-btn cal-add" id="btn-cal-link" data-icon="plus" data-size="14" title="Calendar link"></button>
+                </div>
+                <div id="cal-body"></div>
+              </div>
               <button class="tile" id="tile-settings" data-menu>
                 <span class="tile-title"><i data-icon="cog" data-size="16"></i>Settings</span>
               </button>
@@ -101,6 +132,24 @@
               <input id="location-input" placeholder="City name" maxlength="100" autocomplete="off" />
               <button type="submit" class="btn primary">Save</button>
               <button type="button" class="btn" id="location-cancel">Cancel</button>
+            </form>
+          </section>
+
+          <!-- Agenda: today's calendar events + link editor -->
+          <section class="panel" id="panel-agenda" hidden>
+            <div class="panel-head">
+              <span class="panel-title">Today</span>
+              <button class="link-btn" data-view="calendar">Tasks</button>
+              <button class="link-btn agenda-month" data-view="month">Month</button>
+              <button class="action-btn" id="btn-agenda-link" data-icon="pencil" data-size="16" title="Calendar link"></button>
+              <button class="action-btn" data-view="dashboard" data-icon="home" data-size="16" title="Home"></button>
+            </div>
+            <div id="agenda-list"></div>
+            <form class="location-form" id="cal-form" hidden>
+              <input id="cal-input" placeholder="Paste your calendar's secret iCal link" maxlength="2100" autocomplete="off" spellcheck="false" />
+              <button type="submit" class="btn primary">Save</button>
+              <button type="button" class="btn" id="cal-remove">Remove</button>
+              <button type="button" class="btn" id="cal-cancel">Cancel</button>
             </form>
           </section>
 

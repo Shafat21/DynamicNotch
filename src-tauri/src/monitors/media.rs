@@ -12,8 +12,7 @@ mod os;
 #[cfg(target_os = "linux")]
 #[path = "media_linux.rs"]
 mod os;
-pub use os::{control, spawn};
-
+pub use os::{control, open_player, seek, spawn};
 
 /// Lyrics are shown slightly early so the line appears as it is sung.
 pub(super) const LYRIC_LEAD_SECS: f64 = 1.0;
@@ -24,11 +23,38 @@ pub(super) struct Media {
     title: String,
     artist: String,
     accent: String,
+    art: String,   // image data URI, "" if none
+    duration: f64, // seconds, 0 if unknown
+    seekable: bool,
 }
 
 impl Media {
     pub(super) fn idle() -> Self {
-        Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into() }
+        Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into(), art: String::new(), duration: 0.0, seekable: true }
+    }
+}
+
+/// Album art as a data URI, mime sniffed from magic bytes; `None` if unknown or over 512 KB.
+pub(super) fn art_data_uri(bytes: &[u8]) -> Option<String> {
+    if bytes.len() > 512 * 1024 {
+        return None;
+    }
+    let mime = match bytes {
+        [0xFF, 0xD8, 0xFF, ..] => "jpeg",
+        [0x89, b'P', b'N', b'G', ..] => "png",
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => "webp",
+        [b'B', b'M', ..] => "bmp",
+        _ => return None,
+    };
+    Some(format!("data:image/{mime};base64,{}", crate::launcher::base64(bytes)))
+}
+
+/// Seek target must be finite and within a known (non-zero) duration.
+pub fn validate_seek(seconds: f64, duration: f64) -> Result<f64, String> {
+    if duration.is_finite() && duration > 0.0 && seconds.is_finite() && (0.0..=duration).contains(&seconds) {
+        Ok(seconds)
+    } else {
+        Err("Can't seek there".into())
     }
 }
 
@@ -129,5 +155,23 @@ mod tests {
         img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
         let c = dominant_color(&png).unwrap();
         assert!(c.starts_with("#c") || c.starts_with("#b"), "got {c}");
+    }
+
+    #[test]
+    fn art_data_uri_sniffs_and_caps() {
+        assert!(art_data_uri(&[0xFF, 0xD8, 0xFF, 0xE0, 1, 2]).unwrap().starts_with("data:image/jpeg;base64,"));
+        assert!(art_data_uri(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]).unwrap().starts_with("data:image/png;base64,"));
+        assert!(art_data_uri(b"RIFF\0\0\0\0WEBPVP8 ").unwrap().starts_with("data:image/webp;base64,"));
+        assert!(art_data_uri(b"hello").is_none());
+        let mut big = vec![0xFF, 0xD8, 0xFF]; big.resize(512 * 1024 + 1, 0);
+        assert!(art_data_uri(&big).is_none());
+    }
+    #[test]
+    fn seek_bounds() {
+        assert_eq!(validate_seek(30.0, 200.0), Ok(30.0));
+        assert!(validate_seek(-1.0, 200.0).is_err());
+        assert!(validate_seek(201.0, 200.0).is_err());
+        assert!(validate_seek(f64::NAN, 200.0).is_err());
+        assert!(validate_seek(10.0, 0.0).is_err()); // unknown duration → no seeking
     }
 }

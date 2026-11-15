@@ -2,19 +2,21 @@
 // this file decides the island's size/state and which view is visible.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { agendaRows, renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
 import { hydrateIcons, icon } from "./icons";
 import { createPal, greet, updateMood } from "./pal";
 import { getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 
-type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string };
+type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; art: string; duration: number; seekable: boolean };
+type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; islandStyle: string; animationStyle: string; autostart: boolean };
 type State = "idle" | "hover" | "notify";
-type View = "dashboard" | "perf" | "media" | "weather" | "calendar" | "month";
+type View = "dashboard" | "perf" | "media" | "weather" | "calendar" | "month" | "agenda"; // "calendar" = Tasks
 
-const PANELS = ["dashboard", "perf", "weather", "calendar", "month"] as const; // views with their own <section>; media uses the header
+const PANELS = ["dashboard", "perf", "media", "weather", "calendar", "month", "agenda"] as const; // views with their own <section>
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -29,7 +31,12 @@ const ui = {
   charging: false,
   editingTasks: false,
   editingLocation: false,
-  media: { state: "Idle", title: "", artist: "", accent: "#000000" } as Media,
+  editingCalendar: false,
+  calendar: null as CalPayload | null,
+  media: { state: "Idle", title: "", artist: "", accent: "#000000", art: "", duration: 0, seekable: true } as Media,
+  progress: { position: 0, duration: 0 } as Progress,
+  seekPreview: null as number | null, // seconds while dragging the progress bar
+  showLyric: false,
   lyric: "",
   event: { title: "", text: "" },
   settings: { islandStyle: "Default", animationStyle: "Fluid Blobs" } as Settings,
@@ -38,7 +45,6 @@ const ui = {
 
 const isNotch = () => ui.settings.islandStyle === "Notch Nook";
 const pillTop = () => (isNotch() ? 0 : 10);
-const showingLyrics = () => ui.lyric !== "" && ui.media.state !== "Idle";
 const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
 const calendarHeight = () => {
   const n = Math.min(ui.tasks.length, 3);
@@ -62,11 +68,12 @@ function targetSize(): [number, number] {
   if (ui.state === "notify") return [380, 40];
   switch (ui.view) {
     case "dashboard": return [720, 230];
-    case "media": return [showingLyrics() ? 640 : 420, 40];
+    case "media": return [460, ui.showLyric ? 175 : 150];
     case "perf": return [360, 180];
     case "weather": return [360, ui.editingLocation ? 205 : 160];
     case "calendar": return ui.editingTasks ? [540, 520] : [420, calendarHeight()];
     case "month": return [360, 150];
+    case "agenda": return [420, Math.min(360, 80 + 36 * agendaRows(ui.calendar)) + (ui.editingCalendar ? 50 : 0)];
   }
 }
 
@@ -152,14 +159,6 @@ function renderHeader(): void {
     setStatus(ui.event.title.includes("Lock") ? "bolt" : "email", `${ui.event.title} - ${ui.event.text}`);
     return;
   }
-  const m = ui.media;
-  if (ui.state === "hover" && ui.view === "media") {
-    let text = "Music Player";
-    if (showingLyrics()) text = ui.lyric;
-    else if (m.state !== "Idle") text = m.artist ? `${m.title} - ${m.artist}` : m.title;
-    setStatus("music", text);
-    return;
-  }
   if (ui.state === "idle" && playingTitle()) {
     setStatus(null, playingTitle());
     return;
@@ -170,23 +169,27 @@ function renderHeader(): void {
   setStatus(null, `${day}, ${time}`);
 }
 
-function renderClock(now = new Date()): void {
-  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  $("clock-time").textContent = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  $("clock-date").textContent = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-  $("clock-bar").style.width = `${(now.getDate() / days) * 100}%`;
+const calHandlers = {
+  join: (id: string) => invoke("open_join", { id }).catch((err) => showEvent("Calendar", String(err), 3500)),
+  add: () => openCalendarEditor(),
+};
+
+function renderCalendar(): void {
+  if (ui.state !== "hover") return;
+  if (ui.view === "dashboard") renderCard(ui.calendar, calHandlers);
+  if (ui.view === "agenda") renderAgenda(ui.calendar, calHandlers);
 }
 
 function renderView(): void {
   const hover = ui.state === "hover";
   const v = ui.view;
-  $("header").hidden = hover && v !== "media";
-  $("media-controls").hidden = !(hover && v === "media");
+  $("header").hidden = hover;
   for (const p of PANELS) $(`panel-${p}`).hidden = !(hover && v === p);
   $("task-view").hidden = ui.editingTasks;
   $("task-edit").hidden = !ui.editingTasks;
   $("location-form").hidden = !ui.editingLocation;
-  if (hover && v === "dashboard") renderClock();
+  $("cal-form").hidden = !ui.editingCalendar;
+  renderCalendar();
   if (hover && v === "calendar") renderTasks(ui.tasks);
   if (hover && v === "month") renderMonth();
   renderHeader();
@@ -194,7 +197,7 @@ function renderView(): void {
 
 function openView(v: View): void {
   ui.view = v;
-  ui.editingTasks = ui.editingLocation = false;
+  ui.editingTasks = ui.editingLocation = ui.editingCalendar = false;
   if (ui.state === "hover") transition();
 }
 
@@ -213,20 +216,68 @@ function onPerf(p: Perf): void {
   $("net-up").textContent = `↑ ${fmt(p.up)}`;
 }
 
+/** `m:ss`, or `h:mm:ss` from one hour. */
+function formatTime(secs: number): string {
+  const t = Math.max(0, Math.floor(secs));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+const setArt = (img: HTMLImageElement, art: string) => {
+  img.hidden = !art;
+  if (art) img.src = art; // data URI built by the backend
+  else img.removeAttribute("src");
+};
+
 function onMedia(m: Media): void {
+  const idle = m.state === "Idle";
+  if (m.title !== ui.media.title || m.artist !== ui.media.artist) ui.progress.position = 0;
   ui.media = m;
-  if (m.state === "Idle") ui.lyric = "";
-  $("btn-play").innerHTML = icon(m.state === "Playing" ? "pause" : "play");
-  $("tile-media-title").textContent = m.state === "Idle" ? "Nothing playing" : m.title;
-  $("tile-media-artist").textContent = m.state === "Idle" ? "" : m.artist;
+  ui.progress.duration = m.duration;
+  if (idle) ui.lyric = "";
+  $("btn-play").innerHTML = icon(m.state === "Playing" ? "pause" : "play", 32);
+  $("player-title").textContent = idle ? "Nothing playing" : m.title;
+  $("player-artist").textContent = idle ? "" : m.artist;
+  $("player-eq").classList.toggle("on", m.state === "Playing");
+  setArt($<HTMLImageElement>("player-art"), m.art);
+  setArt($<HTMLImageElement>("tile-media-art"), m.art);
+  $("tile-media-title").textContent = idle ? "Nothing playing" : m.title;
+  $("tile-media-artist").textContent = idle ? "" : m.artist;
   $("tile-media").style.setProperty("--accent", m.accent);
+  renderProgress();
+  renderLyric();
   updateFx();
   refresh(); // idle pill width follows the song title
 }
 
+function onProgress(p: Progress): void {
+  if (ui.seekPreview !== null) return; // the user is dragging; their preview wins
+  ui.progress = p;
+  renderProgress();
+}
+
+function renderProgress(): void {
+  const { duration } = ui.progress;
+  const pos = Math.min(ui.seekPreview ?? ui.progress.position, duration);
+  $("player-progress").style.visibility = duration > 0 ? "" : "hidden";
+  $("player-track").classList.toggle("readonly", !ui.media.seekable);
+  $("player-elapsed").textContent = formatTime(pos);
+  $("player-remaining").textContent = `-${formatTime(duration - pos)}`;
+  $("player-fill").style.width = duration > 0 ? `${(pos / duration) * 100}%` : "0";
+}
+
+function renderLyric(): void {
+  $("player-lyric").hidden = !ui.showLyric;
+  $("player-lyric").textContent = ui.lyric || "♪";
+  $("btn-lyrics").classList.toggle("on", ui.showLyric);
+  $("btn-lyrics").setAttribute("aria-pressed", String(ui.showLyric));
+}
+
 function onLyric(text: string): void {
   ui.lyric = text;
-  refresh(); // the Music view widens to 640 while lyrics show
+  renderLyric();
 }
 
 function onWeather(w: Weather): void {
@@ -288,6 +339,20 @@ function openLocationEditor(): void {
   window.setTimeout(() => $<HTMLInputElement>("location-input").focus(), 300);
 }
 
+function onCalendar(p: CalPayload): void {
+  ui.calendar = p;
+  refresh(); // the agenda's height follows the event count
+  renderCalendar();
+}
+
+function openCalendarEditor(): void {
+  ui.view = "agenda";
+  ui.editingCalendar = true;
+  if (ui.state === "hover") transition();
+  else setState("hover");
+  window.setTimeout(() => $<HTMLInputElement>("cal-input").focus(), 300);
+}
+
 // ---------- launcher ----------
 const launcherError = (err: unknown) => showEvent("Launcher", String(err), 3500);
 
@@ -305,6 +370,45 @@ function updateApps(apps: Promise<LauncherApp[]>): void {
 }
 
 // ---------- user input ----------
+function wirePlayer(): void {
+  $("btn-lyrics").onclick = () => {
+    ui.showLyric = !ui.showLyric;
+    renderLyric();
+    refresh(); // card height 150 <-> 175
+  };
+  $("btn-open-player").onclick = () => invoke("media_open_player").catch((err) => showEvent("Music", String(err), 3500));
+
+  // Seek: preview while dragging, seek once on release.
+  const track = $("player-track");
+  const secondsAt = (e: PointerEvent) => {
+    const r = track.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * ui.progress.duration;
+  };
+  track.onpointerdown = (e) => {
+    if (!ui.media.seekable || ui.progress.duration <= 0) return;
+    track.setPointerCapture(e.pointerId);
+    ui.seekPreview = secondsAt(e);
+    renderProgress();
+  };
+  track.onpointermove = (e) => {
+    if (ui.seekPreview === null) return;
+    ui.seekPreview = secondsAt(e);
+    renderProgress();
+  };
+  track.onpointerup = (e) => {
+    if (ui.seekPreview === null) return;
+    const seconds = secondsAt(e);
+    ui.seekPreview = null;
+    ui.progress.position = seconds;
+    renderProgress();
+    invoke("media_seek", { seconds }).catch((err) => showEvent("Music", String(err), 3500));
+  };
+  track.onpointercancel = () => {
+    ui.seekPreview = null;
+    renderProgress();
+  };
+}
+
 function wireInput(): void {
   window.addEventListener("contextmenu", (e) => {
     e.preventDefault();
@@ -332,6 +436,7 @@ function wireInput(): void {
   document.querySelectorAll<HTMLElement>("[data-media]").forEach((b) => {
     b.onclick = () => invoke("media_control", { action: b.dataset.media }).catch(console.error);
   });
+  wirePlayer();
 
   // tasks
   const toggleEditor = () => {
@@ -358,6 +463,41 @@ function wireInput(): void {
     if (id === null) return;
     ui.tasks = await invoke<Task[]>("delete_task", { id });
     renderTasks(ui.tasks);
+  };
+
+  // calendar
+  $("tile-clock").onclick = () => openView("agenda");
+  $("tile-clock").onkeydown = (e) => {
+    // only the card itself: Enter/Space on the nested +/Join buttons must not also open the agenda
+    if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    openView("agenda");
+  };
+  $("btn-cal-link").onclick = (e) => {
+    e.stopPropagation();
+    openCalendarEditor();
+  };
+  $("btn-agenda-link").onclick = openCalendarEditor;
+  $("cal-cancel").onclick = () => {
+    ui.editingCalendar = false;
+    transition();
+  };
+  const saveCalendar = async (url: string) => {
+    ui.editingCalendar = false;
+    try {
+      onCalendar(await invoke<CalPayload>("set_calendar_url", { url }));
+      $<HTMLInputElement>("cal-input").value = "";
+      showEvent("Calendar", url ? "Calendar connected" : "Calendar removed", 2500);
+    } catch (err) {
+      showEvent("Calendar", `Error: ${err}`, 3500);
+    }
+  };
+  $("cal-remove").onclick = () => saveCalendar("");
+  $("cal-form").onsubmit = (e) => {
+    e.preventDefault();
+    const input = $<HTMLInputElement>("cal-input");
+    if (!input.value.trim()) return input.focus();
+    saveCalendar(input.value);
   };
 
   // location
@@ -395,7 +535,9 @@ async function boot(): Promise<void> {
     listen<Perf>("perf", (e) => onPerf(e.payload)),
     listen<Media>("media", (e) => onMedia(e.payload)),
     listen<string>("lyric", (e) => onLyric(e.payload)),
+    listen<Progress>("media-progress", (e) => onProgress(e.payload)),
     listen<Weather>("weather", (e) => onWeather(e.payload)),
+    listen<CalPayload>("calendar", (e) => onCalendar(e.payload)),
     listen<string>("accent", (e) => document.documentElement.style.setProperty("--sys-accent", e.payload)),
     listen<Settings>("settings", (e) => onSettings(e.payload)),
     listen<{ name: string; on: boolean }>("keylock", (e) => showEvent(e.payload.name, e.payload.on ? "ENABLED" : "DISABLED", 2500)),
@@ -412,16 +554,23 @@ async function boot(): Promise<void> {
   if (snap.accent) document.documentElement.style.setProperty("--sys-accent", snap.accent as string);
   if (snap.perf) onPerf(snap.perf as Perf);
   if (snap.weather) onWeather(snap.weather as Weather);
+  if (snap.calendar) ui.calendar = snap.calendar as CalPayload;
   if (snap.media) onMedia(snap.media as Media);
-  if (snap.lyric) ui.lyric = snap.lyric as string;
+  if (snap.lyric) onLyric(snap.lyric as string);
+  if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
 
   ui.tasks = await invoke<Task[]>("list_tasks");
   onSettings(await invoke<Settings>("get_settings"));
 
   window.setInterval(() => {
     if (ui.state === "idle") renderHeader();
-    else if (ui.state === "hover" && ui.view === "dashboard") renderClock();
+    // Advance locally between backend updates (they come at most once per second).
+    if (ui.media.state === "Playing" && ui.seekPreview === null && ui.progress.duration > 0) {
+      ui.progress.position = Math.min(ui.progress.position + 1, ui.progress.duration);
+      renderProgress();
+    }
   }, 1000);
+  window.setInterval(renderCalendar, 30_000); // relative labels ("In 20 min") while visible
 }
 
 boot().catch(console.error);

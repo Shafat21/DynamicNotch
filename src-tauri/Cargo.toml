@@ -22,6 +22,10 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 sysinfo = "0.37"
 ureq = { version = "3", features = ["json"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
+rrule = "0.14.0"
+chrono-tz = "0.10"
+chrono = "0.4"
+icalendar = { version = "0.17.17", default-features = false, features = ["parser"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
@@ -34,6 +38,7 @@ windows = { version = "0.61", features = [
   "ApplicationModel",
   "UI_ViewManagement",
   "Win32_System_Power",
+  "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
