@@ -1,35 +1,42 @@
-// Focus timer tile: click start/pause, wheel ±5 min while stopped, in memory only.
-import { icon } from "./icons";
+// Focus timer: click start/pause, wheel ±5 min while stopped, in memory only.
+// One timer shown in several places (Home strip chip, Timer tab); every element drives the same state.
+import { icon } from "./icons-line";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-export function initFocus(el: HTMLElement, onDone: () => void): void {
+export function initFocus(els: HTMLElement[], onDone: () => void): void {
   let minutes = 25;
   let left = minutes * 60; // seconds remaining
   let end = 0; // deadline in ms while running (timers drift, the clock doesn't)
   let timer = 0;
   let lastWheel = 0;
 
-  const head = document.createElement("span");
-  head.className = "tile-title focus-time";
-  head.innerHTML = icon("timer", 18); // static SVG, no user text
-  const time = document.createElement("span");
-  head.append(time);
-  const label = document.createElement("span");
-  label.className = "tile-sub";
-  el.append(head, label);
+  const parts = els.map((el) => {
+    const ic = document.createElement("span");
+    ic.className = "focus-ic";
+    ic.dataset.badge = "focus";
+    ic.innerHTML = icon("timer", 18); // static SVG, no user text
+    const label = document.createElement("span");
+    label.className = "focus-label";
+    const time = document.createElement("span");
+    time.className = "focus-time";
+    el.append(ic, label, time);
+    return { el, label, time };
+  });
 
   const render = () => {
-    time.textContent = `${pad(Math.floor(left / 60))}:${pad(left % 60)}`;
-    label.textContent = timer ? "Focusing" : left < minutes * 60 ? "Paused" : "Focus";
-    el.classList.toggle("running", timer !== 0);
+    for (const p of parts) {
+      p.time.textContent = `${pad(Math.floor(left / 60))}:${pad(left % 60)}`;
+      p.label.textContent = timer ? "Focusing" : left < minutes * 60 ? "Paused" : "Focus";
+      p.el.classList.toggle("running", timer !== 0);
+    }
   };
   const stop = () => {
     clearInterval(timer);
     timer = 0;
   };
 
-  el.addEventListener("click", () => {
+  const toggle = () => {
     if (timer) stop();
     else {
       end = Date.now() + left * 1000;
@@ -44,19 +51,19 @@ export function initFocus(el: HTMLElement, onDone: () => void): void {
       }, 250);
     }
     render();
-  });
+  };
 
-  el.addEventListener(
-    "wheel",
-    (e) => {
-      if (timer || e.timeStamp - lastWheel < 250) return; // trackpads fire many events per gesture
-      lastWheel = e.timeStamp;
-      minutes = Math.min(95, Math.max(5, minutes + (e.deltaY < 0 ? 5 : -5)));
-      left = minutes * 60;
-      render();
-    },
-    { passive: true },
-  );
+  const wheel = (e: WheelEvent) => {
+    if (timer || e.timeStamp - lastWheel < 250) return; // trackpads fire many events per gesture
+    lastWheel = e.timeStamp;
+    minutes = Math.min(95, Math.max(5, minutes + (e.deltaY < 0 ? 5 : -5)));
+    left = minutes * 60;
+    render();
+  };
 
+  for (const el of els) {
+    el.addEventListener("click", toggle);
+    el.addEventListener("wheel", wheel, { passive: true });
+  }
   render();
 }

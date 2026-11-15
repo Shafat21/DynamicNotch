@@ -1,4 +1,4 @@
-//! Right-click menu (native popup). Item ids: "settings", "anim:<style>", "style:<style>", "claude", "quit".
+//! Right-click menu (native popup). Item ids: "settings", "anim:<style>", "claude", "quit".
 //! Display, size, fullscreen, autostart and location moved to the Settings window (spec §22.4).
 
 use crate::{bridge, commands, db, emit_settings, AppState};
@@ -15,10 +15,6 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     for st in db::ANIMATION_STYLES {
         anim.append(&check(format!("anim:{st}"), st, s.animation_style == st)?)?;
     }
-    let style = Submenu::with_id(app, "style", "Island Style", true)?;
-    for st in db::ISLAND_STYLES {
-        style.append(&check(format!("style:{st}"), st, s.island_style == st)?)?;
-    }
 
     Menu::with_items(
         app,
@@ -26,7 +22,6 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             &MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &anim,
-            &style,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "claude", claude, true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
@@ -43,8 +38,6 @@ pub fn handle(app: &AppHandle, id: &str) {
     let state = app.state::<AppState>();
     let result = if let Some(st) = id.strip_prefix("anim:").filter(|s| db::ANIMATION_STYLES.contains(s)) {
         state.db.lock().unwrap().set("animation_style", st).map_err(|e| e.to_string())
-    } else if let Some(st) = id.strip_prefix("style:").filter(|s| db::ISLAND_STYLES.contains(s)) {
-        state.db.lock().unwrap().set("island_style", st).map_err(|e| e.to_string())
     } else {
         match id {
             "settings" => {

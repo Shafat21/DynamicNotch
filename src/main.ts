@@ -1,23 +1,29 @@
 // Island state machine + event wiring. Rust pushes events (perf, media, hover, ...);
-// this file decides the island's size/state and which view is visible.
+// this file decides the island's size/state and which tab is visible.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { agendaRows, renderAgenda, renderCard, type CalPayload } from "./calendar";
+import {
+  addPrompt, anyWorking, closePrompt, currentPrompt, dismissAll, dismissPrompt, initAssistant, popMood, promptHeight, setBridge, setSessions, setTyping,
+  type Bridge, type Prompt, type Session,
+} from "./assistant";
+import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
-import { hydrateIcons, icon } from "./icons";
-import { createPal, greet, updateMood } from "./pal";
+import { hydrateIcons, icon } from "./icons-line";
+import type { PalMood } from "./mood";
+import { createPal, greet } from "./pal";
 import { getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
+import { renderHome } from "./ui/home";
+import { closeMore, fitTabs, initTabs, renderTabs, setActiveTab, visibleTabs } from "./ui/tabs";
+import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
 
 type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
-type Settings = { location: string; lat: number; lon: number; islandStyle: string; animationStyle: string; autostart: boolean };
+type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean };
 type Display = { uiScale: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
-type State = "idle" | "hover" | "notify";
-type View = "dashboard" | "perf" | "media" | "weather" | "calendar" | "month" | "agenda"; // "calendar" = Tasks
+type State = "idle" | "hover" | "notify" | "prompt";
 
-const PANELS = ["dashboard", "perf", "media", "weather", "calendar", "month", "agenda"] as const; // views with their own <section>
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -27,8 +33,9 @@ const view = $("view");
 
 const ui = {
   state: "idle" as State,
-  view: "dashboard" as View,
+  tab: "home", // a layout tab id (ui/tabs.ts); its page is #tab-<id>
   hovering: false,
+  pinned: false, // pin button: stay open while the cursor is away
   hidden: false, // a fullscreen app is in front: island slid away, click-through
   charging: false,
   editingTasks: false,
@@ -38,46 +45,42 @@ const ui = {
   media: { state: "Idle", title: "", artist: "", accent: "#000000", duration: 0, seekable: true } as Media,
   progress: { position: 0, duration: 0 } as Progress,
   seekPreview: null as number | null, // seconds while dragging the progress bar
-  showLyric: false,
+  showLyric: true, // Music tab's lyrics panel (in memory)
   lyric: "",
-  event: { title: "", text: "" },
-  settings: { islandStyle: "Default", animationStyle: "Fluid Blobs" } as Settings,
+  event: { title: "", text: "", mood: null as PalMood | null }, // mood: a Claude Code pop shows Pal
+  settings: { animationStyle: "Fluid Blobs" } as Settings,
+  look: DEFAULT_LOOK as Look,
   tasks: [] as Task[],
   scale: 1, // display uiScale from Rust: sizes below are 1080p base px, multiplied in transition()
 };
 
-const isNotch = () => ui.settings.islandStyle === "Notch Nook";
-const pillTop = () => (isNotch() ? 0 : 10);
+const look = () => ui.look.appearance;
+const pillTop = () => (look().shape === "notch" ? 0 : 10);
 const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
-const calendarHeight = () => {
-  const n = Math.min(ui.tasks.length, 3);
-  return n ? 80 + n * 35 : 105;
-};
 
 let measureCtx: CanvasRenderingContext2D | null = null;
-/** Idle pill: clock width, or wide enough for the playing song title (never lyrics). */
+const popPal = createPal(22, "calm"); // Claude Code pops: fixed mood per pop
+const spinning = () => ui.state === "idle" && anyWorking();
+
+/** Idle pill: clock width, or wide enough for the playing song title (never lyrics); + the working spinner. */
 function idleWidth(): number {
+  const min = look().collapsedW + (anyWorking() ? 22 : 0); // 12px spinner + 10px gap
   const title = playingTitle();
-  if (!title) return 180;
+  if (!title) return min;
   measureCtx ??= document.createElement("canvas").getContext("2d")!;
   measureCtx.font = getComputedStyle($("status-text")).font;
   // 2x25px padding + 22px icon + 10px gap
-  return Math.min(420, Math.max(180, Math.ceil(measureCtx.measureText(title).width) + 82));
+  return Math.min(Math.max(420, min), Math.max(min, Math.ceil(measureCtx.measureText(title).width) + 82));
 }
 
+/** Base px at 1080p (appearance sizes); geometry() multiplies by the display scale. */
 function targetSize(): [number, number] {
-  if (ui.charging) return [850, 40];
-  if (ui.state === "idle") return [idleWidth(), 40];
-  if (ui.state === "notify") return [380, 40];
-  switch (ui.view) {
-    case "dashboard": return [720, 230];
-    case "media": return [460, ui.showLyric ? 175 : 150];
-    case "perf": return [360, 180];
-    case "weather": return [360, ui.editingLocation ? 205 : 160];
-    case "calendar": return ui.editingTasks ? [540, 520] : [420, calendarHeight()];
-    case "month": return [360, 150];
-    case "agenda": return [420, Math.min(360, 80 + 36 * agendaRows(ui.calendar)) + (ui.editingCalendar ? 50 : 0)];
-  }
+  const a = look();
+  if (ui.charging) return [850, a.collapsedH];
+  if (ui.state === "idle") return [idleWidth(), a.collapsedH];
+  if (ui.state === "notify") return [380, a.collapsedH];
+  if (ui.state === "prompt") return [a.openW, promptHeight()];
+  return [a.openW, a.openH]; // every tab shares the open size; long pages scroll
 }
 
 // ---------- transitions ----------
@@ -91,46 +94,54 @@ function restartAnimation(node: HTMLElement, cls: string): void {
   node.classList.add(cls);
 }
 
-/** Morph to the size of the current state, swap content halfway through the fade. */
-function transition(): void {
+/** Size, corner radius and shape of the current state on #shell, and the matching hit rect. */
+function geometry(): void {
   const [bw, bh] = targetSize();
   const k = ui.scale;
   const [w, h] = [bw * k, bh * k];
-  const r = Math.min(bh / 2, isNotch() ? 18 : 30) * k;
+  const r = Math.min(bh / 2, look().radius + 14) * k; // island corners follow the card radius
   shell.style.setProperty("--ui", String(k));
   shell.style.setProperty("--w", `${w}px`);
   shell.style.setProperty("--h", `${h}px`);
   shell.style.setProperty("--r", `${r}px`);
   shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25 * k)}px`);
-  shell.dataset.style = ui.settings.islandStyle;
+  shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
+  shell.dataset.shape = look().shape;
+  sendHitRect(w, h, k);
+}
+
+const sizeChanged = () => {
+  const [w, h] = targetSize().map((v) => v * ui.scale);
+  return shell.style.getPropertyValue("--w") !== `${w}px` || shell.style.getPropertyValue("--h") !== `${h}px`;
+};
+
+/** Morph to the size of the current state, swap content halfway through the fade. */
+function transition(): void {
+  geometry();
   // compositor hint only while the 850 ms morph runs
   shell.style.willChange = "width, height";
   clearTimeout(morphTimer);
   morphTimer = window.setTimeout(() => (shell.style.willChange = ""), 850);
 
-  island.dataset.bg = ui.state === "hover" ? ui.view : "";
   updateFx();
   if (!ui.charging) restartAnimation($("island").querySelector<HTMLElement>(".shine")!, "run");
 
-  view.style.setProperty("--slide", `${bw / 4}px`); // #view is zoomed, so base px
+  view.style.setProperty("--slide", `${targetSize()[0] / 4}px`); // #view is zoomed, so base px
   restartAnimation(view, "swap");
   clearTimeout(viewTimer);
   viewTimer = window.setTimeout(renderView, 250);
-
-  sendHitRect(w, h, k);
 }
 
 /** Re-morph only when the size actually changes; media/lyric events arrive often. */
 function refresh(): void {
-  const [w, h] = targetSize().map((v) => v * ui.scale);
-  if (shell.style.getPropertyValue("--w") !== `${w}px` || shell.style.getPropertyValue("--h") !== `${h}px`) transition();
+  if (sizeChanged()) transition();
   else renderHeader();
 }
 
 function updateFx(): void {
-  const on = ui.state === "hover" ? ui.view === "media" : playingTitle() !== "";
+  const on = ui.state === "hover" ? ui.tab === "music" : playingTitle() !== "";
   island.dataset.anim = on ? ANIM_KEYS[ui.settings.animationStyle] ?? "blobs" : "";
-  island.style.setProperty("--accent", ui.media.accent);
+  island.style.setProperty("--media", ui.media.accent);
 }
 
 /** Tell Rust where the island is so it can toggle click-through. */
@@ -141,44 +152,63 @@ function sendHitRect(w: number, h: number, k: number): void {
 }
 
 function setState(s: State): void {
-  if (s === "idle") ui.view = "dashboard"; // the next hover opens home
+  if (s === "idle") {
+    setPinned(false);
+    if (look().openOn === "home") ui.tab = "home"; // otherwise the next hover reopens the last tab
+  }
+  if (s !== "hover") closeMore(); // clicks outside the island never reach the webview
   if (ui.state === s) return;
   ui.state = s;
-  if (s === "hover" && ui.view === "dashboard") greet();
+  if (s === "hover" && !visibleTabs().includes(ui.tab)) ui.tab = visibleTabs()[0] ?? "home";
+  if (s === "hover") greet();
   transition();
 }
 
-function showEvent(title: string, text: string, ms: number): void {
-  if (ui.hidden) return; // pops are dropped, not queued
-  ui.event = { title, text };
+function showEvent(title: string, text: string, ms: number, mood: PalMood | null = null): void {
+  if (ui.hidden || ui.state === "prompt") return; // pops are dropped, not queued; a prompt wins
+  ui.event = { title, text, mood };
   clearTimeout(revertTimer);
   if (ui.state === "notify") transition();
   else setState("notify");
-  revertTimer = window.setTimeout(() => setState(ui.hovering ? "hover" : "idle"), ms);
+  revertTimer = window.setTimeout(() => setState(ui.hovering || ui.pinned ? "hover" : "idle"), ms);
 }
 
 // ---------- rendering ----------
-/** Header icon + text; no icon name = Pal (idle pill). */
-function setStatus(iconName: string | null, text: string): void {
-  $("status-pal").hidden = iconName !== null;
-  $("status-icon").hidden = iconName === null;
-  if (iconName) $("status-icon").innerHTML = icon(iconName, 18);
+/** Header icon + text: an icon name, "pal" (follows the mood, idle pill) or "pop" (Pal with the pop's mood). */
+function setStatus(kind: string, text: string): void {
+  $("status-pal").hidden = kind !== "pal";
+  $("status-pop").hidden = kind !== "pop";
+  $("status-icon").hidden = kind === "pal" || kind === "pop";
+  if (!$("status-icon").hidden) $("status-icon").innerHTML = icon(kind, 18);
+  $("status-spin").hidden = !spinning();
   $("status-text").textContent = text;
 }
 
+const clockTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
 function renderHeader(): void {
   if (ui.state === "notify") {
-    setStatus(ui.event.title.includes("Lock") ? "bolt" : "email", `${ui.event.title} - ${ui.event.text}`);
+    const { title, text, mood } = ui.event;
+    if (mood) popPal.setMood(mood);
+    setStatus(mood ? "pop" : title.includes("Lock") ? "bolt" : "email", `${title} - ${text}`);
     return;
   }
   if (ui.state === "idle" && playingTitle()) {
-    setStatus(null, playingTitle());
+    setStatus("pal", playingTitle());
     return;
   }
   const now = new Date();
-  const day = now.toLocaleDateString("en-US", { weekday: "short" });
-  const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  setStatus(null, `${day}, ${time}`);
+  setStatus("pal", `${now.toLocaleDateString("en-US", { weekday: "short" })}, ${clockTime(now)}`);
+}
+
+/** Date/time in the tab bar and on the Home clock card. */
+function renderClock(): void {
+  const now = new Date();
+  const fmt = (o: Intl.DateTimeFormatOptions) => now.toLocaleDateString("en-US", o);
+  const dayMonth = `${now.getDate()} ${fmt({ month: "short" })}`;
+  $("top-clock").textContent = `${fmt({ weekday: "short" })}, ${dayMonth}  ${clockTime(now)}`;
+  $("clock-time").textContent = clockTime(now);
+  $("clock-date").textContent = `${fmt({ weekday: "long" })}, ${dayMonth}`;
 }
 
 const calHandlers = {
@@ -188,41 +218,50 @@ const calHandlers = {
 
 function renderCalendar(): void {
   if (ui.state !== "hover") return;
-  if (ui.view === "dashboard") renderCard(ui.calendar, calHandlers);
-  if (ui.view === "agenda") renderAgenda(ui.calendar, calHandlers);
+  if (ui.tab === "home") renderCard(ui.calendar, calHandlers);
+  if (ui.tab === "calendar") renderAgenda(ui.calendar, calHandlers);
 }
 
 function renderView(): void {
   const hover = ui.state === "hover";
-  const v = ui.view;
-  $("header").hidden = hover;
-  for (const p of PANELS) $(`panel-${p}`).hidden = !(hover && v === p);
+  const prompt = ui.state === "prompt";
+  const t = ui.tab;
+  $("header").hidden = hover || prompt;
+  $("open").hidden = !hover && !prompt;
+  $("prompt").hidden = !prompt;
+  $("pages").hidden = prompt; // the prompt state is sized for the prompt alone; the tab bar stays
+  document.querySelectorAll<HTMLElement>(".page").forEach((p) => (p.hidden = p.id !== `tab-${t}`));
+  setActiveTab(t);
   $("task-view").hidden = ui.editingTasks;
   $("task-edit").hidden = !ui.editingTasks;
   $("location-form").hidden = !ui.editingLocation;
   $("cal-form").hidden = !ui.editingCalendar;
   renderCalendar();
-  if (hover && v === "calendar") renderTasks(ui.tasks);
-  if (hover && v === "month") renderMonth();
+  if (hover && (t === "tasks" || t === "home")) renderTasks(ui.tasks);
+  if (hover && t === "month") renderMonth();
   renderHeader();
+  renderClock();
 }
 
-function openView(v: View): void {
-  ui.view = v;
+/** Switch the open island to tab `id` (Task 9 opens the Pal tab with it). Same size: no morph, just a fade. */
+export function openTab(id: string): void {
+  ui.tab = id;
   ui.editingTasks = ui.editingLocation = ui.editingCalendar = false;
-  if (ui.state === "hover") transition();
+  if (ui.state !== "hover") return;
+  updateFx();
+  renderView();
+  restartAnimation($("pages"), "fade");
 }
 
 // ---------- backend events ----------
 function onPerf(p: Perf): void {
-  const set = (k: string, v: number) => {
-    $(`${k}-val`).textContent = `${Math.round(v)}%`;
-    $(`${k}-bar`).style.width = `${Math.min(100, v)}%`;
+  const set = (val: string, bar: string, v: number) => {
+    $(val).textContent = `${Math.round(v)}%`;
+    $(bar).style.width = `${Math.min(100, v)}%`;
   };
-  set("cpu", p.cpu);
-  set("ram", p.ram);
-  set("disk", p.disk);
-  $("chip-cpu-val").textContent = `CPU ${Math.round(p.cpu)}%`;
+  for (const [k, v] of [["cpu", p.cpu], ["ram", p.ram], ["disk", p.disk]] as const) set(`${k}-val`, `${k}-bar`, v);
+  set("card-cpu", "card-cpu-bar", p.cpu);
+  set("card-ram", "card-ram-bar", p.ram);
   const fmt = (b: number) => (b < 1024 ? `${Math.round(b)} B/s` : b < 1048576 ? `${Math.round(b / 1024)} KB/s` : `${(b / 1048576).toFixed(1)} MB/s`);
   $("net-down").textContent = `↓ ${fmt(p.down)}`;
   $("net-up").textContent = `↑ ${fmt(p.up)}`;
@@ -253,13 +292,15 @@ function onMedia(m: Media): void {
   ui.media = m;
   ui.progress.duration = m.duration;
   if (idle) ui.lyric = "";
-  $("btn-play").innerHTML = icon(m.state === "Playing" ? "pause" : "play", 32);
+  document.querySelectorAll<HTMLElement>('[data-media="toggle"]').forEach((b) => {
+    b.innerHTML = icon(m.state === "Playing" ? "pause" : "play", Number(b.dataset.size ?? 18));
+  });
   $("player-title").textContent = idle ? "Nothing playing" : m.title;
   $("player-artist").textContent = idle ? "" : m.artist;
+  $("player-state").textContent = idle ? "" : m.state;
   $("player-eq").classList.toggle("on", m.state === "Playing");
   $("tile-media-title").textContent = idle ? "Nothing playing" : m.title;
   $("tile-media-artist").textContent = idle ? "" : m.artist;
-  $("tile-media").style.setProperty("--accent", m.accent);
   renderProgress();
   renderLyric();
   updateFx();
@@ -283,7 +324,7 @@ function renderProgress(): void {
 }
 
 function renderLyric(): void {
-  $("player-lyric").hidden = !ui.showLyric;
+  $("music").classList.toggle("lyrics", ui.showLyric);
   $("player-lyric").textContent = ui.lyric || "♪";
   $("btn-lyrics").classList.toggle("on", ui.showLyric);
   $("btn-lyrics").setAttribute("aria-pressed", String(ui.showLyric));
@@ -298,8 +339,9 @@ function onWeather(w: Weather): void {
   $("weather-temp").textContent = w.temp;
   $("weather-city").textContent = w.city;
   $("weather-cond").textContent = w.desc;
-  $("chip-weather-val").textContent = w.temp;
-  $("chip-weather-icon").innerHTML = icon(w.icon, 14);
+  $("clock-wtext").textContent = `${w.temp} ${w.desc}`;
+  $("clock-city").textContent = w.city;
+  $("clock-wicon").innerHTML = icon(w.icon, 18);
   $("hourly").replaceChildren(
     ...w.hourly.map((h) => {
       const slot = document.createElement("div");
@@ -323,6 +365,30 @@ function onSettings(s: Settings): void {
   transition();
 }
 
+/** Appearance + layout from Settings (spec §22.3): tabs, Home cards, CSS variables. */
+function applyLook(p: Look): void {
+  ui.look = p;
+  renderTabs(p.layout.tabs, ui.tab);
+  renderHome(p.layout.home);
+  applyTheme(p); // after the renders: it also paints the new badges
+  fitTabs(); // text size may have changed the tab widths
+}
+
+function onAppearance(p: Look): void {
+  applyLook(p);
+  if (ui.state === "hover" && !visibleTabs().includes(ui.tab)) ui.tab = visibleTabs()[0] ?? "home";
+  if (sizeChanged()) transition();
+  else {
+    geometry(); // radius/shape may still have changed
+    renderView();
+  }
+}
+
+function onSessions(list: Session[]): void {
+  setSessions(list);
+  refresh(); // idle pill width / spinner follow "any session working"
+}
+
 function onDisplay(d: Display): void {
   ui.scale = d.uiScale;
   transition(); // the window may also have been resized: re-centre the hit rect
@@ -342,44 +408,67 @@ function onCharging(): void {
 /** Fullscreen app in front: slide away and go click-through; come back to the idle pill afterwards. */
 function onFullscreen(hidden: boolean): void {
   ui.hidden = hidden;
+  if (hidden) dismissAll(); // the terminal asks instead
   shell.classList.toggle("away", hidden);
   clearTimeout(revertTimer);
   ui.hovering = false;
+  setPinned(false);
+  closeMore();
   ui.state = "idle";
-  ui.view = "dashboard";
+  if (look().openOn === "home") ui.tab = "home";
   transition(); // also sends the (empty or normal) hit rect
 }
 
 function onHover(inside: boolean): void {
   if (ui.hidden) return;
   ui.hovering = inside;
-  if (ui.state === "notify") return;
+  if (ui.state === "notify" || ui.state === "prompt") return;
   clearTimeout(revertTimer);
   if (inside) setState("hover");
-  else if (ui.state === "hover") revertTimer = window.setTimeout(() => setState("idle"), 1200);
+  else if (ui.state === "hover" && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 1200);
+}
+
+function setPinned(on: boolean): void {
+  ui.pinned = on;
+  $("btn-pin").classList.toggle("on", on);
+  $("btn-pin").setAttribute("aria-pressed", String(on));
+}
+
+// ---------- Claude Code prompts ----------
+function onPrompt(p: Prompt): void {
+  if (ui.hidden) return; // the bridge lets the terminal ask while a fullscreen app is in front
+  const onScreen = addPrompt(p);
+  clearTimeout(revertTimer); // no auto-revert: answered, dismissed or timed out (prompt-closed)
+  if (ui.state !== "prompt") setState("prompt");
+  else if (onScreen) transition();
+}
+
+function onPromptClosed(id: number): void {
+  if (!closePrompt(id) || ui.state !== "prompt") return;
+  if (currentPrompt()) transition(); // the next queued one
+  else setState(ui.hovering || ui.pinned ? "hover" : "idle");
 }
 
 function openLocationEditor(): void {
-  ui.view = "weather";
+  ui.tab = "weather";
   ui.editingLocation = true;
   clearTimeout(revertTimer);
-  if (ui.state === "hover") transition();
+  if (ui.state === "hover") renderView();
   else setState("hover");
   // Opened from the menu while the cursor is elsewhere: fall back to idle if never reached.
-  if (!ui.hovering) revertTimer = window.setTimeout(() => setState("idle"), 6000);
+  if (!ui.hovering && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 6000);
   window.setTimeout(() => $<HTMLInputElement>("location-input").focus(), 300);
 }
 
 function onCalendar(p: CalPayload): void {
   ui.calendar = p;
-  refresh(); // the agenda's height follows the event count
   renderCalendar();
 }
 
 function openCalendarEditor(): void {
-  ui.view = "agenda";
+  ui.tab = "calendar";
   ui.editingCalendar = true;
-  if (ui.state === "hover") transition();
+  if (ui.state === "hover") renderView();
   else setState("hover");
   window.setTimeout(() => $<HTMLInputElement>("cal-input").focus(), 300);
 }
@@ -405,7 +494,6 @@ function wirePlayer(): void {
   $("btn-lyrics").onclick = () => {
     ui.showLyric = !ui.showLyric;
     renderLyric();
-    refresh(); // card height 150 <-> 175
   };
   $("btn-open-player").onclick = () => invoke("media_open_player").catch((err) => showEvent("Music", String(err), 3500));
 
@@ -447,19 +535,32 @@ function wireInput(): void {
   });
 
   // Pal listens while the user types in any island input.
-  island.addEventListener("focusin", (e) => updateMood({ listening: e.target instanceof HTMLInputElement }));
-  island.addEventListener("focusout", () => updateMood({ listening: false }));
+  island.addEventListener("focusin", (e) => setTyping(e.target instanceof HTMLInputElement));
+  island.addEventListener("focusout", () => setTyping(false));
 
-  // dashboard navigation
-  document.querySelectorAll<HTMLElement>("[data-view]").forEach((b) => {
-    b.onclick = () => openView(b.dataset.view as View);
+  // navigation: tab bar, plus cards/links with data-goto (buttons nested in a card do their own thing)
+  initTabs(openTab, () => ui.tab);
+  document.querySelectorAll<HTMLElement>("[data-goto]").forEach((c) => {
+    c.onclick = (e) => {
+      const inner = (e.target as Element).closest("button, input");
+      if (!inner || inner === c) openTab(c.dataset.goto!);
+    };
+    c.onkeydown = (e) => {
+      if (e.target !== c || c instanceof HTMLButtonElement || (e.key !== "Enter" && e.key !== " ")) return;
+      e.preventDefault();
+      openTab(c.dataset.goto!);
+    };
   });
   document.querySelectorAll<HTMLElement>("[data-settings]").forEach((b) => {
     b.onclick = () => invoke("open_settings").catch(console.error);
   });
-  $("btn-collapse").onclick = () => setState("idle");
-  $("btn-add-app").onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
-  initFocus($("tile-focus"), () => showEvent("Focus", "Time's up", 3500));
+  $("btn-pal-status").onclick = () => openTab("pal");
+  $("btn-pin").onclick = () => setPinned(!ui.pinned);
+  $("btn-collapse").onclick = () => (ui.state === "prompt" ? dismissPrompt() : setState("idle"));
+  document.querySelectorAll<HTMLElement>("[data-add-app]").forEach((b) => {
+    b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
+  });
+  initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500));
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
     b.onclick = () => invoke("run_action", { id: b.dataset.action }).catch(console.error);
@@ -472,7 +573,7 @@ function wireInput(): void {
   // tasks
   const toggleEditor = () => {
     ui.editingTasks = !ui.editingTasks;
-    transition();
+    renderView();
   };
   $("btn-edit-tasks").onclick = toggleEditor;
   $("task-done").onclick = toggleEditor;
@@ -497,13 +598,6 @@ function wireInput(): void {
   };
 
   // calendar
-  $("tile-clock").onclick = () => openView("agenda");
-  $("tile-clock").onkeydown = (e) => {
-    // only the card itself: Enter/Space on the nested +/Join buttons must not also open the agenda
-    if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
-    e.preventDefault();
-    openView("agenda");
-  };
   $("btn-cal-link").onclick = (e) => {
     e.stopPropagation();
     openCalendarEditor();
@@ -511,10 +605,11 @@ function wireInput(): void {
   $("btn-agenda-link").onclick = openCalendarEditor;
   $("cal-cancel").onclick = () => {
     ui.editingCalendar = false;
-    transition();
+    renderView();
   };
   const saveCalendar = async (url: string) => {
     ui.editingCalendar = false;
+    renderView();
     try {
       onCalendar(await invoke<CalPayload>("set_calendar_url", { url }));
       $<HTMLInputElement>("cal-input").value = "";
@@ -535,7 +630,7 @@ function wireInput(): void {
   $("btn-edit-location").onclick = openLocationEditor;
   $("location-cancel").onclick = () => {
     ui.editingLocation = false;
-    transition();
+    renderView();
   };
   $("location-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -543,6 +638,7 @@ function wireInput(): void {
     const city = input.value.trim();
     if (!city) return input.focus();
     ui.editingLocation = false;
+    renderView();
     try {
       const name = await invoke<string>("set_location", { city });
       input.value = "";
@@ -556,9 +652,16 @@ function wireInput(): void {
 // ---------- boot ----------
 async function boot(): Promise<void> {
   hydrateIcons();
+  // Pals follow the shared mood (assistant.ts feeds it from Claude Code sessions)
   $("status-pal").append(createPal(22).el);
-  $("assistant-avatar").append(createPal(56).el); // napping until Task 9 connects Claude Code
+  $("status-pop").append(popPal.el);
+  $("pal-card-face").append(createPal(34).el);
+  $("btn-pal-status").append(createPal(20).el);
+  $("pal-tab-face").append(createPal(60).el);
+  applyLook(DEFAULT_LOOK);
+  initAssistant();
   wireInput();
+  renderLyric();
   updateApps(invoke<LauncherApp[]>("list_apps"));
 
   await Promise.all([
@@ -570,14 +673,18 @@ async function boot(): Promise<void> {
     listen<{ art: string }>("media-art", (e) => onArt(e.payload)),
     listen<Weather>("weather", (e) => onWeather(e.payload)),
     listen<CalPayload>("calendar", (e) => onCalendar(e.payload)),
-    listen<string>("accent", (e) => document.documentElement.style.setProperty("--sys-accent", e.payload)),
     listen<Settings>("settings", (e) => onSettings(e.payload)),
     listen<Display>("display", (e) => onDisplay(e.payload)),
+    listen<Look>("appearance", (e) => onAppearance(e.payload)),
     listen<{ name: string; on: boolean }>("keylock", (e) => showEvent(e.payload.name, e.payload.on ? "ENABLED" : "DISABLED", 2500)),
     listen<{ app: string; title: string; text: string }>("notify", (e) => {
       const { app, title, text } = e.payload;
-      showEvent(app, title ? `${title}: ${text}` : text, 3500);
+      showEvent(app, title ? `${title}: ${text}` : text, 3500, popMood(app));
     }),
+    listen<Session[]>("sessions", (e) => onSessions(e.payload)),
+    listen<Bridge>("bridge", (e) => setBridge(e.payload)),
+    listen<Prompt>("prompt", (e) => onPrompt(e.payload)),
+    listen<{ id: number }>("prompt-closed", (e) => onPromptClosed(e.payload.id)),
     listen<boolean>("fullscreen", (e) => onFullscreen(e.payload)),
     listen("charging", onCharging),
     listen<LauncherApp[]>("apps", (e) => updateApps(Promise.resolve(e.payload))), // changed in the Settings window
@@ -585,7 +692,6 @@ async function boot(): Promise<void> {
 
   // Catch up on anything the monitors published before this page loaded.
   const snap = await invoke<Record<string, unknown>>("get_snapshot");
-  if (snap.accent) document.documentElement.style.setProperty("--sys-accent", snap.accent as string);
   if (snap.perf) onPerf(snap.perf as Perf);
   if (snap.weather) onWeather(snap.weather as Weather);
   if (snap.calendar) ui.calendar = snap.calendar as CalPayload;
@@ -594,13 +700,17 @@ async function boot(): Promise<void> {
   if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
   if (snap["media-art"]) onArt(snap["media-art"] as { art: string });
   if (snap.fullscreen) onFullscreen(true);
+  if (snap.bridge) setBridge(snap.bridge as Bridge);
+  if (snap.sessions) setSessions(snap.sessions as Session[]);
   if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
+  if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 
   ui.tasks = await invoke<Task[]>("list_tasks");
   onSettings(await invoke<Settings>("get_settings"));
 
   window.setInterval(() => {
     if (ui.state === "idle") renderHeader();
+    if (ui.state === "hover") renderClock();
     // Advance locally between backend updates (they come at most once per second).
     if (ui.media.state === "Playing" && ui.seekPreview === null && ui.progress.duration > 0) {
       ui.progress.position = Math.min(ui.progress.position + 1, ui.progress.duration);

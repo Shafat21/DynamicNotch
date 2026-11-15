@@ -66,9 +66,6 @@ export function renderCard(p: CalPayload | null, h: Handlers): void {
   body.replaceChildren(rest, ...note);
 }
 
-/** Rows the agenda needs (for its height). */
-export const agendaRows = (p: CalPayload | null) => Math.max(1, p?.today.length ?? 0) + (p?.error ? 1 : 0);
-
 export function renderAgenda(p: CalPayload | null, h: Handlers): void {
   const now = Date.now();
   const list = $("agenda-list");
