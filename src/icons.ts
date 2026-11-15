@@ -1,8 +1,8 @@
 // Material Design Icons as inline SVG.
 import {
-  mdiChartBubble, mdiCircle, mdiCogOutline, mdiConsole, mdiCpu64Bit, mdiEmail, mdiFolderOutline,
-  mdiGoogleChrome, mdiHarddisk, mdiLightningBolt, mdiMemory, mdiMusic, mdiOpenInNew, mdiPause,
-  mdiPencil, mdiPlay, mdiPower, mdiRefresh, mdiSkipNext, mdiSkipPrevious, mdiSleep, mdiSpeedometer,
+  mdiChartBubble, mdiChevronUp, mdiCircle, mdiClose, mdiCogOutline, mdiConsole, mdiCpu64Bit, mdiEmail, mdiFolderOutline,
+  mdiGoogleChrome, mdiHarddisk, mdiHome, mdiLightningBolt, mdiMemory, mdiMusic, mdiOpenInNew, mdiPause,
+  mdiPencil, mdiPlay, mdiPlus, mdiPower, mdiRefresh, mdiSkipNext, mdiSkipPrevious, mdiSleep, mdiSpeedometer, mdiTimerOutline,
   mdiWeatherCloudy, mdiWeatherFog, mdiWeatherLightning, mdiWeatherPartlyCloudy, mdiWeatherPouring,
   mdiWeatherRainy, mdiWeatherSnowy, mdiWeatherSunny, mdiWeb, mdiYoutube,
 } from "@mdi/js";
@@ -11,10 +11,11 @@ const ICONS: Record<string, string> = {
   circle: mdiCircle, music: mdiMusic, play: mdiPlay, pause: mdiPause, prev: mdiSkipPrevious, next: mdiSkipNext,
   speed: mdiSpeedometer, bolt: mdiLightningBolt, email: mdiEmail, cpu: mdiCpu64Bit, memory: mdiMemory,
   disk: mdiHarddisk, web: mdiWeb, open: mdiOpenInNew, pencil: mdiPencil,
+  home: mdiHome, plus: mdiPlus, chevronUp: mdiChevronUp, timer: mdiTimerOutline, close: mdiClose,
   // weather keys come from the Rust weather monitor
   sunny: mdiWeatherSunny, partly: mdiWeatherPartlyCloudy, cloudy: mdiWeatherCloudy, fog: mdiWeatherFog,
   rainy: mdiWeatherRainy, pouring: mdiWeatherPouring, snowy: mdiWeatherSnowy, lightning: mdiWeatherLightning,
-  // basics
+  // launcher built-in actions
   power: mdiPower, restart: mdiRefresh, sleep: mdiSleep, folder: mdiFolderOutline, cog: mdiCogOutline,
   taskmgr: mdiChartBubble, chrome: mdiGoogleChrome, youtube: mdiYoutube, console: mdiConsole,
 };

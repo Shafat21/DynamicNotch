@@ -2,27 +2,24 @@
 //! (`media`), and synced lyrics from lrclib.net (`lyric`). Polls every 100 ms.
 
 use super::http;
-use crate::publish;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::mpsc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::thread;
-use tauri::AppHandle;
-use windows::core::Result;
-use windows::Media::Control::{
-    GlobalSystemMediaTransportControlsSession as Session,
-    GlobalSystemMediaTransportControlsSessionManager as Manager,
-    GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
-};
-use windows::Storage::Streams::DataReader;
+
+#[cfg(windows)]
+#[path = "media_windows.rs"]
+mod os;
+#[cfg(target_os = "linux")]
+#[path = "media_linux.rs"]
+mod os;
+pub use os::{control, spawn};
+
 
 /// Lyrics are shown slightly early so the line appears as it is sung.
-const LYRIC_LEAD_SECS: f64 = 1.0;
+pub(super) const LYRIC_LEAD_SECS: f64 = 1.0;
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
-struct Media {
+pub(super) struct Media {
     state: &'static str, // "Playing" | "Paused" | "Idle"
     title: String,
     artist: String,
@@ -30,120 +27,19 @@ struct Media {
 }
 
 impl Media {
-    fn idle() -> Self {
+    pub(super) fn idle() -> Self {
         Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into() }
     }
 }
 
-type Lyrics = Vec<(f64, String)>;
+pub(super) type Lyrics = Vec<(f64, String)>;
 
-pub fn spawn(app: AppHandle) {
-    thread::spawn(move || {
-        if let Err(e) = run(&app) {
-            eprintln!("media monitor stopped: {e}");
-        }
-    });
-}
-
-fn run(app: &AppHandle) -> Result<()> {
-    let mgr = Manager::RequestAsync()?.get()?;
-    let mut last = Media::idle();
-    let mut lyrics: Lyrics = Vec::new();
-    let mut line = String::new();
-    let (tx, rx) = mpsc::channel::<(String, Lyrics)>();
-    publish(app, "media", &last);
-
-    let mut tick: u64 = 0;
-    loop {
-        tick = tick.wrapping_add(1);
-        thread::sleep(Duration::from_millis(100));
-        let session = mgr.GetCurrentSession().ok();
-
-        if tick % 5 == 0 {
-            let (state, title, artist) = session.as_ref().and_then(|s| read_state(s).ok()).unwrap_or(("Idle", String::new(), String::new()));
-            let track_changed = title != last.title || artist != last.artist;
-            if state != last.state || track_changed {
-                let accent = match (&session, track_changed) {
-                    (Some(s), true) if state != "Idle" => thumbnail_color(s).unwrap_or_else(|| "#000000".into()),
-                    _ => last.accent.clone(),
-                };
-                last = Media { state, title, artist, accent };
-                publish(app, "media", &last);
-
-                if track_changed {
-                    lyrics.clear();
-                    line.clear();
-                    publish(app, "lyric", "");
-                    if !last.artist.is_empty() && !last.title.is_empty() {
-                        let (tx, artist, title) = (tx.clone(), last.artist.clone(), last.title.clone());
-                        thread::spawn(move || {
-                            let _ = tx.send((key(&artist, &title), fetch_lyrics(&artist, &title)));
-                        });
-                    }
-                }
-            }
-        }
-
-        // Drop results for tracks that are no longer playing.
-        while let Ok((k, l)) = rx.try_recv() {
-            if k == key(&last.artist, &last.title) {
-                lyrics = l;
-            }
-        }
-
-        if last.state == "Playing" && !lyrics.is_empty() {
-            if let Some(pos) = session.as_ref().and_then(position_secs) {
-                let now = current_line(&lyrics, pos + LYRIC_LEAD_SECS);
-                if now != line {
-                    line = now.to_string();
-                    publish(app, "lyric", &line);
-                }
-            }
-        }
-    }
-}
-
-fn key(artist: &str, title: &str) -> String {
+pub(super) fn key(artist: &str, title: &str) -> String {
     format!("{artist}\u{1f}{title}")
 }
 
-fn read_state(s: &Session) -> Result<(&'static str, String, String)> {
-    let state = match s.GetPlaybackInfo()?.PlaybackStatus()? {
-        Status::Playing => "Playing",
-        Status::Paused => "Paused",
-        _ => return Ok(("Idle", String::new(), String::new())),
-    };
-    let props = s.TryGetMediaPropertiesAsync()?.get()?;
-    let title = props.Title()?.to_string();
-    let title = if title.is_empty() { "Unknown Title".to_string() } else { title };
-    Ok((state, title, props.Artist()?.to_string()))
-}
-
-/// Current playback position, extrapolated from the last timeline update.
-fn position_secs(s: &Session) -> Option<f64> {
-    let tl = s.GetTimelineProperties().ok()?;
-    let pos = tl.Position().ok()?.Duration as f64 / 1e7;
-    let updated = tl.LastUpdatedTime().ok()?.UniversalTime; // 100 ns ticks since 1601-01-01
-    let now_unix = SystemTime::now().duration_since(UNIX_EPOCH).ok()?;
-    let now = (now_unix.as_secs_f64() + 11_644_473_600.0) * 1e7;
-    Some(pos + ((now - updated as f64) / 1e7).max(0.0))
-}
-
-fn thumbnail_color(s: &Session) -> Option<String> {
-    let read = || -> Result<Vec<u8>> {
-        let stream = s.TryGetMediaPropertiesAsync()?.get()?.Thumbnail()?.OpenReadAsync()?.get()?;
-        let size = stream.Size()? as u32;
-        let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0)?)?;
-        reader.LoadAsync(size)?.get()?;
-        let mut buf = vec![0u8; size as usize];
-        reader.ReadBytes(&mut buf)?;
-        Ok(buf)
-    };
-    dominant_color(&read().ok()?)
-}
-
 /// Most common colour bucket of the album art, skipping near-black and near-white.
-fn dominant_color(bytes: &[u8]) -> Option<String> {
+pub(super) fn dominant_color(bytes: &[u8]) -> Option<String> {
     let img = image::load_from_memory(bytes).ok()?.resize_exact(32, 32, image::imageops::FilterType::Triangle).to_rgb8();
     let mut buckets: HashMap<(u8, u8, u8), (u32, [u32; 3])> = HashMap::new();
     let mut all = [0u32; 3];
@@ -162,7 +58,7 @@ fn dominant_color(bytes: &[u8]) -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", sum[0] / n, sum[1] / n, sum[2] / n))
 }
 
-fn fetch_lyrics(artist: &str, title: &str) -> Lyrics {
+pub(super) fn fetch_lyrics(artist: &str, title: &str) -> Lyrics {
     let res: std::result::Result<Value, ureq::Error> = http()
         .get("https://lrclib.net/api/get")
         .query("artist_name", artist)
@@ -206,23 +102,8 @@ fn parse_lrc(text: &str) -> Lyrics {
     out
 }
 
-fn current_line(lyrics: &Lyrics, pos: f64) -> &str {
+pub(super) fn current_line(lyrics: &Lyrics, pos: f64) -> &str {
     lyrics.iter().take_while(|(t, _)| *t <= pos).last().map(|(_, l)| l.as_str()).unwrap_or("")
-}
-
-/// Play/pause, next, previous on the current media session.
-pub fn control(action: &str) -> std::result::Result<(), String> {
-    let run = || -> Result<()> {
-        let s = Manager::RequestAsync()?.get()?.GetCurrentSession()?;
-        match action {
-            "toggle" => s.TryTogglePlayPauseAsync()?.get()?,
-            "next" => s.TrySkipNextAsync()?.get()?,
-            "prev" => s.TrySkipPreviousAsync()?.get()?,
-            _ => false,
-        };
-        Ok(())
-    };
-    run().map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

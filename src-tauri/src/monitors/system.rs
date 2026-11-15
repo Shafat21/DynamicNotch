@@ -1,13 +1,17 @@
-//! Small Win32 watchers: Windows accent colour (`accent`, once), Caps/Num Lock (`keylock`),
-//! charger plugged in (`charging`).
+//! Small watchers: accent colour (`accent`, once), Caps/Num Lock (`keylock`), charger plugged in
+//! (`charging`). OS-specific sources live in `system_{windows,linux}.rs`.
 
 use crate::publish;
 use serde::Serialize;
 use std::{thread, time::Duration};
 use tauri::{AppHandle, Emitter};
-use windows::UI::ViewManagement::{UIColorType, UISettings};
-use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CAPITAL, VK_NUMLOCK};
+
+#[cfg(windows)]
+#[path = "system_windows.rs"]
+mod os;
+#[cfg(target_os = "linux")]
+#[path = "system_linux.rs"]
+mod os;
 
 #[derive(Serialize, Clone)]
 struct KeyLock {
@@ -16,14 +20,14 @@ struct KeyLock {
 }
 
 pub fn spawn(app: AppHandle) {
-    publish(&app, "accent", accent_color().unwrap_or_else(|| "#0078D7".into()));
+    publish(&app, "accent", os::accent_color().unwrap_or_else(|| "#0078D7".into()));
 
     let a = app.clone();
     thread::spawn(move || {
-        let mut last = (lock_on(VK_CAPITAL), lock_on(VK_NUMLOCK));
+        let mut last = os::caps_num();
         loop {
-            thread::sleep(Duration::from_millis(20));
-            let now = (lock_on(VK_CAPITAL), lock_on(VK_NUMLOCK));
+            thread::sleep(os::KEYLOCK_POLL);
+            let now = os::caps_num();
             if now.0 != last.0 {
                 let _ = a.emit("keylock", KeyLock { name: "Caps Lock", on: now.0 });
             }
@@ -35,29 +39,14 @@ pub fn spawn(app: AppHandle) {
     });
 
     thread::spawn(move || {
-        let mut was_plugged = plugged_in();
+        let mut was_plugged = os::plugged_in();
         loop {
             thread::sleep(Duration::from_secs(2));
-            let now = plugged_in();
+            let now = os::plugged_in();
             if now && !was_plugged {
                 let _ = app.emit("charging", ());
             }
             was_plugged = now;
         }
     });
-}
-
-fn lock_on(vk: VIRTUAL_KEY) -> bool {
-    // Low bit of GetKeyState = toggle state.
-    unsafe { GetKeyState(vk.0 as i32) & 1 != 0 }
-}
-
-fn plugged_in() -> bool {
-    let mut s = SYSTEM_POWER_STATUS::default();
-    unsafe { GetSystemPowerStatus(&mut s).is_ok() && s.ACLineStatus == 1 }
-}
-
-fn accent_color() -> Option<String> {
-    let c = UISettings::new().ok()?.GetColorValue(UIColorType::Accent).ok()?;
-    Some(format!("#{:02x}{:02x}{:02x}", c.R, c.G, c.B))
 }

@@ -9,3 +9,4 @@ src-tauri/gen/
 *.db
 *.db-journal
 docs/superpowers/specs/
+docs/superpowers/plans/2026-11-15-assistant-dashboard.md

@@ -1,9 +1,10 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
-use crate::{actions, db, emit_settings, hit, menu, monitors, AppState};
+use crate::{actions, db, emit_settings, launcher, menu, monitors, window, AppState};
 use serde_json::Value;
 use std::collections::HashMap;
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tauri_plugin_dialog::DialogExt;
 
 type Res<T> = Result<T, String>;
 
@@ -76,11 +77,54 @@ pub fn run_action(id: String) -> Res<()> {
 }
 
 #[tauri::command]
-pub fn set_hit_rect(state: State<AppState>, rect: hit::Rect) {
-    *state.hit.lock().unwrap() = rect;
+pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
+    window::set_hit_rect(&app, rect);
 }
 
 #[tauri::command]
 pub fn show_context_menu(app: AppHandle, window: WebviewWindow) -> Res<()> {
     menu::popup(&app, &window).map_err(err)
+}
+
+#[tauri::command]
+pub fn list_apps(state: State<AppState>) -> Res<Vec<db::App>> {
+    state.db.lock().unwrap().apps().map_err(err)
+}
+
+/// Native file dialog, opened from Rust so the webview needs no dialog permission. Cancel returns the list unchanged.
+#[tauri::command]
+pub async fn pick_app(app: AppHandle) -> Res<Vec<db::App>> {
+    let handle = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        handle.dialog().file().add_filter("Apps", &["exe", "lnk"]).blocking_pick_file()
+    })
+    .await
+    .map_err(err)?;
+    let state = app.state::<AppState>();
+    if let Some(path) = picked.and_then(|p| p.into_path().ok()) {
+        let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let icon = tauri::async_runtime::spawn_blocking({
+            let path = path.clone();
+            move || launcher::icon_data_uri(&path)
+        })
+        .await
+        .ok()
+        .flatten();
+        state.db.lock().unwrap().add_app(&name, "path", &path.to_string_lossy(), icon.as_deref()).map_err(err)?;
+    }
+    let apps = state.db.lock().unwrap().apps().map_err(err);
+    apps
+}
+
+#[tauri::command]
+pub fn remove_app(state: State<AppState>, id: i64) -> Res<Vec<db::App>> {
+    let db = state.db.lock().unwrap();
+    db.remove_app(id).map_err(err)?;
+    db.apps().map_err(err)
+}
+
+#[tauri::command]
+pub fn launch_app(state: State<AppState>, id: i64) -> Res<()> {
+    let app = state.db.lock().unwrap().app(id).map_err(err)?.ok_or("unknown app")?;
+    launcher::launch(&app)
 }

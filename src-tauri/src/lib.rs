@@ -1,15 +1,16 @@
 mod actions;
 mod commands;
 mod db;
-mod hit;
+mod launcher;
 mod menu;
 mod monitors;
+mod window;
 
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 pub struct AppState {
@@ -17,7 +18,7 @@ pub struct AppState {
     /// Last payload of each "sticky" event, so a freshly loaded page can catch up (see `get_snapshot`).
     pub last: Mutex<HashMap<&'static str, Value>>,
     /// Interactive area of the island, in logical px relative to the window.
-    pub hit: Mutex<hit::Rect>,
+    pub hit: Mutex<window::Rect>,
 }
 
 /// Emit an event to the frontend and remember it for `get_snapshot`.
@@ -42,6 +43,7 @@ pub fn emit_settings(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
@@ -50,23 +52,15 @@ pub fn run() {
             app.manage(AppState {
                 db: Mutex::new(db),
                 last: Mutex::new(HashMap::new()),
-                hit: Mutex::new(hit::Rect::default()),
+                hit: Mutex::new(window::Rect::default()),
             });
 
-            // Top-centre of the monitor; clicks pass through until the cursor reaches the island.
             let win = app.get_webview_window("main").expect("main window");
-            if let Some(m) = win.current_monitor()?.or(win.primary_monitor()?) {
-                let size = win.outer_size()?;
-                let x = m.position().x + (m.size().width as i32 - size.width as i32) / 2;
-                win.set_position(PhysicalPosition::new(x, m.position().y))?;
-            }
-            win.set_ignore_cursor_events(true)?;
-            win.show()?;
+            window::setup(app.handle(), &win)?;
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));
 
-            hit::spawn(app.handle().clone());
             monitors::spawn_all(app.handle().clone());
             Ok(())
         })
@@ -79,6 +73,10 @@ pub fn run() {
             commands::set_location,
             commands::media_control,
             commands::run_action,
+            commands::list_apps,
+            commands::pick_app,
+            commands::remove_app,
+            commands::launch_app,
             commands::set_hit_rect,
             commands::show_context_menu,
         ])

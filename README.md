@@ -101,3 +101,5 @@ See [plan.md](plan.md) for the full file map, event/command contract and roadmap
 ## Credits
 
 Weather by [Open-Meteo](https://open-meteo.com), lyrics by [LRCLIB](https://lrclib.net).
+
+Avatar art: [Fun Emoji](https://www.dicebear.com/styles/fun-emoji/) by Davis Uche, remixed by [DiceBear](https://www.dicebear.com), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

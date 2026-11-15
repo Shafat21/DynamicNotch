@@ -6,8 +6,10 @@ use std::process::Command;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+#[cfg(windows)]
 fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     // `cmd /C start "" <target>` lets Windows resolve URIs, app aliases and elevation prompts.
     Some(match id {
@@ -26,6 +28,11 @@ fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     })
 }
 
+#[cfg(target_os = "linux")]
+fn command_for(_id: &str) -> Option<(&'static str, &'static [&'static str])> {
+    None // not implemented on Linux yet
+}
+
 pub fn run(id: &str) -> Result<(), String> {
     let (prog, args) = command_for(id).ok_or_else(|| format!("unknown action: {id}"))?;
     let mut cmd = Command::new(prog);
@@ -41,8 +48,11 @@ mod tests {
 
     #[test]
     fn only_known_ids_map_to_commands() {
-        assert!(command_for("shutdown").is_some());
-        assert!(command_for("youtube").is_some());
+        #[cfg(windows)]
+        {
+            assert!(command_for("shutdown").is_some());
+            assert!(command_for("youtube").is_some());
+        }
         assert!(command_for("calc & del *").is_none());
         assert!(command_for("").is_none());
     }
