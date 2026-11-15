@@ -73,8 +73,9 @@ pub const THEMES: [Theme; 7] = [
     th("Pure black", "#000000", "#000000", "#1a1a1a", "#4f8cff"),
 ];
 
-pub const TAB_IDS: &[&str] = &["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard"];
-pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders"];
+pub const TAB_IDS: &[&str] = &["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard", "sound"];
+pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders", "sound"];
+// extra grid cards (system, tasks, sound) start hidden so Home keeps its 4 primary cards without scrolling
 const HOME_DEFAULT_VISIBLE: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "notes", "reminders"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -237,9 +238,10 @@ mod tests {
         assert_eq!(l.home.len(), HOME_IDS.len());
         // a stored layout without newer ids gets them appended with their default visibility
         let old = normalize_layout(Layout { tabs: vec![LayoutItem { id: "home".into(), visible: true }], home: vec![LayoutItem { id: "clock".into(), visible: true }] });
-        assert!(old.tabs.last().unwrap().visible && old.tabs.last().unwrap().id == "clipboard");
+        assert!(old.tabs.last().unwrap().visible && old.tabs.last().unwrap().id == "sound");
         assert!(old.home.iter().find(|h| h.id == "notes").unwrap().visible);
         assert!(old.home.iter().find(|h| h.id == "reminders").unwrap().visible);
+        assert!(!old.home.iter().find(|h| h.id == "sound").unwrap().visible); // grid card: appended hidden
         assert!(!old.home.iter().find(|h| h.id == "system").unwrap().visible); // other ids keep their (hidden) default
     }
     #[test]
@@ -255,6 +257,7 @@ mod tests {
         assert_eq!(a.shape, "notch");
         assert!(l.tabs.iter().all(|t| t.visible));
         assert_eq!(l.home.iter().filter(|h| h.visible).count(), 8);
+        assert!(!l.home.iter().find(|h| h.id == "sound").unwrap().visible && l.tabs.iter().find(|t| t.id == "sound").unwrap().visible);
         db.set("appearance", "{not json").unwrap();
         assert_eq!(load(&db).0, Appearance::default());
         let a2 = merge_patch(&a, &json!({"theme": "Rose"}));

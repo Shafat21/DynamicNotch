@@ -95,6 +95,23 @@
                     <div class="card-head"><span class="card-ic badge-only" data-badge="tasks" data-icon="tasks"></span><span class="lbl">TASKS</span></div>
                     <div id="card-task-list"></div>
                   </button>
+                  <!-- Sound & brightness card (sound.ts); the background opens the Sound tab -->
+                  <div class="card snd-card" id="card-sound" data-goto="sound" role="button" tabindex="0" title="Sound &amp; brightness">
+                    <div class="snd-row">
+                      <button class="snd-ic snd-mute" id="snd-mute" title="Mute"></button>
+                      <input type="range" class="slider" id="snd-vol" min="0" max="100" step="1" aria-label="Volume" />
+                      <span class="snd-val" id="snd-vol-val">--</span>
+                    </div>
+                    <div class="snd-row" id="snd-bright-row" hidden>
+                      <span class="snd-ic" data-icon="sunny" data-size="16"></span>
+                      <input type="range" class="slider" id="snd-bright" min="0" max="100" step="1" aria-label="Brightness" />
+                      <span class="snd-val" id="snd-bright-val"></span>
+                    </div>
+                    <div class="snd-foot">
+                      <select id="snd-device" aria-label="Output device"></select>
+                      <button class="btn snd-lock compact" data-action="lock" title="Lock this PC" aria-label="Lock this PC"><span data-icon="lock" data-size="14"></span></button>
+                    </div>
+                  </div>
                 </div>
                 <div class="home-strip" id="home-strip">
                   <div class="strip-launcher" id="card-launcher">
@@ -311,6 +328,33 @@
                     <button class="btn" id="clip-clear" type="button">Clear</button>
                   </div>
                   <div class="clip-list" id="clip-list"></div>
+                </div>
+              </section>
+
+              <!-- Sound & brightness (sound.ts) -->
+              <section class="page" id="tab-sound" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Sound &amp; brightness</span>
+                  <button class="btn snd-lock" data-action="lock" title="Lock this PC"><span data-icon="lock" data-size="14"></span>Lock</button>
+                </div>
+                <div class="snd-tab">
+                  <div class="snd-col">
+                    <span class="lbl">OUTPUT</span>
+                    <div class="snd-row">
+                      <button class="snd-ic snd-mute" id="snd-tab-mute" title="Mute"></button>
+                      <input type="range" class="slider" id="snd-tab-vol" min="0" max="100" step="1" aria-label="Volume" />
+                      <span class="snd-val" id="snd-tab-vol-val">--</span>
+                    </div>
+                    <select id="snd-tab-device" aria-label="Output device"></select>
+                    <div class="snd-err" id="snd-err" hidden>
+                      <span class="muted small">Couldn't switch the output here.</span>
+                      <button class="link-btn" data-action="sound-settings">Open sound settings</button>
+                    </div>
+                  </div>
+                  <div class="snd-col">
+                    <span class="lbl">BRIGHTNESS</span>
+                    <div class="snd-list" id="snd-displays"></div>
+                  </div>
                 </div>
               </section>
 

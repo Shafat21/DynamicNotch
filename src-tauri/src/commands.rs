@@ -1,7 +1,9 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, clipboard, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, window, AppState};
+use crate::{actions, clipboard, appearance, bridge, brightness, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, sound, window, AppState};
+use crate::brightness::BrightDisplay;
+use crate::sound::{AudioDevice, SoundState};
 use crate::clipboard::Clip;
 use crate::notes::Note;
 use crate::reminders::{Reminder, Repeat};
@@ -343,6 +345,49 @@ pub async fn media_seek(app: AppHandle, seconds: f64) -> Res<()> {
 #[tauri::command]
 pub async fn media_open_player() -> Res<()> {
     tauri::async_runtime::spawn_blocking(monitors::media::open_player).await.map_err(err)?
+}
+
+/// Sound & brightness: OS calls are slow or COM-bound, so they run off the main thread.
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Res<T> + Send + 'static) -> Res<T> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(err)?
+}
+
+#[tauri::command]
+pub async fn sound_state() -> Res<SoundState> {
+    blocking(sound::state).await
+}
+
+/// `value` 0..=1 (clamped).
+#[tauri::command]
+pub async fn set_volume(value: f64) -> Res<()> {
+    blocking(move || sound::set_volume(value)).await
+}
+
+#[tauri::command]
+pub async fn set_mute(muted: bool) -> Res<()> {
+    blocking(move || sound::set_mute(muted)).await
+}
+
+#[tauri::command]
+pub async fn audio_devices() -> Res<Vec<AudioDevice>> {
+    blocking(sound::devices).await
+}
+
+/// `id` must be in the current device list.
+#[tauri::command]
+pub async fn set_audio_device(id: String) -> Res<()> {
+    blocking(move || sound::set_default(id)).await
+}
+
+#[tauri::command]
+pub async fn brightness_displays() -> Res<Vec<BrightDisplay>> {
+    blocking(|| Ok(brightness::displays())).await
+}
+
+/// `id` from the last `brightness_displays` list; `percent` 0..=100 (clamped).
+#[tauri::command]
+pub async fn set_brightness(id: String, percent: u8) -> Res<()> {
+    blocking(move || brightness::set(&id, percent)).await
 }
 
 #[tauri::command]

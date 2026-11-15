@@ -1,5 +1,6 @@
 mod actions;
 mod appearance;
+mod brightness;
 mod bridge;
 mod clipboard;
 mod commands;
@@ -13,6 +14,7 @@ mod menu;
 mod monitors;
 mod notes;
 mod reminders;
+mod sound;
 mod window;
 
 use serde::Serialize;
@@ -98,6 +100,7 @@ pub fn run() {
             fullscreen::spawn_watcher(app.handle().clone());
             reminders::spawn_scheduler(app.handle().clone());
             clipboard::spawn(app.handle().clone());
+            sound::spawn(app.handle().clone());
             #[cfg(windows)]
             glass_spike::run(&win); // SPIKE: remove
 
@@ -147,6 +150,13 @@ pub fn run() {
             commands::media_seek,
             commands::media_open_player,
             commands::run_action,
+            commands::sound_state,
+            commands::set_volume,
+            commands::set_mute,
+            commands::audio_devices,
+            commands::set_audio_device,
+            commands::brightness_displays,
+            commands::set_brightness,
             commands::list_apps,
             commands::pick_app,
             commands::remove_app,

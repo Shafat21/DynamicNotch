@@ -10,6 +10,7 @@ import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initNotes, showNotes } from "./notes";
+import { initSound, showSound } from "./sound";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
 import type { PalMood } from "./mood";
@@ -250,6 +251,7 @@ function renderView(): void {
   if (hover && t === "notes") showNotes();
   if (hover && t === "reminders") showReminders();
   if (hover && t === "clipboard") void showClipboard();
+  if (hover && (t === "sound" || (t === "home" && !$("card-sound").hidden))) void showSound();
   renderHeader();
   renderClock();
 }
@@ -568,7 +570,7 @@ function wireInput(): void {
   initTabs(openTab, () => ui.tab);
   document.querySelectorAll<HTMLElement>("[data-goto]").forEach((c) => {
     c.onclick = (e) => {
-      const inner = (e.target as Element).closest("button, input");
+      const inner = (e.target as Element).closest("button, input, select");
       if (!inner || inner === c) openTab(c.dataset.goto!);
     };
     c.onkeydown = (e) => {
@@ -598,6 +600,7 @@ function wireInput(): void {
 
   initNotes();
   initClipboard();
+  initSound({ switchFailed: () => openTab("sound") });
   initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });
 
   // tasks

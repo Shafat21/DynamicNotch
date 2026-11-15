@@ -24,16 +24,27 @@ fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
         "cmd" => ("cmd", &["/C", "start", "", "cmd"]),
         "weather" => ("cmd", &["/C", "start", "", "bingweather:"]),
         "datetime" => ("cmd", &["/C", "start", "", "ms-settings:dateandtime"]),
+        "sound-settings" => ("cmd", &["/C", "start", "", "ms-settings:sound"]),
         _ => return None,
     })
 }
 
 #[cfg(target_os = "linux")]
-fn command_for(_id: &str) -> Option<(&'static str, &'static [&'static str])> {
-    None // not implemented on Linux yet
+fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
+    // the rest is not implemented on Linux yet
+    Some(match id {
+        "lock" => ("loginctl", &["lock-session"]),
+        "sound-settings" => ("gnome-control-center", &["sound"]),
+        _ => return None,
+    })
 }
 
 pub fn run(id: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    if id == "lock" {
+        // an API call, not a spawned process
+        return unsafe { windows::Win32::System::Shutdown::LockWorkStation() }.map_err(|e| e.to_string());
+    }
     let (prog, args) = command_for(id).ok_or_else(|| format!("unknown action: {id}"))?;
     let mut cmd = Command::new(prog);
     cmd.args(args);
@@ -52,7 +63,11 @@ mod tests {
         {
             assert!(command_for("shutdown").is_some());
             assert!(command_for("youtube").is_some());
+            assert!(command_for("lock").is_none()); // handled by LockWorkStation in run()
         }
+        #[cfg(target_os = "linux")]
+        assert!(command_for("lock").is_some());
+        assert!(command_for("sound-settings").is_some());
         assert!(command_for("calc & del *").is_none());
         assert!(command_for("").is_none());
     }

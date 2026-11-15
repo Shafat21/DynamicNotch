@@ -17,8 +17,8 @@ export const DEFAULT_LOOK: Look = {
     radius: 20, textScale: 1, cardOpacity: 0.75, tabLabels: "always", openOn: "home", collapsedW: 180, collapsedH: 40, openW: 760, openH: 260,
   },
   layout: {
-    tabs: items(["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard"]),
-    home: items(["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders"], ["system", "tasks"]),
+    tabs: items(["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard", "sound"]),
+    home: items(["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders", "sound"], ["system", "tasks", "sound"]),
   },
   theme: { name: "Midnight", bgFrom: "#1b2033", bgTo: "#20263b", card: "#2c3450", accent: "#8fb0ff" },
 };
@@ -26,7 +26,7 @@ export const DEFAULT_LOOK: Look = {
 // Spec defaults for the eight named badges; the rest borrow a related colour.
 const BADGES: Record<string, string> = {
   music: "#1DB954", focus: "#FF9F0A", calendar: "#FF453A", settings: "#8E7CFF", pal: "#30D158", launcher: "#0A84FF", weather: "#64D2FF", system: "#5E5CE6",
-  timer: "#FF9F0A", clock: "#64D2FF", tasks: "#FFD60A", month: "#BF5AF2", notes: "#FFCC00", reminders: "#FF9F0A", clipboard: "#64D2FF", home: "#8E8E93",
+  timer: "#FF9F0A", clock: "#64D2FF", tasks: "#FFD60A", month: "#BF5AF2", notes: "#FFCC00", reminders: "#FF9F0A", clipboard: "#64D2FF", sound: "#FF375F", home: "#8E8E93",
 };
 const DENSITY: Record<string, [gap: number, pad: string]> = { compact: [8, "10px 12px"], comfortable: [12, "14px 16px"], airy: [16, "18px 20px"] };
 

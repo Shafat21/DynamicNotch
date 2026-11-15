@@ -74,6 +74,7 @@ impl Db {
     }
 
     fn init(conn: Connection) -> Result<Self> {
+        conn.execute_batch("PRAGMA secure_delete = ON;")?; // deleted notes / clips must not linger in free pages
         let db = Self { conn };
         db.migrate()?;
         Ok(db)
