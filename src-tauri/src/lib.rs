@@ -6,6 +6,7 @@ mod bridge;
 mod clipboard;
 mod commands;
 mod db;
+mod dictation;
 mod display;
 mod fullscreen;
 #[cfg(windows)]
@@ -115,6 +116,7 @@ pub fn run() {
 
             monitors::spawn_all(app.handle().clone());
             bridge::spawn(app.handle().clone());
+            dictation::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -183,6 +185,15 @@ pub fn run() {
             commands::answer_prompt,
             commands::connect_claude,
             commands::disconnect_claude,
+            dictation::commands::dictation_settings,
+            dictation::commands::set_dictation_settings,
+            dictation::commands::download_model,
+            dictation::commands::model_status,
+            dictation::commands::set_cloud_key,
+            dictation::commands::clear_cloud_key,
+            dictation::commands::has_cloud_key,
+            dictation::commands::list_mics,
+            dictation::commands::dictation_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running DynamicNotch");
