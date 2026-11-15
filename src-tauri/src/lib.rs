@@ -10,6 +10,7 @@ mod glass_spike; // SPIKE: remove
 mod launcher;
 mod menu;
 mod monitors;
+mod notes;
 mod window;
 
 use serde::Serialize;
@@ -114,6 +115,11 @@ pub fn run() {
             commands::list_tasks,
             commands::add_task,
             commands::delete_task,
+            commands::list_notes,
+            commands::add_note,
+            commands::update_note,
+            commands::pin_note,
+            commands::delete_note,
             commands::set_location,
             commands::set_calendar_url,
             commands::open_join,

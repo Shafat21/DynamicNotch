@@ -2,7 +2,7 @@ import { renderLayoutList } from "./layout-list";
 
 const LABELS: Record<string, string> = {
   home: "Home", music: "Music", calendar: "Calendar", pal: "Pal", timer: "Timer", launcher: "Launcher",
-  weather: "Weather", system: "System", tasks: "Tasks", month: "Month",
+  weather: "Weather", system: "System", tasks: "Tasks", month: "Month", notes: "Notes",
 };
 
 export function renderTabs(root: HTMLElement): void {

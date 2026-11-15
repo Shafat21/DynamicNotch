@@ -1,6 +1,7 @@
 //! Local SQLite storage: key/value settings + tasks.
 //! Schema version lives in `PRAGMA user_version`; add a new `if version < N` block to migrate.
 
+use crate::notes::Note;
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::Serialize;
 use std::path::Path;
@@ -119,6 +120,19 @@ impl Db {
                  COMMIT;",
             )?;
         }
+        if version < 3 {
+            self.conn.execute_batch(
+                "BEGIN;
+                 CREATE TABLE notes (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     body TEXT NOT NULL,
+                     pinned INTEGER NOT NULL DEFAULT 0,
+                     updated_at INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 3;
+                 COMMIT;",
+            )?;
+        }
         Ok(())
     }
 
@@ -149,6 +163,40 @@ impl Db {
 
     pub fn remove_app(&self, id: i64) -> Result<()> {
         self.conn.execute("DELETE FROM apps WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Pinned first, then newest. `query` is a literal, case-insensitive substring.
+    pub fn notes(&self, query: &str) -> Result<Vec<Note>> {
+        let like = format!("%{}%", query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        let mut stmt = self.conn.prepare(
+            "SELECT id, body, pinned, updated_at FROM notes WHERE body LIKE ?1 ESCAPE '\\'
+             ORDER BY pinned DESC, updated_at DESC, id DESC",
+        )?;
+        let rows = stmt.query_map([like], |r| {
+            Ok(Note { id: r.get(0)?, body: r.get(1)?, pinned: r.get::<_, i64>(2)? != 0, updated_at: r.get(3)? })
+        })?;
+        rows.collect()
+    }
+
+    pub fn add_note(&self, body: &str) -> Result<i64> {
+        self.conn.execute("INSERT INTO notes (body, updated_at) VALUES (?1, strftime('%s','now'))", [body])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn update_note(&self, id: i64, body: &str) -> Result<()> {
+        self.conn.execute("UPDATE notes SET body = ?2, updated_at = strftime('%s','now') WHERE id = ?1", params![id, body])?;
+        Ok(())
+    }
+
+    /// Pinning keeps `updated_at`, so unpinning returns the note to its old place.
+    pub fn pin_note(&self, id: i64, pinned: bool) -> Result<()> {
+        self.conn.execute("UPDATE notes SET pinned = ?2 WHERE id = ?1", params![id, pinned])?;
+        Ok(())
+    }
+
+    pub fn delete_note(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM notes WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -316,5 +364,51 @@ mod tests {
         assert_eq!(tasks[4].category, "Other");
         db.delete_task(tasks[0].id).unwrap();
         assert_eq!(db.tasks().unwrap().len(), 4);
+    }
+
+    fn v2_conn() -> Connection {
+        let conn = Db::open_in_memory().unwrap().conn;
+        conn.execute_batch("DROP TABLE notes; PRAGMA user_version = 2;").unwrap();
+        conn
+    }
+
+    #[test]
+    fn notes_crud_and_sort_order() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(db.notes("").unwrap().is_empty());
+        let (a, b) = (db.add_note("first").unwrap(), db.add_note("second").unwrap());
+        db.conn.execute("UPDATE notes SET updated_at = id", []).unwrap(); // deterministic clock: b newer
+        assert_eq!(db.notes("").unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), [b, a]);
+        db.pin_note(a, true).unwrap();
+        assert_eq!(db.notes("").unwrap()[0].id, a); // pinned first
+        db.update_note(b, "second!").unwrap();
+        let n = db.notes("").unwrap().into_iter().find(|n| n.id == b).unwrap();
+        assert_eq!((n.body.as_str(), n.pinned), ("second!", false));
+        assert!(n.updated_at > 1_000_000);
+        db.delete_note(a).unwrap();
+        assert_eq!(db.notes("").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn notes_search_is_literal_and_case_insensitive() {
+        let db = Db::open_in_memory().unwrap();
+        for b in ["100% done", "a_b", "axb", "Hello World", r"back\slash"] {
+            db.add_note(b).unwrap();
+        }
+        let hits = |q: &str| db.notes(q).unwrap().into_iter().map(|n| n.body).collect::<Vec<_>>();
+        assert_eq!(hits("%"), ["100% done"]);
+        assert_eq!(hits("a_b"), ["a_b"]); // _ is not a wildcard
+        assert_eq!(hits("hello wor"), ["Hello World"]);
+        assert_eq!(hits("\\"), [r"back\slash"]);
+        assert_eq!(hits("").len(), 5);
+    }
+
+    #[test]
+    fn v2_upgrades_to_v3_keeping_apps() {
+        let db = Db::init(v2_conn()).unwrap();
+        assert_eq!(db.apps().unwrap().len(), 9);
+        assert!(db.add_note("x").is_ok());
+        db.migrate().unwrap();
+        assert_eq!(db.notes("").unwrap().len(), 1);
     }
 }

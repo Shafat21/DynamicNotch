@@ -100,6 +100,10 @@
                     <div class="launcher" id="launcher"></div>
                     <button class="app add" data-add-app data-icon="plus" title="Add app"></button>
                   </div>
+                  <div class="strip-notes" id="card-notes" title="Notes: press Enter to add">
+                    <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
+                    <input id="notes-quick" placeholder="Jot something down…" maxlength="20000" autocomplete="off" spellcheck="false" />
+                  </div>
                   <button class="focus-chip" id="card-focus" title="Click to start/pause, scroll to change"></button>
                 </div>
               </section>
@@ -234,6 +238,26 @@
                       <button type="button" class="btn" id="task-delete">Delete Selected</button>
                     </form>
                     <button class="btn primary wide" id="task-done">Done</button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Notes: list + editor (notes.ts) -->
+              <section class="page" id="tab-notes" hidden>
+                <div class="notes">
+                  <div class="notes-side">
+                    <div class="notes-bar">
+                      <input id="notes-search" type="search" placeholder="Search notes" maxlength="100" autocomplete="off" spellcheck="false" />
+                      <button class="action-btn" id="notes-new" data-icon="plus" data-size="16" title="New note"></button>
+                    </div>
+                    <div class="notes-list" id="notes-list"></div>
+                  </div>
+                  <div class="notes-edit">
+                    <textarea id="note-body" placeholder="Write a note…" maxlength="20000" spellcheck="false"></textarea>
+                    <div class="notes-actions">
+                      <button class="action-btn" id="note-pin" data-icon="pin" data-size="16" title="Pin"></button>
+                      <button class="action-btn" id="note-del" data-icon="trash" data-size="16" title="Delete"></button>
+                    </div>
                   </div>
                 </div>
               </section>

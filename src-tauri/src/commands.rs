@@ -1,7 +1,8 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, window, AppState};
+use crate::{actions, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, window, AppState};
+use crate::notes::Note;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -173,6 +174,40 @@ pub fn delete_task(state: State<AppState>, id: i64) -> Res<Vec<db::Task>> {
     let db = state.db.lock().unwrap();
     db.delete_task(id).map_err(err)?;
     db.tasks().map_err(err)
+}
+
+/// Notes: each command returns the (filtered) list so the UI re-renders from one reply.
+#[tauri::command]
+pub fn list_notes(state: State<AppState>, query: String) -> Res<Vec<Note>> {
+    state.db.lock().unwrap().notes(&query).map_err(err)
+}
+
+#[tauri::command]
+pub fn add_note(state: State<AppState>, body: String) -> Res<Vec<Note>> {
+    let db = state.db.lock().unwrap();
+    db.add_note(notes::clean_body(&body)?).map_err(err)?;
+    db.notes("").map_err(err)
+}
+
+#[tauri::command]
+pub fn update_note(state: State<AppState>, id: i64, body: String) -> Res<Vec<Note>> {
+    let db = state.db.lock().unwrap();
+    db.update_note(id, notes::clean_body(&body)?).map_err(err)?;
+    db.notes("").map_err(err)
+}
+
+#[tauri::command]
+pub fn pin_note(state: State<AppState>, id: i64, pinned: bool) -> Res<Vec<Note>> {
+    let db = state.db.lock().unwrap();
+    db.pin_note(id, pinned).map_err(err)?;
+    db.notes("").map_err(err)
+}
+
+#[tauri::command]
+pub fn delete_note(state: State<AppState>, id: i64) -> Res<Vec<Note>> {
+    let db = state.db.lock().unwrap();
+    db.delete_note(id).map_err(err)?;
+    db.notes("").map_err(err)
 }
 
 /// Geocode a city name, store it, refresh the weather. Returns the resolved "City, Country".

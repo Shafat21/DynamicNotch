@@ -8,6 +8,7 @@ import {
 } from "./assistant";
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
+import { initNotes, showNotes } from "./notes";
 import { hydrateIcons, icon } from "./icons-line";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
@@ -79,7 +80,7 @@ function targetSize(): [number, number] {
   if (ui.charging) return [850, a.collapsedH];
   if (ui.state === "idle") return [idleWidth(), a.collapsedH];
   if (ui.state === "notify") return [380, a.collapsedH];
-  if (ui.state === "prompt") return [a.openW, promptHeight()];
+  if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
   return [a.openW, a.openH]; // every tab shares the open size; long pages scroll
 }
 
@@ -229,7 +230,8 @@ function renderView(): void {
   $("header").hidden = hover || prompt;
   $("open").hidden = !hover && !prompt;
   $("prompt").hidden = !prompt;
-  $("pages").hidden = prompt; // the prompt state is sized for the prompt alone; the tab bar stays
+  $("pages").hidden = prompt; // the prompt state is sized for the prompt alone
+  $("tabbar").setAttribute("aria-disabled", String(prompt)); // visible but inert until the prompt closes
   document.querySelectorAll<HTMLElement>(".page").forEach((p) => (p.hidden = p.id !== `tab-${t}`));
   setActiveTab(t);
   $("task-view").hidden = ui.editingTasks;
@@ -239,12 +241,14 @@ function renderView(): void {
   renderCalendar();
   if (hover && (t === "tasks" || t === "home")) renderTasks(ui.tasks);
   if (hover && t === "month") renderMonth();
+  if (hover && t === "notes") showNotes();
   renderHeader();
   renderClock();
 }
 
 /** Switch the open island to tab `id` (Task 9 opens the Pal tab with it). Same size: no morph, just a fade. */
 export function openTab(id: string): void {
+  if (ui.state === "prompt") return; // never leave a pending prompt for a tab
   ui.tab = id;
   ui.editingTasks = ui.editingLocation = ui.editingCalendar = false;
   if (ui.state !== "hover") return;
@@ -569,6 +573,8 @@ function wireInput(): void {
     b.onclick = () => invoke("media_control", { action: b.dataset.media }).catch(console.error);
   });
   wirePlayer();
+
+  initNotes();
 
   // tasks
   const toggleEditor = () => {

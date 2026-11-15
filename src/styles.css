@@ -239,6 +239,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @keyframes page-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .pages.fade { animation: none; } }
 
+/* ---------- Notes ---------- */
+.notes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: var(--gap); height: 100%; min-height: 0; }
+.notes-side, .notes-edit { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.notes-bar { display: flex; gap: 8px; }
+.notes-bar input { flex: 1; }
+.notes-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; }
+.note-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 10px; border: none; border-radius: 10px; background: rgba(255, 255, 255, 0.05); color: inherit; text-align: left; font-size: var(--t13); }
+.note-row:hover { background: rgba(255, 255, 255, 0.1); }
+.note-row.on { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.note-pin { display: grid; flex: none; color: var(--accent); }
+.note-empty { padding: 8px 4px; font-size: var(--t12); }
+.notes-edit { position: relative; }
+#note-body { flex: 1; min-height: 0; resize: none; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 10px 12px; padding-right: 44px; font: inherit; font-size: var(--t13); outline: none; }
+#note-body:focus { border-color: var(--accent); }
+.notes-actions { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; }
+.notes-actions .action-btn { width: 28px; height: 28px; }
+.notes-actions .action-btn:disabled { opacity: 0.35; }
+.notes-actions .action-btn.on { color: var(--accent); }
+.notes-actions .action-btn.danger { background: #d0342c; color: #fff; }
+.strip-notes { flex: 0 1 190px; min-width: 120px; display: flex; align-items: center; gap: 8px; }
+.strip-notes input { flex: 1; padding: 5px 10px; font-size: var(--t12); }
+
 /* ---------- Home cards ---------- */
 .home-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
 .card {
@@ -409,7 +431,13 @@ button.card:hover, .card[role="button"]:hover { filter: brightness(1.1); }
 .prompt .btn:disabled, .opt:disabled { opacity: 0.5; cursor: default; }
 .prompt-who { flex: 0 1 auto; min-width: 70px; max-width: 30%; }
 .prompt-sub { display: flex; gap: 6px; min-width: 0; }
-.prompt-sum { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.25); font: var(--t12) / 1.4 "Cascadia Mono", Consolas, monospace; }
+.prompt-sum {
+  flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.25);
+  font: var(--t12) / 1.4 "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+  max-height: calc(var(--t12) * 1.4 * 3); overflow-y: auto; user-select: text; /* the user decides Allow on this text */
+}
+/* during a prompt the tab bar can't switch away from it (openTab is a no-op) */
+.tabbar[aria-disabled="true"] { pointer-events: none; opacity: 0.4; }
 .q { margin-top: 6px; }
 .q-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-weight: 600; }
 .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }

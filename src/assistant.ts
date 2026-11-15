@@ -198,10 +198,21 @@ function renderTab(): void {
 // ---------- prompts ----------
 export const currentPrompt = (): Prompt | null => st.queue[0]?.p ?? null;
 
-/** Base px height of the prompt state (spec decision): permission 150, questions 230 + 30 per extra question. */
-export function promptHeight(): number {
+/** Lines the permission summary wraps to (max 3; the rest scrolls inside it).
+ *  shortcut: estimated from a ~7.3 px monospace char and the row's fixed parts (~380 px); measure the DOM if it proves off. */
+function summaryLines(summary: string, openW: number, textScale: number): number {
+  const perLine = Math.max(20, Math.floor((openW - 380) / (7.3 * textScale)));
+  const lines = summary.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
+  return Math.min(3, lines);
+}
+
+/** Base px height of the prompt state (spec decision): permission 150 (+1 line per extra summary line, up to 3,
+ *  capped by openH), questions 230 + 30 per extra question (max 420). */
+export function promptHeight(openW: number, openH: number, textScale: number): number {
   const p = currentPrompt();
-  return p?.kind === "question" ? Math.min(420, 230 + 30 * Math.max(0, (p.questions?.length ?? 1) - 1)) : 150;
+  if (p?.kind === "question") return Math.min(420, 230 + 30 * Math.max(0, (p.questions?.length ?? 1) - 1));
+  const extra = (summaryLines(p?.summary || p?.toolName || "", openW, textScale) - 1) * Math.ceil(12 * 1.4 * textScale);
+  return Math.min(openH, 150 + extra);
 }
 
 /** Queues `p`; true when it is the one on screen now. */
@@ -221,6 +232,10 @@ export function closePrompt(id: number): boolean {
   mood();
   if (i === 0 && st.queue.length) renderPrompt();
   else updateCount();
+  if (!st.queue.length) {
+    promptPal?.destroy();
+    promptPal = null;
+  }
   return i === 0;
 }
 
@@ -283,7 +298,7 @@ function renderPrompt(): void {
     const sub = el("span", "muted small prompt-sub");
     sub.append(el("span", "ell", `wants ${p.toolName || "a tool"}`), el("span", "prompt-count"));
     who.append(el("b", "ell", p.project || "Claude Code"), sub);
-    const sum = el("code", "prompt-sum ell", p.summary || p.toolName || "");
+    const sum = el("code", "prompt-sum", p.summary || p.toolName || ""); // wraps to 3 lines, then scrolls
     sum.title = p.summary ?? "";
     head.append(face, who, sum, button("btn", "Deny", () => answer({ kind: "deny" })), button("btn primary", "Allow", () => answer({ kind: "allow" })));
     submit = () => answer({ kind: "allow" });
