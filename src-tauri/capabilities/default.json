@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Main island window: core APIs (events, window) only. App features go through our own commands.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

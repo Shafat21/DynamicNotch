@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DynamicNotch</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <!-- #shell animates size/position; #island clips its layers to the pill shape. -->
+    <div id="shell">
+      <div class="charge"><div class="beam l"></div><div class="beam r"></div></div>
+      <div class="ear l"></div>
+      <div class="ear r"></div>
+      <div id="island">
+        <div class="bg bg-weather"></div>
+        <div class="bg bg-perf"></div>
+        <div class="bg bg-calendar"></div>
+        <div class="bg bg-month"></div>
+        <div class="fx"></div>
+        <div class="shine"></div>
+
+        <div id="content"><div id="view">
+          <!-- Header: idle clock, media title/lyric, notifications -->
+          <div class="header" id="header">
+            <span class="icon" id="status-icon"></span>
+            <span class="title" id="status-text"></span>
+            <div class="media-controls" id="media-controls" hidden>
+              <button class="media-btn" data-media="prev" data-icon="prev"></button>
+              <button class="media-btn" data-media="toggle" id="btn-play" data-icon="play"></button>
+              <button class="media-btn" data-media="next" data-icon="next"></button>
+            </div>
+          </div>
+
+          <!-- System status -->
+          <section class="panel" id="panel-perf" hidden>
+            <div class="panel-head">
+              <span class="panel-title">System Status</span>
+              <button class="action-btn" data-action="taskmgr" data-icon="open" data-size="16" title="Task Manager"></button>
+            </div>
+            <div class="stat-grid">
+              <div class="stat"><div class="stat-label"><i data-icon="cpu" data-size="14"></i>CPU</div><div class="stat-val" id="cpu-val">0%</div><div class="bar"><div id="cpu-bar"></div></div></div>
+              <div class="stat"><div class="stat-label"><i data-icon="memory" data-size="14"></i>RAM</div><div class="stat-val" id="ram-val">0%</div><div class="bar"><div id="ram-bar"></div></div></div>
+              <div class="stat"><div class="stat-label"><i data-icon="disk" data-size="14"></i>STORAGE</div><div class="stat-val" id="disk-val">0%</div><div class="bar"><div id="disk-bar"></div></div></div>
+              <div class="stat"><div class="stat-label"><i data-icon="web" data-size="14"></i>NETWORK</div><div class="net" id="net-down">↓ 0 KB/s</div><div class="net" id="net-up">↑ 0 KB/s</div></div>
+            </div>
+          </section>
+
+          <!-- Weather -->
+          <section class="panel" id="panel-weather" hidden>
+            <div class="weather-top">
+              <div>
+                <div class="weather-city" id="weather-city">—</div>
+                <div class="weather-cond" id="weather-cond">Loading...</div>
+              </div>
+              <div class="weather-temp" id="weather-temp">--°</div>
+            </div>
+            <div class="hourly" id="hourly"></div>
+            <div class="weather-tools">
+              <button class="action-btn" id="btn-edit-location" data-icon="pencil" data-size="15" title="Change location"></button>
+              <button class="action-btn" data-action="weather" data-icon="open" data-size="15" title="Open Weather app"></button>
+            </div>
+            <form class="location-form" id="location-form" hidden>
+              <input id="location-input" placeholder="City name" maxlength="100" autocomplete="off" />
+              <button type="submit" class="btn primary">Save</button>
+              <button type="button" class="btn" id="location-cancel">Cancel</button>
+            </form>
+          </section>
+
+          <!-- Tasks: view mode + edit mode -->
+          <section class="panel" id="panel-calendar" hidden>
+            <div id="task-view">
+              <div class="panel-head">
+                <button class="action-btn" id="btn-edit-tasks" data-icon="pencil" data-size="16" title="Manage tasks"></button>
+                <span class="panel-title">Next Up</span>
+                <span class="muted" id="task-count">0 tasks</span>
+              </div>
+              <div id="task-list"></div>
+            </div>
+            <div id="task-edit" hidden>
+              <div class="panel-title big">Manage Tasks</div>
+              <ul class="edit-list" id="edit-list"></ul>
+              <form id="task-form" class="task-form">
+                <input id="task-name" placeholder="Task Name" maxlength="100" autocomplete="off" />
+                <input id="task-time" placeholder="Time (e.g. 3:00 PM)" maxlength="30" autocomplete="off" />
+                <select id="task-cat">
+                  <option>Work</option><option>Health</option><option>Personal</option><option>Study</option><option>Other</option>
+                </select>
+                <button type="submit" class="btn">Add</button>
+                <button type="button" class="btn" id="task-delete">Delete Selected</button>
+              </form>
+              <button class="btn primary wide" id="task-done">Done</button>
+            </div>
+          </section>
+
+          <!-- Month progress -->
+          <section class="panel" id="panel-month" hidden>
+            <div class="panel-head">
+              <span class="panel-title" id="month-title">Month Progress</span>
+              <span class="month-pct" id="month-pct">0%</span>
+              <button class="action-btn" data-action="datetime" data-icon="open" data-size="16" title="Date &amp; time settings"></button>
+            </div>
+            <div class="dots" id="month-dots"></div>
+          </section>
+
+          <!-- Basics: the pill stays small, control balls float beside it -->
+          <section class="panel" id="panel-basics" hidden>
+            <div class="basics">
+              <button class="nav-btn" data-scroll="-1">&lt;</button>
+              <span class="basics-label">Basics</span>
+              <button class="nav-btn" data-scroll="1">&gt;</button>
+            </div>
+          </section>
+        </div></div>
+      </div>
+    </div>
+    <div id="balls"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
