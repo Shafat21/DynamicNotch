@@ -1,6 +1,7 @@
 mod actions;
 mod appearance;
 mod bridge;
+mod clipboard;
 mod commands;
 mod db;
 mod display;
@@ -34,6 +35,8 @@ pub struct AppState {
     pub prompts: bridge::Prompts,
     /// True while a fullscreen app hides the island (spec §18).
     pub hidden: AtomicBool,
+    /// Clipboard history (memory; mirrored to the DB only with "Remember across restarts").
+    pub clips: Mutex<clipboard::ClipStore>,
 }
 
 /// Emit an event to the frontend and remember it for `get_snapshot`.
@@ -75,8 +78,10 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let db = db::Db::open(&dir.join("dynamic_notch.db"))?;
+            let clips = if clipboard::remember(&db) { clipboard::ClipStore::from_saved(db.clips().unwrap_or_default()) } else { clipboard::ClipStore::default() };
             app.manage(AppState {
                 db: Mutex::new(db),
+                clips: Mutex::new(clips),
                 last: Mutex::new(HashMap::new()),
                 hit: Mutex::new(window::Rect::default()),
                 sessions: Mutex::default(),
@@ -92,6 +97,7 @@ pub fn run() {
             display::spawn_watcher(app.handle().clone());
             fullscreen::spawn_watcher(app.handle().clone());
             reminders::spawn_scheduler(app.handle().clone());
+            clipboard::spawn(app.handle().clone());
             #[cfg(windows)]
             glass_spike::run(&win); // SPIKE: remove
 
@@ -128,6 +134,12 @@ pub fn run() {
             commands::snooze_reminder,
             commands::done_reminder,
             commands::delete_reminder,
+            commands::list_clips,
+            commands::copy_clip,
+            commands::pin_clip,
+            commands::remove_clip,
+            commands::clear_clips,
+            commands::set_clip_paused,
             commands::set_location,
             commands::set_calendar_url,
             commands::open_join,

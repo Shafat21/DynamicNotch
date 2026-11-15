@@ -1,7 +1,8 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, window, AppState};
+use crate::{actions, clipboard, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, window, AppState};
+use crate::clipboard::Clip;
 use crate::notes::Note;
 use crate::reminders::{Reminder, Repeat};
 use serde_json::{json, Value};
@@ -51,6 +52,7 @@ pub enum General {
     HideFullscreen(bool),
     Autostart(bool),
     ReminderSound(bool),
+    ClipRemember(bool),
 }
 
 pub fn parse_general(key: &str, value: &Value) -> Res<General> {
@@ -60,7 +62,8 @@ pub fn parse_general(key: &str, value: &Value) -> Res<General> {
         ("hide_fullscreen", Value::Bool(b)) => Ok(General::HideFullscreen(*b)),
         ("autostart", Value::Bool(b)) => Ok(General::Autostart(*b)),
         ("reminder_sound", Value::Bool(b)) => Ok(General::ReminderSound(*b)),
-        ("display" | "island_size" | "hide_fullscreen" | "autostart" | "reminder_sound", _) => Err(format!("invalid value for {key}")),
+        ("clip_remember", Value::Bool(b)) => Ok(General::ClipRemember(*b)),
+        ("display" | "island_size" | "hide_fullscreen" | "autostart" | "reminder_sound" | "clip_remember", _) => Err(format!("invalid value for {key}")),
         _ => Err(format!("unknown setting {key}")),
     }
 }
@@ -77,6 +80,13 @@ pub fn set_general(app: AppHandle, key: String, value: Value) -> Res<db::Setting
             if on { al.enable() } else { al.disable() }.map_err(err)
         }
         General::ReminderSound(on) => app.state::<AppState>().db.lock().unwrap().set("reminder_sound", &on.to_string()).map_err(err),
+        General::ClipRemember(on) => {
+            let state = app.state::<AppState>();
+            let db = state.db.lock().unwrap();
+            db.set("clip_remember", &on.to_string()).map_err(err)?;
+            clipboard::persist(&db, &state.clips.lock().unwrap(), on); // off wipes what was stored
+            Ok(())
+        }
     }?;
     emit_settings(&app);
     crate::current_settings(&app)
@@ -432,4 +442,49 @@ mod tests {
         assert!(parse_general("bridge_token", &json!("x")).is_err()); // not allow-listed
         assert!(parse_general("", &json!(null)).is_err());
     }
+}
+
+/// Clipboard history: lists are pinned first, then newest.
+#[tauri::command]
+pub fn list_clips(state: State<AppState>) -> Vec<Clip> {
+    state.clips.lock().unwrap().list()
+}
+
+/// Writes the entry back to the clipboard; the write itself is kept out of history.
+#[tauri::command]
+pub fn copy_clip(state: State<AppState>, id: i64) -> Res<()> {
+    let text = state.clips.lock().unwrap().text_of(id).ok_or("unknown clip")?;
+    clipboard::write(&text)
+}
+
+fn edit_clips(app: &AppHandle, f: impl FnOnce(&mut clipboard::ClipStore)) -> Vec<Clip> {
+    let state = app.state::<AppState>();
+    let db = state.db.lock().unwrap();
+    let mut store = state.clips.lock().unwrap();
+    f(&mut store);
+    clipboard::changed(app, &db, &store);
+    store.list()
+}
+
+#[tauri::command]
+pub fn pin_clip(app: AppHandle, id: i64, pinned: bool) -> Vec<Clip> {
+    edit_clips(&app, |s| s.pin(id, pinned))
+}
+
+#[tauri::command]
+pub fn remove_clip(app: AppHandle, id: i64) -> Vec<Clip> {
+    edit_clips(&app, |s| s.remove(id))
+}
+
+/// Keeps pinned entries.
+#[tauri::command]
+pub fn clear_clips(app: AppHandle) -> Vec<Clip> {
+    edit_clips(&app, |s| s.clear())
+}
+
+#[tauri::command]
+pub fn set_clip_paused(app: AppHandle, paused: bool) -> Res<()> {
+    app.state::<AppState>().db.lock().unwrap().set("clip_paused", &paused.to_string()).map_err(err)?;
+    emit_settings(&app);
+    Ok(())
 }

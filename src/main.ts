@@ -8,6 +8,7 @@ import {
 } from "./assistant";
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
+import { initClipboard, showClipboard } from "./clipboard";
 import { initNotes, showNotes } from "./notes";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
@@ -248,6 +249,7 @@ function renderView(): void {
   if (hover && t === "month") renderMonth();
   if (hover && t === "notes") showNotes();
   if (hover && t === "reminders") showReminders();
+  if (hover && t === "clipboard") void showClipboard();
   renderHeader();
   renderClock();
 }
@@ -595,6 +597,7 @@ function wireInput(): void {
   wirePlayer();
 
   initNotes();
+  initClipboard();
   initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });
 
   // tasks

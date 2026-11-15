@@ -270,7 +270,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pill:disabled { opacity: 0.5; cursor: default; }
 .rem-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .rem-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.rem-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 8px 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+#rem-view .panel-head { margin-bottom: 8px; }
+.rem-row { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 6px 4px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 .rem-row .col { flex: 1; }
 .rem-row .action-btn { width: 26px; height: 26px; }
 .rem-row.done .rem-name { text-decoration: line-through; color: var(--muted); }
@@ -607,3 +608,17 @@ select option { background: var(--bg-to); }
 [data-icons="badges"] .tab-ic { width: 22px; height: 22px; }
 [data-icons="badges"] .card-ic { width: 20px; height: 20px; border-radius: 6px; margin: -1px 0; }
 [data-icons="badges"] .card-ic svg { width: 13px; height: 13px; }
+
+/* Clipboard tab */
+.clip { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
+.clip .notes-bar { align-items: center; }
+.clip .btn { flex: none; padding: 5px 14px; font-size: var(--t12); }
+.clip .btn:disabled { opacity: 0.35; }
+.clip-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; }
+.clip-row { display: flex; align-items: center; gap: 4px; padding: 2px 4px 2px 0; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.clip-row:hover { background: rgba(255, 255, 255, 0.1); }
+.clip-row.flash { background: color-mix(in srgb, var(--accent) 32%, transparent); }
+.clip-main { flex: 1; min-width: 0; display: flex; padding: 6px 6px 6px 10px; border: none; background: none; color: inherit; text-align: left; font-size: var(--t13); }
+.clip-row .action-btn { width: 24px; height: 24px; flex: none; }
+.clip-row .action-btn.on { color: var(--accent); }
+.clip-empty { padding: 8px 4px; font-size: var(--t12); }

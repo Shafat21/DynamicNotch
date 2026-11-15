@@ -91,6 +91,20 @@ export function renderFeatures(root: HTMLElement): () => void {
         toggle("Reminder sound", store.settings.reminderSound, (on) => setGeneral("reminder_sound", on).catch(() => {})),
       ),
     ),
+    section(
+      "Clipboard history",
+      row(
+        "Remember across restarts",
+        "Off by default: history stays in memory. When on, copied text is stored on disk, unencrypted, in this app's database.",
+        toggle("Remember across restarts", store.settings.clipRemember, (on) => setGeneral("clip_remember", on).catch(() => {})),
+      ),
+      row(
+        "Pause",
+        "Stop recording new copies.",
+        toggle("Pause clipboard history", store.settings.clipPaused, (on) => invoke("set_clip_paused", { paused: on }).catch((e) => report(String(e)))),
+      ),
+      row("Clear history", "Removes every entry except pinned ones.", button("Clear history", () => invoke("clear_clips").then(() => report("Clipboard history cleared"), (e) => report(String(e))))),
+    ),
     section("Weather", row("Location", "City used for the weather card.", h("div", { className: "stack" }, locForm, locState))),
     section("Launcher apps", apps, h("div", { className: "section-actions" }, addApp)),
   );

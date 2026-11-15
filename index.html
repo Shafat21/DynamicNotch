@@ -301,6 +301,19 @@
                 </form>
               </section>
 
+              <!-- Clipboard history (clipboard.ts) -->
+              <section class="page" id="tab-clipboard" hidden>
+                <div class="clip">
+                  <div class="notes-bar">
+                    <input id="clip-search" type="search" placeholder="Search clipboard" maxlength="100" autocomplete="off" spellcheck="false" />
+                    <span class="muted" id="clip-state" hidden>Paused</span>
+                    <button class="action-btn" id="clip-pause" title="Pause recording"></button>
+                    <button class="btn" id="clip-clear" type="button">Clear</button>
+                  </div>
+                  <div class="clip-list" id="clip-list"></div>
+                </div>
+              </section>
+
               <!-- Month progress -->
               <section class="page" id="tab-month" hidden>
                 <div class="panel-head">

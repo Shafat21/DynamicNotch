@@ -1,6 +1,7 @@
 //! Local SQLite storage: key/value settings + tasks.
 //! Schema version lives in `PRAGMA user_version`; add a new `if version < N` block to migrate.
 
+use crate::clipboard::Clip;
 use crate::notes::Note;
 use crate::reminders::{Reminder, Repeat};
 use rusqlite::{params, Connection, OptionalExtension, Result};
@@ -34,6 +35,8 @@ pub struct Settings {
     pub island_size: String,
     pub hide_fullscreen: bool,
     pub reminder_sound: bool,
+    pub clip_remember: bool,
+    pub clip_paused: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -148,6 +151,19 @@ impl Db {
                      done_at INTEGER
                  );
                  PRAGMA user_version = 4;
+                 COMMIT;",
+            )?;
+        }
+        if version < 5 {
+            self.conn.execute_batch(
+                "BEGIN;
+                 CREATE TABLE clip_history (
+                     id INTEGER PRIMARY KEY,
+                     text TEXT NOT NULL,
+                     pinned INTEGER NOT NULL DEFAULT 0,
+                     at INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 5;
                  COMMIT;",
             )?;
         }
@@ -271,6 +287,22 @@ impl Db {
         Ok(())
     }
 
+    pub fn clips(&self) -> Result<Vec<Clip>> {
+        let mut stmt = self.conn.prepare("SELECT id, text, pinned, at FROM clip_history ORDER BY at DESC, id DESC")?;
+        let rows = stmt.query_map([], |r| Ok(Clip { id: r.get(0)?, text: r.get(1)?, pinned: r.get::<_, i64>(2)? != 0, at: r.get(3)? }))?;
+        rows.collect()
+    }
+
+    /// Replace the stored history (at most ~50 rows).
+    pub fn save_clips(&self, clips: &[Clip]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM clip_history", [])?;
+        for c in clips {
+            tx.execute("INSERT INTO clip_history (id, text, pinned, at) VALUES (?1, ?2, ?3, ?4)", params![c.id, c.text, c.pinned, c.at])?;
+        }
+        tx.commit()
+    }
+
     pub fn bridge_port(&self) -> Result<u16> {
         Ok(self.get("bridge_port")?.and_then(|v| v.parse().ok()).unwrap_or(47863))
     }
@@ -314,6 +346,8 @@ impl Db {
             island_size: text("island_size", "Auto")?,
             hide_fullscreen: text("hide_fullscreen", "true")? != "false",
             reminder_sound: text("reminder_sound", "true")? != "false",
+            clip_remember: text("clip_remember", "false")? == "true",
+            clip_paused: text("clip_paused", "false")? == "true",
         })
     }
 
@@ -440,7 +474,7 @@ mod tests {
 
     fn v2_conn() -> Connection {
         let conn = Db::open_in_memory().unwrap().conn;
-        conn.execute_batch("DROP TABLE notes; DROP TABLE reminders; PRAGMA user_version = 2;").unwrap();
+        conn.execute_batch("DROP TABLE notes; DROP TABLE reminders; DROP TABLE clip_history; PRAGMA user_version = 2;").unwrap();
         conn
     }
 
@@ -477,7 +511,7 @@ mod tests {
 
     fn v3_conn() -> Connection {
         let conn = Db::open_in_memory().unwrap().conn;
-        conn.execute_batch("DROP TABLE reminders; PRAGMA user_version = 3;").unwrap();
+        conn.execute_batch("DROP TABLE reminders; DROP TABLE clip_history; PRAGMA user_version = 3;").unwrap();
         conn
     }
 
@@ -508,6 +542,18 @@ mod tests {
         db.delete_reminder(a).unwrap();
         assert!(db.reminder(a).unwrap().is_none());
         assert!(db.reminder(9999).unwrap().is_none());
+    }
+
+    #[test]
+    fn v4_upgrades_to_v5_keeping_reminders() {
+        let conn = Db::open_in_memory().unwrap().conn;
+        conn.execute_batch("DROP TABLE clip_history; PRAGMA user_version = 4;").unwrap();
+        let db = Db::init(conn).unwrap();
+        db.add_reminder("x", 1, Repeat::None).unwrap();
+        db.save_clips(&[Clip { id: 7, text: "t".into(), pinned: true, at: 1 }]).unwrap();
+        db.migrate().unwrap();
+        assert_eq!((db.reminders(0).unwrap().len(), db.clips().unwrap().len()), (1, 1));
+        assert!(db.clips().unwrap()[0].pinned);
     }
 
     #[test]
