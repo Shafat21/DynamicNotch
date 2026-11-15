@@ -114,9 +114,6 @@ function geometry(): void {
   shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
   shell.dataset.shape = look().shape;
   sendHitRect(w, h, k);
-  // Glass: Rust clips the desktop blur to this outline and steps it with the same easing as the CSS morph
-  const durationMs = matchMedia("(prefers-reduced-motion: reduce)").matches ? 250 : 850;
-  invoke("set_island_shape", { shape: { w, h, r, top: pillTop(), durationMs, shape: look().shape } }).catch(console.error);
 }
 
 const sizeChanged = () => {

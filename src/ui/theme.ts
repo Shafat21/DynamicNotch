@@ -4,7 +4,7 @@ export type LayoutItem = { id: string; visible: boolean };
 export type Layout = { tabs: LayoutItem[]; home: LayoutItem[] };
 export type Appearance = {
   theme: string; accent: string; bgMode: string; iconStyle: string; badgeColors: Record<string, string>; shape: string;
-  density: string; radius: number; textScale: number; cardOpacity: number; glassFrost: number; tabLabels: string; openOn: string;
+  density: string; radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string;
   collapsedW: number; collapsedH: number; openW: number; openH: number;
 };
 export type Look = { appearance: Appearance; layout: Layout; theme: Theme };
@@ -14,7 +14,7 @@ const items = (ids: string[], hidden: string[] = []) => ids.map((id) => ({ id, v
 export const DEFAULT_LOOK: Look = {
   appearance: {
     theme: "Midnight", accent: "", bgMode: "glass", iconStyle: "line", badgeColors: {}, shape: "pill", density: "comfortable",
-    radius: 20, textScale: 1, cardOpacity: 0.75, glassFrost: 0.45, tabLabels: "always", openOn: "home", collapsedW: 180, collapsedH: 40, openW: 760, openH: 260,
+    radius: 20, textScale: 1, cardOpacity: 0.75, tabLabels: "always", openOn: "home", collapsedW: 180, collapsedH: 40, openW: 760, openH: 260,
   },
   layout: {
     tabs: items(["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard", "sound", "devices", "shelf"]),
@@ -30,11 +30,9 @@ const BADGES: Record<string, string> = {
 };
 const DENSITY: Record<string, [gap: number, pad: string]> = { compact: [8, "10px 12px"], comfortable: [12, "14px 16px"], airy: [16, "18px 20px"] };
 
-const hexRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-
 /** Dark glyph on light badges, white on dark ones (relative luminance of #RRGGBB). */
 function badgeFg(hex: string): string {
-  const [r, g, b] = hexRgb(hex).map((v) => v / 255);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? "#000" : "#fff";
 }
 
@@ -43,7 +41,6 @@ export function applyTheme({ appearance: a, theme: t }: Look): void {
   const [gap, pad] = DENSITY[a.density] ?? DENSITY.comfortable;
   const vars: Record<string, string> = {
     "--bg-from": t.bgFrom, "--bg-to": t.bgTo, "--card": t.card, "--card-opacity": String(a.cardOpacity), "--accent": a.accent || t.accent,
-    "--glass-frost": String(a.glassFrost), "--glass-tint-rgb": hexRgb(t.bgFrom).join(" "),
     "--radius": `${a.radius}px`, "--gap": `${gap}px`, "--pad": pad, "--text-scale": String(a.textScale),
   };
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);

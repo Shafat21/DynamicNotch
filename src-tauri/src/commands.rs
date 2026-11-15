@@ -129,7 +129,6 @@ fn update_appearance(
     let (a, l) = (appearance::sanitize(a), appearance::normalize_layout(l));
     appearance::save(&db, &a, &l)?;
     drop(db);
-    crate::glass::apply(app, &a);
     let payload = appearance::payload(&a, &l);
     crate::publish(app, "appearance", payload.clone());
     Ok(payload)
@@ -421,11 +420,6 @@ pub fn run_action(id: String) -> Res<()> {
 #[tauri::command]
 pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
     window::set_hit_rect(&app, rect);
-}
-
-#[tauri::command]
-pub fn set_island_shape(app: AppHandle, shape: crate::glass::Shape) {
-    crate::glass::animate_to(&app, shape);
 }
 
 #[tauri::command]

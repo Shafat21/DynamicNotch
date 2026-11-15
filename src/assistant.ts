@@ -148,7 +148,7 @@ function renderCard(): void {
     const sub = el("span", "muted ell", st.bridge.online ? (st.bridge.connected ? "Connected" : st.note || "Not connected") : "Offline");
     sub.title = sub.textContent!;
     col.append(el("b", "ell", "Claude Code"), sub);
-    const foot = st.bridge.online && !st.bridge.connected ? button("btn glass-btn primary pal-connect", "Connect Claude Code", connect) : el("div", "pal-msg muted", text);
+    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect Claude Code", connect) : el("div", "pal-msg muted", text);
     return card.replaceChildren(row, foot);
   }
   const list = st.sessions;
@@ -179,7 +179,7 @@ function renderTab(): void {
   const state = $("pal-state");
   const n = st.sessions.length;
   state.replaceChildren(el("b", "", "Claude Code"), el("span", "muted small", text ?? `${n} session${n === 1 ? "" : "s"}`));
-  if (st.bridge.online && !st.bridge.connected) state.append(button("btn glass-btn primary", "Connect Claude Code", connect));
+  if (st.bridge.online && !st.bridge.connected) state.append(button("btn primary", "Connect Claude Code", connect));
   $("pal-sessions").replaceChildren(
     ...st.sessions.map((s) => {
       const row = el("div", "sess");
@@ -300,7 +300,7 @@ function renderPrompt(): void {
     who.append(el("b", "ell", p.project || "Claude Code"), sub);
     const sum = el("code", "prompt-sum", p.summary || p.toolName || ""); // wraps to 3 lines, then scrolls
     sum.title = p.summary ?? "";
-    head.append(face, who, sum, button("btn glass-btn", "Deny", () => answer({ kind: "deny" })), button("btn glass-btn primary", "Allow", () => answer({ kind: "allow" })));
+    head.append(face, who, sum, button("btn", "Deny", () => answer({ kind: "deny" })), button("btn primary", "Allow", () => answer({ kind: "allow" })));
     submit = () => answer({ kind: "allow" });
   } else {
     head.append(face, el("b", "ell prompt-project", p.project || "Claude Code"));
@@ -311,8 +311,8 @@ function renderPrompt(): void {
       el("span", "muted ell", "asks"),
       el("span", "spacer"),
       el("span", "muted small prompt-count"),
-      button("btn glass-btn", "Dismiss", dismissPrompt),
-      button("btn glass-btn primary", "Send", () => submit()),
+      button("btn", "Dismiss", dismissPrompt),
+      button("btn primary", "Send", () => submit()),
     );
     qs.forEach((q, i) => {
       const box = el("div", "q");

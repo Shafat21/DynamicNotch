@@ -18,8 +18,6 @@ pub struct Appearance {
     pub radius: f64,
     pub text_scale: f64,
     pub card_opacity: f64,
-    /// Glass mode: strength of the dark frost tint over the blur.
-    pub glass_frost: f64,
     pub tab_labels: String,
     pub open_on: String,
     pub collapsed_w: f64,
@@ -41,7 +39,6 @@ impl Default for Appearance {
             radius: 20.0,
             text_scale: 1.0,
             card_opacity: 0.75,
-            glass_frost: 0.45,
             tab_labels: "always".into(),
             open_on: "home".into(),
             collapsed_w: 180.0,
@@ -124,7 +121,6 @@ pub fn sanitize(a: Appearance) -> Appearance {
         radius: clamp(a.radius, 8.0, 40.0, d.radius),
         text_scale: clamp(a.text_scale, 0.85, 1.25, d.text_scale),
         card_opacity: clamp(a.card_opacity, 0.3, 1.0, d.card_opacity),
-        glass_frost: clamp(a.glass_frost, 0.0, 0.85, d.glass_frost),
         tab_labels: one_of(a.tab_labels, &["always", "active", "never"], &d.tab_labels),
         open_on: one_of(a.open_on, &["home", "last"], &d.open_on),
         collapsed_w: clamp(a.collapsed_w, 140.0, 320.0, d.collapsed_w),
@@ -218,18 +214,14 @@ mod tests {
     fn defaults_and_sanitize() {
         let d = Appearance::default();
         assert_eq!((d.theme.as_str(), d.bg_mode.as_str(), d.icon_style.as_str()), ("Midnight", "glass", "line"));
-        assert_eq!(d.glass_frost, 0.45);
-        let bad = Appearance { theme: "Nope".into(), radius: 99.0, text_scale: 0.1, accent: "red".into(), density: "huge".into(), open_w: 5000.0, glass_frost: 2.0, ..d.clone() };
+        let bad = Appearance { theme: "Nope".into(), radius: 99.0, text_scale: 0.1, accent: "red".into(), density: "huge".into(), open_w: 5000.0, ..d.clone() };
         let s = sanitize(bad);
-        assert_eq!(s.glass_frost, 0.85);
-        assert_eq!(sanitize(Appearance { glass_frost: f64::NAN, ..d.clone() }).glass_frost, 0.45);
         assert_eq!(s.theme, "Midnight"); assert_eq!(s.radius, 40.0); assert_eq!(s.text_scale, 0.85);
         assert_eq!(s.accent, ""); assert_eq!(s.density, "comfortable"); assert_eq!(s.open_w, 1000.0);
     }
     #[test]
     fn patch_merges_and_validates() {
         let cur = Appearance::default();
-        assert_eq!(merge_patch(&cur, &serde_json::json!({"glassFrost": -1})).glass_frost, 0.0);
         let next = merge_patch(&cur, &serde_json::json!({"theme": "Ember", "radius": 12, "badgeColors": {"music": "#1DB954", "focus": "nope"}, "unknown": 1}));
         assert_eq!(next.theme, "Ember"); assert_eq!(next.radius, 12.0);
         assert_eq!(next.badge_colors.get("music").map(String::as_str), Some("#1DB954"));

@@ -79,7 +79,6 @@ export function renderAppearance(root: HTMLElement): void {
       range("Corner radius", "Roundness of the island and its cards.", "radius", 8, 40, 1, px),
       range("Text size", "Scales all text in the island.", "textScale", 0.85, 1.25, 0.05, pct),
       range("Card opacity", "How solid the cards look on the background.", "cardOpacity", 0.3, 1, 0.05, pct),
-      range("Glass frost", "How dark the frosted tint over the blurred desktop is (Glass background).", "glassFrost", 0, 0.85, 0.05, pct),
       range("Collapsed width", "Width of the idle pill (at 1080p).", "collapsedW", 140, 320, 1, px),
       range("Collapsed height", "Height of the idle pill (at 1080p).", "collapsedH", 28, 48, 1, px),
       range("Open width", "Width of the open island (at 1080p).", "openW", 560, 1000, 10, px),

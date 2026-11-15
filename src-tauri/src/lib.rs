@@ -8,7 +8,8 @@ mod commands;
 mod db;
 mod display;
 mod fullscreen;
-mod glass;
+#[cfg(windows)]
+mod glass_spike; // SPIKE: remove
 mod launcher;
 mod menu;
 mod monitors;
@@ -106,7 +107,8 @@ pub fn run() {
             reminders::spawn_scheduler(app.handle().clone());
             clipboard::spawn(app.handle().clone());
             sound::spawn(app.handle().clone());
-            glass::apply(app.handle(), &a);
+            #[cfg(windows)]
+            glass_spike::run(&win); // SPIKE: remove
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));
@@ -177,7 +179,6 @@ pub fn run() {
             commands::remove_app,
             commands::launch_app,
             commands::set_hit_rect,
-            commands::set_island_shape,
             commands::show_context_menu,
             commands::answer_prompt,
             commands::connect_claude,
