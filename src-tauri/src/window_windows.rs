@@ -3,19 +3,20 @@
 use super::Rect;
 use crate::AppState;
 use std::{thread, time::Duration};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Monitor, WebviewWindow};
 
-/// Top-centre of the monitor; clicks pass through until the cursor reaches the island.
+/// Top-centre of the chosen monitor; clicks pass through until the cursor reaches the island.
 pub fn setup(app: &AppHandle, win: &WebviewWindow) -> tauri::Result<()> {
-    if let Some(m) = win.current_monitor()?.or(win.primary_monitor()?) {
-        let size = win.outer_size()?;
-        let x = m.position().x + (m.size().width as i32 - size.width as i32) / 2;
-        win.set_position(PhysicalPosition::new(x, m.position().y))?;
-    }
+    super::place(app)?;
     win.set_ignore_cursor_events(true)?;
     win.show()?;
     spawn(app.clone());
     Ok(())
+}
+
+/// The island hangs from the very top of the monitor (over the taskbar if it is on top).
+pub fn top_y(m: &Monitor) -> i32 {
+    m.position().y
 }
 
 pub fn set_hit_rect(app: &AppHandle, rect: Rect) {

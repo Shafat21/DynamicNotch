@@ -159,7 +159,13 @@ git push origin v0.2.0
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Shafat21/DynamicNotch&type=Date)](https://star-history.com/#Shafat21/DynamicNotch&Date)
+<a href="https://www.star-history.com/?type=date&repos=Shafat21%2FDynamicNotch">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Shafat21/DynamicNotch&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Shafat21/DynamicNotch&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Shafat21/DynamicNotch&type=date&legend=top-left" />
+ </picture>
+</a>
 
 ## Credits
 

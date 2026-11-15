@@ -2,6 +2,7 @@ mod actions;
 mod bridge;
 mod commands;
 mod db;
+mod display;
 #[cfg(windows)]
 mod glass_spike; // SPIKE: remove
 mod launcher;
@@ -22,6 +23,10 @@ pub struct AppState {
     pub last: Mutex<HashMap<&'static str, Value>>,
     /// Interactive area of the island, in logical px relative to the window.
     pub hit: Mutex<window::Rect>,
+    /// Claude Code sessions seen by the hook bridge (memory only).
+    pub sessions: Mutex<bridge::sessions::Sessions>,
+    /// Permission / question prompts waiting for an answer in the island.
+    pub prompts: bridge::Prompts,
 }
 
 /// Emit an event to the frontend and remember it for `get_snapshot`.
@@ -48,6 +53,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .on_window_event(|win, event| {
+            if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
+                // off the event thread: the OS applies its own DPI resize after this handler returns
+                let app = win.app_handle().clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = window::place(&app) {
+                        eprintln!("display: re-place failed: {e}");
+                    }
+                });
+            }
+        })
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -56,10 +72,13 @@ pub fn run() {
                 db: Mutex::new(db),
                 last: Mutex::new(HashMap::new()),
                 hit: Mutex::new(window::Rect::default()),
+                sessions: Mutex::default(),
+                prompts: bridge::Prompts::default(),
             });
 
             let win = app.get_webview_window("main").expect("main window");
             window::setup(app.handle(), &win)?;
+            display::spawn_watcher(app.handle().clone());
             #[cfg(windows)]
             glass_spike::run(&win); // SPIKE: remove
 
@@ -67,6 +86,7 @@ pub fn run() {
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));
 
             monitors::spawn_all(app.handle().clone());
+            bridge::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -88,6 +108,9 @@ pub fn run() {
             commands::launch_app,
             commands::set_hit_rect,
             commands::show_context_menu,
+            commands::answer_prompt,
+            commands::connect_claude,
+            commands::disconnect_claude,
         ])
         .run(tauri::generate_context!())
         .expect("error while running DynamicNotch");

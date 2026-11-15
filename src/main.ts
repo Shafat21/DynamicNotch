@@ -13,6 +13,7 @@ type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; islandStyle: string; animationStyle: string; autostart: boolean };
+type Display = { uiScale: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
 type State = "idle" | "hover" | "notify";
 type View = "dashboard" | "perf" | "media" | "weather" | "calendar" | "month" | "agenda"; // "calendar" = Tasks
 
@@ -41,6 +42,7 @@ const ui = {
   event: { title: "", text: "" },
   settings: { islandStyle: "Default", animationStyle: "Fluid Blobs" } as Settings,
   tasks: [] as Task[],
+  scale: 1, // display uiScale from Rust: sizes below are 1080p base px, multiplied in transition()
 };
 
 const isNotch = () => ui.settings.islandStyle === "Notch Nook";
@@ -80,6 +82,7 @@ function targetSize(): [number, number] {
 // ---------- transitions ----------
 let viewTimer = 0;
 let revertTimer = 0;
+let morphTimer = 0;
 
 function restartAnimation(node: HTMLElement, cls: string): void {
   node.classList.remove(cls);
@@ -89,29 +92,36 @@ function restartAnimation(node: HTMLElement, cls: string): void {
 
 /** Morph to the size of the current state, swap content halfway through the fade. */
 function transition(): void {
-  const [w, h] = targetSize();
-  const r = Math.min(h / 2, isNotch() ? 18 : 30);
+  const [bw, bh] = targetSize();
+  const k = ui.scale;
+  const [w, h] = [bw * k, bh * k];
+  const r = Math.min(bh / 2, isNotch() ? 18 : 30) * k;
+  shell.style.setProperty("--ui", String(k));
   shell.style.setProperty("--w", `${w}px`);
   shell.style.setProperty("--h", `${h}px`);
   shell.style.setProperty("--r", `${r}px`);
-  shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25)}px`);
+  shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25 * k)}px`);
   shell.dataset.style = ui.settings.islandStyle;
+  // compositor hint only while the 850 ms morph runs
+  shell.style.willChange = "width, height";
+  clearTimeout(morphTimer);
+  morphTimer = window.setTimeout(() => (shell.style.willChange = ""), 850);
 
   island.dataset.bg = ui.state === "hover" ? ui.view : "";
   updateFx();
   if (!ui.charging) restartAnimation($("island").querySelector<HTMLElement>(".shine")!, "run");
 
-  view.style.setProperty("--slide", `${w / 4}px`);
+  view.style.setProperty("--slide", `${bw / 4}px`); // #view is zoomed, so base px
   restartAnimation(view, "swap");
   clearTimeout(viewTimer);
   viewTimer = window.setTimeout(renderView, 250);
 
-  sendHitRect(w, h);
+  sendHitRect(w, h, k);
 }
 
 /** Re-morph only when the size actually changes; media/lyric events arrive often. */
 function refresh(): void {
-  const [w, h] = targetSize();
+  const [w, h] = targetSize().map((v) => v * ui.scale);
   if (shell.style.getPropertyValue("--w") !== `${w}px` || shell.style.getPropertyValue("--h") !== `${h}px`) transition();
   else renderHeader();
 }
@@ -123,9 +133,9 @@ function updateFx(): void {
 }
 
 /** Tell Rust where the island is so it can toggle click-through. */
-function sendHitRect(w: number, h: number): void {
+function sendHitRect(w: number, h: number, k: number): void {
   const left = (window.innerWidth - w) / 2;
-  const rect = { x: left - 15, y: 0, w: w + 30, h: pillTop() + h + 30 };
+  const rect = { x: left - 15 * k, y: 0, w: w + 30 * k, h: pillTop() + h + 30 * k };
   invoke("set_hit_rect", { rect }).catch(console.error);
 }
 
@@ -309,6 +319,11 @@ function onWeather(w: Weather): void {
 function onSettings(s: Settings): void {
   ui.settings = s;
   transition();
+}
+
+function onDisplay(d: Display): void {
+  ui.scale = d.uiScale;
+  transition(); // the window may also have been resized: re-centre the hit rect
 }
 
 function onCharging(): void {
@@ -543,6 +558,7 @@ async function boot(): Promise<void> {
     listen<CalPayload>("calendar", (e) => onCalendar(e.payload)),
     listen<string>("accent", (e) => document.documentElement.style.setProperty("--sys-accent", e.payload)),
     listen<Settings>("settings", (e) => onSettings(e.payload)),
+    listen<Display>("display", (e) => onDisplay(e.payload)),
     listen<{ name: string; on: boolean }>("keylock", (e) => showEvent(e.payload.name, e.payload.on ? "ENABLED" : "DISABLED", 2500)),
     listen<{ app: string; title: string; text: string }>("notify", (e) => {
       const { app, title, text } = e.payload;
@@ -562,6 +578,7 @@ async function boot(): Promise<void> {
   if (snap.lyric) onLyric(snap.lyric as string);
   if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
   if (snap["media-art"]) onArt(snap["media-art"] as { art: string });
+  if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
 
   ui.tasks = await invoke<Task[]>("list_tasks");
   onSettings(await invoke<Settings>("get_settings"));

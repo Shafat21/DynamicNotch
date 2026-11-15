@@ -8,6 +8,7 @@ use std::path::Path;
 pub const CATEGORIES: [&str; 5] = ["Work", "Health", "Personal", "Study", "Other"];
 pub const ISLAND_STYLES: [&str; 3] = ["Liquid Glass", "Default", "Notch Nook"];
 pub const ANIMATION_STYLES: [&str; 3] = ["Glow Sweep", "Fluid Blobs", "Neon Border"];
+pub const ISLAND_SIZES: [&str; 4] = ["Auto", "Small", "Medium", "Large"];
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Task {
@@ -27,6 +28,10 @@ pub struct Settings {
     pub island_style: String,
     pub animation_style: String,
     pub autostart: bool,
+    /// `"primary"` or a monitor name (`Monitor::name()`).
+    pub display: String,
+    pub island_size: String,
+    pub hide_fullscreen: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -187,6 +192,9 @@ impl Db {
             island_style: text("island_style", "Liquid Glass")?,
             animation_style: text("animation_style", "Fluid Blobs")?,
             autostart: false,
+            display: text("display", "primary")?,
+            island_size: text("island_size", "Auto")?,
+            hide_fullscreen: text("hide_fullscreen", "true")? != "false",
         })
     }
 
@@ -232,6 +240,7 @@ mod tests {
         let s = db.settings().unwrap();
         assert_eq!(s.island_style, "Liquid Glass");
         assert_eq!(s.animation_style, "Fluid Blobs");
+        assert_eq!((s.display.as_str(), s.island_size.as_str(), s.hide_fullscreen), ("primary", "Auto", true));
     }
 
     fn v1_conn(style: &str) -> Connection {

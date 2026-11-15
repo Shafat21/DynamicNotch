@@ -21,7 +21,6 @@ serde_json = { version = "1", features = ["preserve_order"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 sysinfo = "0.37"
 ureq = { version = "3", features = ["json"] }
-tiny_http = "0.12"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
 rrule = "0.14.0"
 chrono-tz = "0.10"

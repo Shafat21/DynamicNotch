@@ -1,22 +1,116 @@
 //! Merge / remove our hook entries in Claude Code's `~/.claude/settings.json`.
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::Path;
 
-pub fn connect(_settings: &mut Value, _url: &str, _token: &str) {
-    unimplemented!()
+/// Events we install, with the hook `timeout` (s). Blocking ones get 25 s so the island (15 s) answers first.
+pub const EVENTS: [(&str, u64); 8] = [
+    ("SessionStart", 5),
+    ("UserPromptSubmit", 5),
+    ("Notification", 5),
+    ("Stop", 5),
+    ("StopFailure", 5),
+    ("SessionEnd", 5),
+    ("PermissionRequest", 25),
+    ("PreToolUse", 25),
+];
+
+/// Root is an object, `hooks` absent or an object, and each of our events absent or an array.
+fn layout_ok(settings: &Value) -> bool {
+    match settings.get("hooks") {
+        None => settings.is_object(),
+        Some(h) => h.as_object().is_some_and(|h| EVENTS.iter().all(|(e, _)| h.get(*e).is_none_or(Value::is_array))),
+    }
 }
 
-pub fn disconnect(_settings: &mut Value, _url: &str) {
-    unimplemented!()
+/// Adds one group per event pointing at `url`; replaces any previous entry of ours. Unexpected layout → no change.
+pub fn connect(settings: &mut Value, url: &str, token: &str) {
+    if !layout_ok(settings) {
+        return;
+    }
+    disconnect(settings, url);
+    let root = settings.as_object_mut().expect("layout checked");
+    let hooks = root.entry("hooks").or_insert_with(|| json!({})).as_object_mut().expect("layout checked");
+    for (event, timeout) in EVENTS {
+        let entry = json!({"type": "http", "url": url, "headers": {"Authorization": format!("Bearer {token}")}, "timeout": timeout});
+        let group = if event == "PreToolUse" {
+            json!({"matcher": "AskUserQuestion", "hooks": [entry]})
+        } else {
+            json!({"hooks": [entry]})
+        };
+        hooks.entry(event).or_insert_with(|| json!([])).as_array_mut().expect("layout checked").push(group);
+    }
 }
 
-pub fn is_connected(_settings: &Value, _url: &str, _token: &str) -> bool {
-    unimplemented!()
+/// Removes hook entries whose `url` is ours, plus only the groups / event arrays / `hooks` key that this emptied.
+pub fn disconnect(settings: &mut Value, url: &str) {
+    let Some(hooks) = settings.get_mut("hooks").and_then(Value::as_object_mut) else { return };
+    let mut emptied = Vec::new();
+    for (event, groups) in hooks.iter_mut() {
+        let Some(groups) = groups.as_array_mut() else { continue };
+        let n = groups.len();
+        groups.retain_mut(|g| {
+            let Some(list) = g.get_mut("hooks").and_then(Value::as_array_mut) else { return true };
+            let had = list.len();
+            list.retain(|h| h["url"] != url);
+            !(list.is_empty() && had > 0)
+        });
+        if groups.is_empty() && n > 0 {
+            emptied.push(event.clone());
+        }
+    }
+    for e in &emptied {
+        hooks.shift_remove(e); // shift, not swap: keep the user's key order
+    }
+    if hooks.is_empty() && !emptied.is_empty() {
+        settings.as_object_mut().expect("has hooks").shift_remove("hooks");
+    }
 }
 
-pub fn write_settings(_path: &Path, _f: impl FnOnce(&mut Value)) -> Result<(), String> {
-    unimplemented!()
+/// All 8 events carry an entry with our URL and the current token.
+pub fn is_connected(settings: &Value, url: &str, token: &str) -> bool {
+    let auth = format!("Bearer {token}");
+    EVENTS.iter().all(|(e, _)| {
+        settings["hooks"][*e].as_array().is_some_and(|groups| {
+            groups.iter().any(|g| {
+                g["hooks"].as_array().is_some_and(|hs| {
+                    hs.iter().any(|h| h["url"] == url && h["headers"]["Authorization"] == auth.as_str())
+                })
+            })
+        })
+    })
+}
+
+/// Read-modify-write `path`: missing → `{}`; invalid JSON or non-object → error, file untouched.
+/// Existing file is copied to `settings.json.dynamicnotch.bak` first; the write is temp file + rename.
+pub fn write_settings(path: &Path, f: impl FnOnce(&mut Value)) -> Result<(), String> {
+    let shown = path.display();
+    let mut settings = match std::fs::read_to_string(path) {
+        Ok(text) => {
+            let v: Value = serde_json::from_str(&text).map_err(|e| format!("{shown} is not valid JSON ({e}); left unchanged"))?;
+            if !v.is_object() {
+                return Err(format!("{shown} is not a JSON object; left unchanged"));
+            }
+            let mut bak = path.as_os_str().to_owned();
+            bak.push(".dynamicnotch.bak");
+            std::fs::copy(path, &bak).map_err(|e| format!("backup failed: {e}"))?;
+            v
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({}),
+        Err(e) => return Err(format!("cannot read {shown}: {e}")),
+    };
+    f(&mut settings);
+    let dir = path.parent().ok_or("settings path has no folder")?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".dynamicnotch.tmp");
+    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())? + "\n";
+    std::fs::write(&tmp, text)
+        .and_then(|()| std::fs::rename(&tmp, path))
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            format!("cannot write {shown}: {e}")
+        })
 }
 
 #[cfg(test)]

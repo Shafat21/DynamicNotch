@@ -1,7 +1,7 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, db, emit_settings, launcher, menu, monitors, window, AppState};
+use crate::{actions, bridge, db, emit_settings, launcher, menu, monitors, window, AppState};
 use serde_json::Value;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
@@ -170,4 +170,21 @@ pub fn remove_app(state: State<AppState>, id: i64) -> Res<Vec<db::App>> {
 pub fn launch_app(state: State<AppState>, id: i64) -> Res<()> {
     let app = state.db.lock().unwrap().app(id).map_err(err)?.ok_or("unknown app")?;
     launcher::launch(&app)
+}
+
+/// Answer for a pending prompt; validated against the prompt's kind and questions before the hook sees it.
+#[tauri::command]
+pub fn answer_prompt(state: State<AppState>, id: u64, answer: bridge::prompt::Answer) -> Res<()> {
+    state.prompts.answer(id, answer)
+}
+
+/// Native confirm, then merge our hooks into ~/.claude/settings.json (with backup).
+#[tauri::command]
+pub async fn connect_claude(app: AppHandle) -> Res<()> {
+    tauri::async_runtime::spawn_blocking(move || bridge::set_connected(&app, true)).await.map_err(err)?
+}
+
+#[tauri::command]
+pub async fn disconnect_claude(app: AppHandle) -> Res<()> {
+    tauri::async_runtime::spawn_blocking(move || bridge::set_connected(&app, false)).await.map_err(err)?
 }
