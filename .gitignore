@@ -8,3 +8,4 @@ src-tauri/gen/
 .idea/
 *.db
 *.db-journal
+docs/superpowers/specs/
