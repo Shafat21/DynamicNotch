@@ -26,7 +26,6 @@ pub struct Settings {
     pub lon: f64,
     pub island_style: String,
     pub animation_style: String,
-    pub avatar_seed: String,
     pub autostart: bool,
 }
 
@@ -187,7 +186,6 @@ impl Db {
             lon: num("lon", 83.0)?,
             island_style: text("island_style", "Liquid Glass")?,
             animation_style: text("animation_style", "Fluid Blobs")?,
-            avatar_seed: text("avatar_seed", "DynamicNotch")?,
             autostart: false,
         })
     }

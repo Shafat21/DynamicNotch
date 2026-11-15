@@ -1,18 +1,20 @@
 // Island state machine + event wiring. Rust pushes events (perf, media, hover, ...);
-// this file decides the island's size/state and which panel is visible.
+// this file decides the island's size/state and which view is visible.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { initFocus } from "./focus";
 import { hydrateIcons, icon } from "./icons";
-import { getSelectedTask, initBalls, layoutBalls, renderMonth, renderTasks, scrollBalls, type Task } from "./panels";
+import { createPal, greet, updateMood } from "./pal";
+import { getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 
 type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; islandStyle: string; animationStyle: string; autostart: boolean };
 type State = "idle" | "hover" | "notify";
+type View = "dashboard" | "perf" | "media" | "weather" | "calendar" | "month";
 
-const FEATURES = ["perf", "media", "weather", "calendar", "month", "basics"] as const;
-type Feature = (typeof FEATURES)[number];
+const PANELS = ["dashboard", "perf", "weather", "calendar", "month"] as const; // views with their own <section>; media uses the header
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -22,7 +24,7 @@ const view = $("view");
 
 const ui = {
   state: "idle" as State,
-  feat: 0,
+  view: "dashboard" as View,
   hovering: false,
   charging: false,
   editingTasks: false,
@@ -34,26 +36,37 @@ const ui = {
   tasks: [] as Task[],
 };
 
-const feature = (): Feature => FEATURES[ui.feat];
 const isNotch = () => ui.settings.islandStyle === "Notch Nook";
 const pillTop = () => (isNotch() ? 0 : 10);
 const showingLyrics = () => ui.lyric !== "" && ui.media.state !== "Idle";
+const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
 const calendarHeight = () => {
   const n = Math.min(ui.tasks.length, 3);
   return n ? 80 + n * 35 : 105;
 };
 
+let measureCtx: CanvasRenderingContext2D | null = null;
+/** Idle pill: clock width, or wide enough for the playing song title (never lyrics). */
+function idleWidth(): number {
+  const title = playingTitle();
+  if (!title) return 180;
+  measureCtx ??= document.createElement("canvas").getContext("2d")!;
+  measureCtx.font = getComputedStyle($("status-text")).font;
+  // 2x25px padding + 22px icon + 10px gap
+  return Math.min(420, Math.max(180, Math.ceil(measureCtx.measureText(title).width) + 82));
+}
+
 function targetSize(): [number, number] {
   if (ui.charging) return [850, 40];
-  if (ui.state === "idle") return feature() === "media" && showingLyrics() ? [640, 40] : [180, 40];
+  if (ui.state === "idle") return [idleWidth(), 40];
   if (ui.state === "notify") return [380, 40];
-  switch (feature()) {
+  switch (ui.view) {
+    case "dashboard": return [720, 230];
     case "media": return [showingLyrics() ? 640 : 420, 40];
     case "perf": return [360, 180];
     case "weather": return [360, ui.editingLocation ? 205 : 160];
     case "calendar": return ui.editingTasks ? [540, 520] : [420, calendarHeight()];
     case "month": return [360, 150];
-    case "basics": return [180, 40];
   }
 }
 
@@ -77,7 +90,7 @@ function transition(): void {
   shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25)}px`);
   shell.dataset.style = ui.settings.islandStyle;
 
-  island.dataset.bg = ui.state === "hover" ? feature() : "";
+  island.dataset.bg = ui.state === "hover" ? ui.view : "";
   updateFx();
   if (!ui.charging) restartAnimation($("island").querySelector<HTMLElement>(".shine")!, "run");
 
@@ -86,27 +99,34 @@ function transition(): void {
   clearTimeout(viewTimer);
   viewTimer = window.setTimeout(renderView, 250);
 
-  const basics = ui.state === "hover" && feature() === "basics";
-  layoutBalls(basics, pillTop());
-  sendHitRect(w, h, basics);
+  sendHitRect(w, h);
+}
+
+/** Re-morph only when the size actually changes; media/lyric events arrive often. */
+function refresh(): void {
+  const [w, h] = targetSize();
+  if (shell.style.getPropertyValue("--w") !== `${w}px` || shell.style.getPropertyValue("--h") !== `${h}px`) transition();
+  else renderHeader();
 }
 
 function updateFx(): void {
-  const on = feature() === "media" && (ui.state !== "idle" || ui.media.state !== "Idle");
+  const on = ui.state === "hover" ? ui.view === "media" : playingTitle() !== "";
   island.dataset.anim = on ? ANIM_KEYS[ui.settings.animationStyle] ?? "blobs" : "";
   island.style.setProperty("--accent", ui.media.accent);
 }
 
-/** Tell Rust where the island is so it can toggle click-through. Extra room on the right/bottom for the balls. */
-function sendHitRect(w: number, h: number, basics: boolean): void {
+/** Tell Rust where the island is so it can toggle click-through. */
+function sendHitRect(w: number, h: number): void {
   const left = (window.innerWidth - w) / 2;
-  const rect = { x: left - 15, y: 0, w: w + 15 + (basics ? 80 : 15), h: pillTop() + h + (basics ? 90 : 30) };
+  const rect = { x: left - 15, y: 0, w: w + 30, h: pillTop() + h + 30 };
   invoke("set_hit_rect", { rect }).catch(console.error);
 }
 
 function setState(s: State): void {
+  if (s === "idle") ui.view = "dashboard"; // the next hover opens home
   if (ui.state === s) return;
   ui.state = s;
+  if (s === "hover" && ui.view === "dashboard") greet();
   transition();
 }
 
@@ -119,8 +139,11 @@ function showEvent(title: string, text: string, ms: number): void {
 }
 
 // ---------- rendering ----------
-function setStatus(iconName: string, text: string, color = "#fff"): void {
-  $("status-icon").innerHTML = icon(iconName, 18, color);
+/** Header icon + text; no icon name = Pal (idle pill). */
+function setStatus(iconName: string | null, text: string): void {
+  $("status-pal").hidden = iconName !== null;
+  $("status-icon").hidden = iconName === null;
+  if (iconName) $("status-icon").innerHTML = icon(iconName, 18);
   $("status-text").textContent = text;
 }
 
@@ -130,31 +153,49 @@ function renderHeader(): void {
     return;
   }
   const m = ui.media;
-  if (feature() === "media" && (ui.state === "hover" || m.state !== "Idle")) {
+  if (ui.state === "hover" && ui.view === "media") {
     let text = "Music Player";
     if (showingLyrics()) text = ui.lyric;
-    else if (m.state !== "Idle") text = ui.state === "hover" && m.artist ? `${m.title} - ${m.artist}` : m.title;
+    else if (m.state !== "Idle") text = m.artist ? `${m.title} - ${m.artist}` : m.title;
     setStatus("music", text);
+    return;
+  }
+  if (ui.state === "idle" && playingTitle()) {
+    setStatus(null, playingTitle());
     return;
   }
   const now = new Date();
   const day = now.toLocaleDateString("en-US", { weekday: "short" });
   const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  setStatus("circle", `${day}, ${time}`, getComputedStyle(document.documentElement).getPropertyValue("--sys-accent").trim() || "#0078d7");
+  setStatus(null, `${day}, ${time}`);
+}
+
+function renderClock(now = new Date()): void {
+  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  $("clock-time").textContent = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  $("clock-date").textContent = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  $("clock-bar").style.width = `${(now.getDate() / days) * 100}%`;
 }
 
 function renderView(): void {
   const hover = ui.state === "hover";
-  const f = feature();
-  $("header").hidden = hover && f !== "media";
-  $("media-controls").hidden = !(hover && f === "media");
-  for (const p of FEATURES) $(`panel-${p}`).hidden = !(hover && f === p);
+  const v = ui.view;
+  $("header").hidden = hover && v !== "media";
+  $("media-controls").hidden = !(hover && v === "media");
+  for (const p of PANELS) $(`panel-${p}`).hidden = !(hover && v === p);
   $("task-view").hidden = ui.editingTasks;
   $("task-edit").hidden = !ui.editingTasks;
   $("location-form").hidden = !ui.editingLocation;
-  if (hover && f === "calendar") renderTasks(ui.tasks);
-  if (hover && f === "month") renderMonth();
+  if (hover && v === "dashboard") renderClock();
+  if (hover && v === "calendar") renderTasks(ui.tasks);
+  if (hover && v === "month") renderMonth();
   renderHeader();
+}
+
+function openView(v: View): void {
+  ui.view = v;
+  ui.editingTasks = ui.editingLocation = false;
+  if (ui.state === "hover") transition();
 }
 
 // ---------- backend events ----------
@@ -166,6 +207,7 @@ function onPerf(p: Perf): void {
   set("cpu", p.cpu);
   set("ram", p.ram);
   set("disk", p.disk);
+  $("chip-cpu-val").textContent = `CPU ${Math.round(p.cpu)}%`;
   const fmt = (b: number) => (b < 1024 ? `${Math.round(b)} B/s` : b < 1048576 ? `${Math.round(b / 1024)} KB/s` : `${(b / 1048576).toFixed(1)} MB/s`);
   $("net-down").textContent = `↓ ${fmt(p.down)}`;
   $("net-up").textContent = `↑ ${fmt(p.up)}`;
@@ -175,21 +217,24 @@ function onMedia(m: Media): void {
   ui.media = m;
   if (m.state === "Idle") ui.lyric = "";
   $("btn-play").innerHTML = icon(m.state === "Playing" ? "pause" : "play");
+  $("tile-media-title").textContent = m.state === "Idle" ? "Nothing playing" : m.title;
+  $("tile-media-artist").textContent = m.state === "Idle" ? "" : m.artist;
+  $("tile-media").style.setProperty("--accent", m.accent);
   updateFx();
-  renderHeader();
+  refresh(); // idle pill width follows the song title
 }
 
 function onLyric(text: string): void {
-  const was = showingLyrics();
   ui.lyric = text;
-  if (was !== showingLyrics()) transition(); // width changes between 640 and normal
-  else renderHeader();
+  refresh(); // the Music view widens to 640 while lyrics show
 }
 
 function onWeather(w: Weather): void {
   $("weather-temp").textContent = w.temp;
   $("weather-city").textContent = w.city;
   $("weather-cond").textContent = w.desc;
+  $("chip-weather-val").textContent = w.temp;
+  $("chip-weather-icon").innerHTML = icon(w.icon, 14);
   $("hourly").replaceChildren(
     ...w.hourly.map((h) => {
       const slot = document.createElement("div");
@@ -233,7 +278,7 @@ function onHover(inside: boolean): void {
 }
 
 function openLocationEditor(): void {
-  ui.feat = FEATURES.indexOf("weather");
+  ui.view = "weather";
   ui.editingLocation = true;
   clearTimeout(revertTimer);
   if (ui.state === "hover") transition();
@@ -243,6 +288,22 @@ function openLocationEditor(): void {
   window.setTimeout(() => $<HTMLInputElement>("location-input").focus(), 300);
 }
 
+// ---------- launcher ----------
+const launcherError = (err: unknown) => showEvent("Launcher", String(err), 3500);
+
+/** Render the app list a launcher command returns. */
+function updateApps(apps: Promise<LauncherApp[]>): void {
+  apps
+    .then((list) =>
+      renderApps(
+        list,
+        (a) => invoke("launch_app", { id: a.id }).catch(launcherError),
+        (a) => updateApps(invoke<LauncherApp[]>("remove_app", { id: a.id })),
+      ),
+    )
+    .catch(launcherError);
+}
+
 // ---------- user input ----------
 function wireInput(): void {
   window.addEventListener("contextmenu", (e) => {
@@ -250,27 +311,26 @@ function wireInput(): void {
     invoke("show_context_menu").catch(console.error);
   });
 
-  let lastWheel = 0;
-  window.addEventListener(
-    "wheel",
-    (e) => {
-      if (ui.state !== "hover" || ui.editingTasks || ui.editingLocation) return;
-      if (e.timeStamp - lastWheel < 250) return; // trackpads fire many events per gesture
-      lastWheel = e.timeStamp;
-      ui.feat = (ui.feat + (e.deltaY > 0 ? 1 : -1) + FEATURES.length) % FEATURES.length;
-      transition();
-    },
-    { passive: true },
-  );
+  // Pal listens while the user types in any island input.
+  island.addEventListener("focusin", (e) => updateMood({ listening: e.target instanceof HTMLInputElement }));
+  island.addEventListener("focusout", () => updateMood({ listening: false }));
+
+  // dashboard navigation
+  document.querySelectorAll<HTMLElement>("[data-view]").forEach((b) => {
+    b.onclick = () => openView(b.dataset.view as View);
+  });
+  document.querySelectorAll<HTMLElement>("[data-menu]").forEach((b) => {
+    b.onclick = () => invoke("show_context_menu").catch(console.error);
+  });
+  $("btn-collapse").onclick = () => setState("idle");
+  $("btn-add-app").onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
+  initFocus($("tile-focus"), () => showEvent("Focus", "Time's up", 3500));
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
     b.onclick = () => invoke("run_action", { id: b.dataset.action }).catch(console.error);
   });
   document.querySelectorAll<HTMLElement>("[data-media]").forEach((b) => {
     b.onclick = () => invoke("media_control", { action: b.dataset.media }).catch(console.error);
-  });
-  document.querySelectorAll<HTMLElement>("[data-scroll]").forEach((b) => {
-    b.onclick = () => scrollBalls(Number(b.dataset.scroll), pillTop());
   });
 
   // tasks
@@ -325,8 +385,10 @@ function wireInput(): void {
 // ---------- boot ----------
 async function boot(): Promise<void> {
   hydrateIcons();
-  initBalls();
+  $("status-pal").append(createPal(22).el);
+  $("assistant-avatar").append(createPal(56).el); // napping until Task 9 connects Claude Code
   wireInput();
+  updateApps(invoke<LauncherApp[]>("list_apps"));
 
   await Promise.all([
     listen<boolean>("hover", (e) => onHover(e.payload)),
@@ -354,10 +416,12 @@ async function boot(): Promise<void> {
   if (snap.lyric) ui.lyric = snap.lyric as string;
 
   ui.tasks = await invoke<Task[]>("list_tasks");
-  ui.settings = await invoke<Settings>("get_settings");
-  transition();
+  onSettings(await invoke<Settings>("get_settings"));
 
-  window.setInterval(() => ui.state === "idle" && renderHeader(), 1000);
+  window.setInterval(() => {
+    if (ui.state === "idle") renderHeader();
+    else if (ui.state === "hover" && ui.view === "dashboard") renderClock();
+  }, 1000);
 }
 
 boot().catch(console.error);

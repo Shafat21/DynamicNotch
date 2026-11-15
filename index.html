@@ -23,20 +23,56 @@
         <div id="content"><div id="view">
           <!-- Header: idle clock, media title/lyric, notifications -->
           <div class="header" id="header">
-            <span class="icon" id="status-icon"></span>
+            <span class="icon" id="status-pal"></span>
+            <span class="icon" id="status-icon" hidden></span>
             <span class="title" id="status-text"></span>
             <div class="media-controls" id="media-controls" hidden>
+              <button class="media-btn" data-view="dashboard" data-icon="home" title="Home"></button>
               <button class="media-btn" data-media="prev" data-icon="prev"></button>
               <button class="media-btn" data-media="toggle" id="btn-play" data-icon="play"></button>
               <button class="media-btn" data-media="next" data-icon="next"></button>
             </div>
           </div>
 
+          <!-- Dashboard: hover home -->
+          <section class="panel" id="panel-dashboard" hidden>
+            <div class="dash-bar">
+              <button class="bar-btn" data-view="dashboard" data-icon="home" title="Home"></button>
+              <button class="bar-btn" id="btn-add-app" data-icon="plus" title="Add app"></button>
+              <span class="spacer"></span>
+              <button class="chip" id="chip-cpu" data-view="perf" title="System status"><i data-icon="cpu" data-size="14"></i><span id="chip-cpu-val">CPU --%</span></button>
+              <button class="chip" id="chip-weather" data-view="weather" title="Weather"><i id="chip-weather-icon" data-icon="partly" data-size="14"></i><span id="chip-weather-val">--°</span></button>
+              <button class="bar-btn" data-menu data-icon="cog" title="Settings"></button>
+              <button class="bar-btn" id="btn-collapse" data-icon="chevronUp" title="Collapse"></button>
+            </div>
+            <div class="dash-grid">
+              <div class="tile" id="assistant-card">
+                <span class="avatar" id="assistant-avatar"></span>
+                <span class="tile-col"><span class="tile-title">Claude Code</span><span class="tile-sub">Offline</span></span>
+              </div>
+              <button class="tile" id="tile-media" data-view="media">
+                <span class="tile-title"><i data-icon="music" data-size="16"></i><span id="tile-media-title">Nothing playing</span></span>
+                <span class="tile-sub" id="tile-media-artist"></span>
+              </button>
+              <button class="tile" id="tile-focus" title="Click to start/pause, scroll to change"></button>
+              <button class="tile" id="tile-clock" data-view="calendar">
+                <span class="tile-title clock-time" id="clock-time"></span>
+                <span class="tile-sub" id="clock-date"></span>
+                <span class="bar clock-bar"><span id="clock-bar"></span></span>
+              </button>
+              <button class="tile" id="tile-settings" data-menu>
+                <span class="tile-title"><i data-icon="cog" data-size="16"></i>Settings</span>
+              </button>
+            </div>
+            <div id="launcher"></div>
+          </section>
+
           <!-- System status -->
           <section class="panel" id="panel-perf" hidden>
             <div class="panel-head">
               <span class="panel-title">System Status</span>
               <button class="action-btn" data-action="taskmgr" data-icon="open" data-size="16" title="Task Manager"></button>
+              <button class="action-btn" data-view="dashboard" data-icon="home" data-size="16" title="Home"></button>
             </div>
             <div class="stat-grid">
               <div class="stat"><div class="stat-label"><i data-icon="cpu" data-size="14"></i>CPU</div><div class="stat-val" id="cpu-val">0%</div><div class="bar"><div id="cpu-bar"></div></div></div>
@@ -59,6 +95,7 @@
             <div class="weather-tools">
               <button class="action-btn" id="btn-edit-location" data-icon="pencil" data-size="15" title="Change location"></button>
               <button class="action-btn" data-action="weather" data-icon="open" data-size="15" title="Open Weather app"></button>
+              <button class="action-btn" data-view="dashboard" data-icon="home" data-size="15" title="Home"></button>
             </div>
             <form class="location-form" id="location-form" hidden>
               <input id="location-input" placeholder="City name" maxlength="100" autocomplete="off" />
@@ -74,6 +111,8 @@
                 <button class="action-btn" id="btn-edit-tasks" data-icon="pencil" data-size="16" title="Manage tasks"></button>
                 <span class="panel-title">Next Up</span>
                 <span class="muted" id="task-count">0 tasks</span>
+                <button class="link-btn" data-view="month">Month</button>
+                <button class="action-btn" data-view="dashboard" data-icon="home" data-size="16" title="Home"></button>
               </div>
               <div id="task-list"></div>
             </div>
@@ -99,22 +138,13 @@
               <span class="panel-title" id="month-title">Month Progress</span>
               <span class="month-pct" id="month-pct">0%</span>
               <button class="action-btn" data-action="datetime" data-icon="open" data-size="16" title="Date &amp; time settings"></button>
+              <button class="action-btn" data-view="dashboard" data-icon="home" data-size="16" title="Home"></button>
             </div>
             <div class="dots" id="month-dots"></div>
-          </section>
-
-          <!-- Basics: the pill stays small, control balls float beside it -->
-          <section class="panel" id="panel-basics" hidden>
-            <div class="basics">
-              <button class="nav-btn" data-scroll="-1">&lt;</button>
-              <span class="basics-label">Basics</span>
-              <button class="nav-btn" data-scroll="1">&gt;</button>
-            </div>
           </section>
         </div></div>
       </div>
     </div>
-    <div id="balls"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

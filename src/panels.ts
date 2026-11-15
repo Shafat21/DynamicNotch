@@ -1,6 +1,5 @@
-// Panels whose DOM is rebuilt from data: tasks, month progress, basics control balls.
+// Panels whose DOM is rebuilt from data: tasks, month progress, launcher row.
 // User/third-party text always goes through textContent, never innerHTML.
-import { invoke } from "@tauri-apps/api/core";
 import { icon } from "./icons";
 
 export type Task = { id: number; name: string; category: string; time: string; color: string };
@@ -59,80 +58,66 @@ export function renderMonth(now = new Date()): void {
   );
 }
 
-// ---------- basics: control balls orbiting the small pill ----------
-type Basic = { id: string; name: string; icon: string; confirm?: boolean };
-const BASICS: Basic[] = [
-  { id: "shutdown", name: "Shutdown", icon: "power", confirm: true },
-  { id: "restart", name: "Restart", icon: "restart", confirm: true },
-  { id: "sleep", name: "Sleep", icon: "sleep" },
-  { id: "explorer", name: "File Explorer", icon: "folder" },
-  { id: "settings", name: "Settings", icon: "cog" },
-  { id: "taskmgr", name: "Task Manager", icon: "taskmgr" },
-  { id: "chrome", name: "Chrome", icon: "chrome" },
-  { id: "youtube", name: "YouTube", icon: "youtube" },
-  { id: "cmd", name: "CMD", icon: "console" },
-];
+// ---------- launcher row ----------
+export type LauncherApp = { id: number; name: string; kind: "path" | "action"; target: string; icon: string | null };
 
-let basicsIndex = 0;
+// Built-in actions have no file icon; reuse the old Basics glyphs.
+const ACTION_ICONS: Record<string, string> = {
+  shutdown: "power", restart: "restart", sleep: "sleep", explorer: "folder", settings: "cog",
+  taskmgr: "taskmgr", chrome: "chrome", youtube: "youtube", cmd: "console",
+};
+const CONFIRM = new Set(["shutdown", "restart"]);
 let armTimer = 0;
-const balls: HTMLButtonElement[] = [];
-
-export function initBalls(): void {
-  for (let i = 0; i < 4; i++) {
-    const b = document.createElement("button");
-    b.className = "ball";
-    b.onclick = () => onBallClick(b);
-    $("balls").append(b);
-    balls.push(b);
-  }
-}
-
-function onBallClick(b: HTMLButtonElement): void {
-  const item = BASICS.find((x) => x.id === b.dataset.id);
-  if (!item) return;
-  // Shutdown/restart need a second click within 3 s.
-  if (item.confirm && !b.classList.contains("armed")) {
-    disarm();
-    b.classList.add("armed");
-    b.title = `Click again to ${item.name}`;
-    armTimer = window.setTimeout(disarm, 3000);
-    return;
-  }
-  disarm();
-  invoke("run_action", { id: item.id }).catch(console.error);
-}
 
 function disarm(): void {
   clearTimeout(armTimer);
-  balls.forEach((b) => b.classList.remove("armed"));
-}
-
-export function scrollBalls(delta: number, pillTop: number): void {
-  basicsIndex = (basicsIndex + delta + BASICS.length) % BASICS.length;
-  layoutBalls(true, pillTop);
-}
-
-/** Show: fan the balls out around the right side of the 180x40 pill. Hide: tuck them behind it. */
-export function layoutBalls(show: boolean, pillTop: number): void {
-  const left = (window.innerWidth - 180) / 2;
-  const right = left + 180;
-  const cx = right - 22;
-  const cy = pillTop + 20;
-  const targets = [[cx + 42, cy - 24], [cx + 25, cy + 22], [cx - 18, cy + 44], [cx - 58, cy + 44]];
-  const home = [right - 20, pillTop + 20];
-  if (!show) disarm();
-
-  balls.forEach((b, i) => {
-    const item = BASICS[(basicsIndex + i - 1 + BASICS.length) % BASICS.length];
-    b.innerHTML = icon(item.icon, 20);
-    b.title = item.name;
-    b.dataset.id = item.id;
-    const visible = show && i <= 2;
-    const [x, y] = show ? targets[i] : home;
-    const scale = show ? (i === 1 ? 1.15 : 1) : 0.7;
-    b.style.transitionDelay = show ? `${i * 45}ms` : "0ms";
-    b.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-    b.style.opacity = visible ? "1" : "0";
-    b.style.pointerEvents = visible ? "auto" : "none";
+  $("launcher").querySelectorAll<HTMLElement>(".armed").forEach((b) => {
+    b.classList.remove("armed", "launch", "remove");
+    b.title = b.dataset.name!;
   });
+}
+
+/** Two-step confirm: the first call arms `b` for 3 s and returns false; a second call of the same kind returns true. */
+function confirmed(b: HTMLElement, kind: "launch" | "remove", hint: string): boolean {
+  if (b.classList.contains(kind)) {
+    disarm();
+    return true;
+  }
+  disarm();
+  b.classList.add("armed", kind);
+  b.title = hint;
+  armTimer = window.setTimeout(disarm, 3000);
+  return false;
+}
+
+export function renderApps(apps: LauncherApp[], onLaunch: (a: LauncherApp) => void, onRemove: (a: LauncherApp) => void): void {
+  clearTimeout(armTimer);
+  $("launcher").replaceChildren(
+    ...apps.map((a) => {
+      const b = el("button", "app");
+      b.title = b.dataset.name = a.name;
+      b.setAttribute("aria-label", a.name);
+      if (a.icon) {
+        const img = document.createElement("img");
+        img.src = a.icon;
+        img.alt = "";
+        b.append(img);
+      } else if (a.kind === "action" && ACTION_ICONS[a.target]) {
+        b.innerHTML = icon(ACTION_ICONS[a.target], 20);
+      } else {
+        b.textContent = [...a.name][0]?.toUpperCase() ?? "?";
+      }
+      b.onclick = () => {
+        if (a.kind === "action" && CONFIRM.has(a.target) && !confirmed(b, "launch", `Click again to ${a.name}`)) return;
+        disarm();
+        onLaunch(a);
+      };
+      b.oncontextmenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // keep the island menu closed
+        if (confirmed(b, "remove", "Right-click again to remove")) onRemove(a);
+      };
+      return b;
+    }),
+  );
 }

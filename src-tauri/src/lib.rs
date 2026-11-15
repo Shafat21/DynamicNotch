@@ -1,6 +1,9 @@
 mod actions;
+mod bridge;
 mod commands;
 mod db;
+#[cfg(windows)]
+mod glass_spike; // SPIKE: remove
 mod launcher;
 mod menu;
 mod monitors;
@@ -57,6 +60,8 @@ pub fn run() {
 
             let win = app.get_webview_window("main").expect("main window");
             window::setup(app.handle(), &win)?;
+            #[cfg(windows)]
+            glass_spike::run(&win); // SPIKE: remove
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));
