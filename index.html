@@ -112,6 +112,19 @@
                       <button class="btn snd-lock compact" data-action="lock" title="Lock this PC" aria-label="Lock this PC"><span data-icon="lock" data-size="14"></span></button>
                     </div>
                   </div>
+                  <!-- Bluetooth card (bluetooth.ts); the background opens the Devices tab -->
+                  <div class="card bt-card" id="card-devices" data-goto="devices" role="button" tabindex="0" title="Bluetooth">
+                    <div class="card-head">
+                      <span class="card-ic badge-only" data-badge="devices" data-icon="bluetooth"></span>
+                      <span class="lbl">BLUETOOTH</span>
+                      <span class="spacer"></span>
+                      <button class="bar-btn" id="bt-card-refresh" data-icon="restart" data-size="14" title="Refresh" aria-label="Refresh Bluetooth devices"></button>
+                      <button class="bar-btn" data-action="bluetooth" data-icon="cog" data-size="14" title="Bluetooth settings" aria-label="Open Bluetooth settings"></button>
+                    </div>
+                    <div class="bt-radio"><span class="small">Bluetooth</span><button class="bt-switch" id="bt-card-radio" role="switch" aria-checked="false" aria-label="Bluetooth" disabled></button></div>
+                    <div class="bt-list" id="bt-card-list"></div>
+                    <div class="small bt-err" id="bt-card-err" hidden></div>
+                  </div>
                 </div>
                 <div class="home-strip" id="home-strip">
                   <div class="strip-launcher" id="card-launcher">
@@ -331,6 +344,20 @@
                 </div>
               </section>
 
+              <!-- Shelf (shelf.ts) -->
+              <section class="page" id="tab-shelf" hidden>
+                <div class="shelf">
+                  <div class="notes-bar">
+                    <span class="muted ell" id="shelf-hint"></span>
+                    <span class="spacer"></span>
+                    <button class="btn" id="shelf-clear" type="button">Clear</button>
+                  </div>
+                  <div class="shelf-grid" id="shelf-grid"></div>
+                  <div class="muted shelf-empty" id="shelf-empty" hidden>Drop files or folders on the island to keep them here</div>
+                  <div class="shelf-menu" id="shelf-menu" role="menu" hidden></div>
+                </div>
+              </section>
+
               <!-- Sound & brightness (sound.ts) -->
               <section class="page" id="tab-sound" hidden>
                 <div class="panel-head">
@@ -356,6 +383,18 @@
                     <div class="snd-list" id="snd-displays"></div>
                   </div>
                 </div>
+              </section>
+
+              <!-- Bluetooth (bluetooth.ts) -->
+              <section class="page" id="tab-devices" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Bluetooth</span>
+                  <button class="bar-btn" id="bt-tab-refresh" data-icon="restart" data-size="14" title="Refresh" aria-label="Refresh Bluetooth devices"></button>
+                  <button class="bar-btn" data-action="bluetooth" data-icon="cog" data-size="14" title="Bluetooth settings" aria-label="Open Bluetooth settings"></button>
+                  <button class="bt-switch" id="bt-tab-radio" role="switch" aria-checked="false" aria-label="Bluetooth" disabled></button>
+                </div>
+                <div class="bt-list" id="bt-tab-list"></div>
+                <div class="small bt-err" id="bt-tab-err" hidden></div>
               </section>
 
               <!-- Month progress -->

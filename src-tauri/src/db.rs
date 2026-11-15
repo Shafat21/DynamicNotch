@@ -4,6 +4,7 @@
 use crate::clipboard::Clip;
 use crate::notes::Note;
 use crate::reminders::{Reminder, Repeat};
+use crate::shelf;
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::Serialize;
 use std::path::Path;
@@ -168,6 +169,18 @@ impl Db {
                  COMMIT;",
             )?;
         }
+        if version < 6 {
+            self.conn.execute_batch(
+                "BEGIN;
+                 CREATE TABLE shelf (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     path TEXT NOT NULL UNIQUE,
+                     added_at INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 6;
+                 COMMIT;",
+            )?;
+        }
         Ok(())
     }
 
@@ -302,6 +315,43 @@ impl Db {
             tx.execute("INSERT INTO clip_history (id, text, pinned, at) VALUES (?1, ?2, ?3, ?4)", params![c.id, c.text, c.pinned, c.at])?;
         }
         tx.commit()
+    }
+
+    /// Newest first. Missing files stay listed (flagged), so a removable drive coming back just works.
+    pub fn shelf_rows(&self) -> Result<Vec<(i64, String)>> {
+        let mut stmt = self.conn.prepare("SELECT id, path FROM shelf ORDER BY id DESC")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+        rows.collect()
+    }
+
+    #[cfg(test)]
+    pub fn shelf(&self) -> Result<Vec<shelf::ShelfItem>> {
+        Ok(self.shelf_rows()?.into_iter().map(|(id, path)| shelf::ShelfItem::new(id, path)).collect())
+    }
+
+    pub fn shelf_path(&self, id: i64) -> Result<Option<String>> {
+        self.conn.query_row("SELECT path FROM shelf WHERE id = ?1", [id], |r| r.get(0)).optional()
+    }
+
+    /// Validates the path (existing, local); a path already on the shelf returns its id. Keeps the newest `shelf::CAP`.
+    pub fn add_shelf(&self, path: &str) -> Result<i64> {
+        shelf::validate(path).map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?;
+        if let Some((id, _)) = self.shelf_rows()?.into_iter().find(|(_, p)| shelf::same_path(p, path)) {
+            return Ok(id);
+        }
+        self.conn.execute("INSERT OR IGNORE INTO shelf (path, added_at) VALUES (?1, ?2)", params![path, chrono::Utc::now().timestamp_millis()])?;
+        self.conn.execute("DELETE FROM shelf WHERE id NOT IN (SELECT id FROM shelf ORDER BY id DESC LIMIT ?1)", [shelf::CAP])?;
+        self.conn.query_row("SELECT id FROM shelf WHERE path = ?1", [path], |r| r.get(0))
+    }
+
+    pub fn remove_shelf(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM shelf WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn clear_shelf(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM shelf", [])?;
+        Ok(())
     }
 
     pub fn bridge_port(&self) -> Result<u16> {
@@ -475,7 +525,7 @@ mod tests {
 
     fn v2_conn() -> Connection {
         let conn = Db::open_in_memory().unwrap().conn;
-        conn.execute_batch("DROP TABLE notes; DROP TABLE reminders; DROP TABLE clip_history; PRAGMA user_version = 2;").unwrap();
+        conn.execute_batch("DROP TABLE notes; DROP TABLE reminders; DROP TABLE clip_history; DROP TABLE shelf; PRAGMA user_version = 2;").unwrap();
         conn
     }
 
@@ -512,7 +562,7 @@ mod tests {
 
     fn v3_conn() -> Connection {
         let conn = Db::open_in_memory().unwrap().conn;
-        conn.execute_batch("DROP TABLE reminders; DROP TABLE clip_history; PRAGMA user_version = 3;").unwrap();
+        conn.execute_batch("DROP TABLE reminders; DROP TABLE clip_history; DROP TABLE shelf; PRAGMA user_version = 3;").unwrap();
         conn
     }
 
@@ -548,13 +598,24 @@ mod tests {
     #[test]
     fn v4_upgrades_to_v5_keeping_reminders() {
         let conn = Db::open_in_memory().unwrap().conn;
-        conn.execute_batch("DROP TABLE clip_history; PRAGMA user_version = 4;").unwrap();
+        conn.execute_batch("DROP TABLE clip_history; DROP TABLE shelf; PRAGMA user_version = 4;").unwrap();
         let db = Db::init(conn).unwrap();
         db.add_reminder("x", 1, Repeat::None).unwrap();
         db.save_clips(&[Clip { id: 7, text: "t".into(), pinned: true, at: 1 }]).unwrap();
         db.migrate().unwrap();
         assert_eq!((db.reminders(0).unwrap().len(), db.clips().unwrap().len()), (1, 1));
         assert!(db.clips().unwrap()[0].pinned);
+    }
+
+    #[test]
+    fn v5_upgrades_to_v6_adding_shelf() {
+        let conn = Db::open_in_memory().unwrap().conn;
+        conn.execute_batch("DROP TABLE shelf; PRAGMA user_version = 5;").unwrap();
+        let db = Db::init(conn).unwrap();
+        assert!(db.shelf().unwrap().is_empty());
+        db.save_clips(&[Clip { id: 1, text: "kept".into(), pinned: false, at: 1 }]).unwrap();
+        db.migrate().unwrap(); // re-running is a no-op
+        assert_eq!(db.clips().unwrap().len(), 1);
     }
 
     #[test]

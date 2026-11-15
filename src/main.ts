@@ -9,7 +9,9 @@ import {
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
 import { initClipboard, showClipboard } from "./clipboard";
+import { initShelf, showShelf } from "./shelf";
 import { initNotes, showNotes } from "./notes";
+import { initBluetooth, showBluetooth } from "./bluetooth";
 import { initSound, showSound } from "./sound";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
@@ -251,6 +253,8 @@ function renderView(): void {
   if (hover && t === "notes") showNotes();
   if (hover && t === "reminders") showReminders();
   if (hover && t === "clipboard") void showClipboard();
+  if (hover && t === "shelf") void showShelf();
+  if (hover && (t === "devices" || (t === "home" && !$("card-devices").hidden))) void showBluetooth();
   if (hover && (t === "sound" || (t === "home" && !$("card-sound").hidden))) void showSound();
   renderHeader();
   renderClock();
@@ -433,7 +437,10 @@ function onFullscreen(hidden: boolean): void {
   transition(); // also sends the (empty or normal) hit rect
 }
 
+let backendHover = false; // last `hover` event: the pointer is really over the island
+
 function onHover(inside: boolean): void {
+  backendHover = inside;
   if (ui.hidden) return;
   ui.hovering = inside;
   if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder") return;
@@ -600,6 +607,26 @@ function wireInput(): void {
 
   initNotes();
   initClipboard();
+  initShelf({
+    dragging: (on) => {
+      $("tab-shelf").firstElementChild?.classList.toggle("dropping", on);
+      if (ui.hidden) return;
+      clearTimeout(revertTimer);
+      if (!on) {
+        // drag left or dropped: back to the real pointer state (the backend hover loop keeps reporting it)
+        ui.hovering = backendHover;
+        if (ui.state === "hover" && !ui.hovering && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 1200);
+        return;
+      }
+      if (!visibleTabs().includes("shelf")) return;
+      ui.hovering = true; // stay open while the drag is over the island
+      if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder") return;
+      ui.tab = "shelf";
+      if (ui.state === "hover") openTab("shelf");
+      else setState("hover");
+    },
+  });
+  initBluetooth({ visible: () => ui.state === "hover" && (ui.tab === "devices" || (ui.tab === "home" && !$("card-devices").hidden)) });
   initSound({ switchFailed: () => openTab("sound") });
   initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });
 

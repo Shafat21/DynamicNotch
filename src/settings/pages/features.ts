@@ -106,11 +106,23 @@ export function renderFeatures(root: HTMLElement): () => void {
       row("Clear history", "Removes every entry except pinned ones.", button("Clear history", () => invoke("clear_clips").then(() => report("Clipboard history cleared"), (e) => report(String(e))))),
     ),
     section(
+      "Shelf",
+      row("Clear shelf", "Removes every item from the shelf. The files themselves are not touched.", button("Clear shelf", () => invoke("clear_shelf").then(() => report("Shelf cleared"), (e) => report(String(e))))),
+    ),
+    section(
       "Sound & brightness",
       row(
         "Sound settings",
         "Output devices that can't be switched from the island can be changed in the system's sound settings.",
         button("Open sound settings", () => invoke("run_action", { id: "sound-settings" }).catch((e) => report(String(e)))),
+      ),
+    ),
+    section(
+      "Bluetooth",
+      row(
+        "Bluetooth settings",
+        "Windows can't connect or disconnect paired devices from the island; pair and connect them in the system's Bluetooth settings.",
+        button("Open Bluetooth settings", () => invoke("run_action", { id: "bluetooth" }).catch((e) => report(String(e)))),
       ),
     ),
     section("Weather", row("Location", "City used for the weather card.", h("div", { className: "stack" }, locForm, locState))),

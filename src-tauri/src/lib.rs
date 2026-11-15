@@ -1,5 +1,6 @@
 mod actions;
 mod appearance;
+mod bluetooth;
 mod brightness;
 mod bridge;
 mod clipboard;
@@ -14,8 +15,10 @@ mod menu;
 mod monitors;
 mod notes;
 mod reminders;
+mod shelf;
 mod sound;
 mod window;
+mod worker;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -66,6 +69,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .on_window_event(|win, event| {
+            if let (tauri::WindowEvent::DragDrop(d), "main") = (event, win.label()) {
+                shelf::on_drag_drop(win.app_handle(), d);
+            }
             if let (tauri::WindowEvent::ScaleFactorChanged { .. }, "main") = (event, win.label()) {
                 // off the event thread: the OS applies its own DPI resize after this handler returns
                 let app = win.app_handle().clone();
@@ -143,6 +149,13 @@ pub fn run() {
             commands::remove_clip,
             commands::clear_clips,
             commands::set_clip_paused,
+            commands::list_shelf,
+            commands::open_shelf,
+            commands::reveal_shelf,
+            commands::copy_shelf_path,
+            commands::remove_shelf,
+            commands::clear_shelf,
+            commands::drag_out,
             commands::set_location,
             commands::set_calendar_url,
             commands::open_join,
@@ -150,6 +163,10 @@ pub fn run() {
             commands::media_seek,
             commands::media_open_player,
             commands::run_action,
+            commands::bt_state,
+            commands::bt_set_radio,
+            commands::bt_connect,
+            commands::bt_disconnect,
             commands::sound_state,
             commands::set_volume,
             commands::set_mute,

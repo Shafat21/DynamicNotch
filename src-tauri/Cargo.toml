@@ -28,9 +28,13 @@ chrono = "0.4"
 icalendar = { version = "0.17.17", default-features = false, features = ["parser"] }
 
 [target.'cfg(windows)'.dependencies]
+drag = "2.1" # native drag-out of shelf files
 windows = { version = "0.61", features = [
   "Foundation",
   "Foundation_Collections",
+  "Devices_Bluetooth",
+  "Devices_Enumeration",
+  "Devices_Radios",
   "Media_Control",
   "Storage_Streams",
   "UI_Notifications",
@@ -68,5 +72,4 @@ arboard = { version = "3", default-features = false }
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
 strip = true

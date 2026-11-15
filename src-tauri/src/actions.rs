@@ -25,6 +25,7 @@ fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
         "weather" => ("cmd", &["/C", "start", "", "bingweather:"]),
         "datetime" => ("cmd", &["/C", "start", "", "ms-settings:dateandtime"]),
         "sound-settings" => ("cmd", &["/C", "start", "", "ms-settings:sound"]),
+        "bluetooth" => ("cmd", &["/C", "start", "", "ms-settings:bluetooth"]),
         _ => return None,
     })
 }
@@ -35,6 +36,7 @@ fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
     Some(match id {
         "lock" => ("loginctl", &["lock-session"]),
         "sound-settings" => ("gnome-control-center", &["sound"]),
+        "bluetooth" => ("gnome-control-center", &["bluetooth"]),
         _ => return None,
     })
 }
@@ -68,6 +70,7 @@ mod tests {
         #[cfg(target_os = "linux")]
         assert!(command_for("lock").is_some());
         assert!(command_for("sound-settings").is_some());
+        assert!(command_for("bluetooth").is_some());
         assert!(command_for("calc & del *").is_none());
         assert!(command_for("").is_none());
     }

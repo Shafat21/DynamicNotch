@@ -657,3 +657,47 @@ button.snd-ic:hover { background: rgba(255, 255, 255, 0.1); }
 .snd-name { width: 110px; flex: none; font-size: var(--t12); }
 .snd-err { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .snd-err .link-btn { margin-left: 0; }
+
+/* ---------- bluetooth (bluetooth.ts) ---------- */
+.bt-card { gap: 8px; }
+.bt-radio { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bt-switch { position: relative; width: 34px; height: 20px; flex: none; padding: 0; border: none; border-radius: 10px; background: rgba(255, 255, 255, 0.18); transition: background 0.2s; }
+.bt-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.bt-switch[aria-checked="true"] { background: var(--accent); }
+.bt-switch[aria-checked="true"]::after { transform: translateX(14px); }
+.bt-switch:disabled { opacity: 0.4; }
+.bt-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#tab-devices .bt-list { display: grid; grid-template-columns: 1fr 1fr; }
+.bt-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: 12px; background: rgba(255, 255, 255, 0.07); font-size: var(--t12); }
+.bt-row.off { color: var(--muted); }
+.bt-ic { flex: none; display: grid; place-items: center; }
+.bt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bt-status { font-size: var(--t11); color: var(--muted); }
+.bt-row:not(.off) .bt-status { color: var(--accent); }
+.bt-act { flex: none; max-width: 50%; padding: 3px 8px; border: none; border-radius: 8px; background: rgba(255, 255, 255, 0.1); color: var(--text); font-size: var(--t11); font-weight: 600; }
+.bt-act:hover { background: rgba(255, 255, 255, 0.18); }
+.bt-act:disabled { opacity: 0.5; }
+.bt-card .bt-act { padding: 3px; background: transparent; }
+.bt-card .bt-list { max-height: 86px; overflow-y: auto; } /* the card must not make the Home row taller than its neighbours */
+.bt-err { color: #ff6b6b; }
+
+/* Shelf */
+.shelf { position: relative; display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
+.shelf .notes-bar { align-items: center; }
+.shelf .btn { flex: none; padding: 5px 14px; font-size: var(--t12); }
+.shelf .btn:disabled { opacity: 0.35; }
+.shelf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; align-content: start; }
+.shelf-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px; border: none; border-radius: 10px; background: rgba(255, 255, 255, 0.05); color: inherit; font-size: var(--t12); }
+.shelf-tile:hover { background: rgba(255, 255, 255, 0.1); }
+.shelf-tile.missing { opacity: 0.45; }
+.shelf-ic { display: grid; place-items: center; width: 32px; height: 32px; }
+.shelf-ic img { width: 32px; height: 32px; }
+.shelf-name { max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; text-align: center; line-height: 1.2; }
+.shelf-badge { position: absolute; top: 4px; right: 4px; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); font-size: 10px; }
+.shelf-empty { padding: 8px 4px; font-size: var(--t12); }
+.shelf-menu { position: absolute; z-index: 5; display: flex; flex-direction: column; min-width: 140px; padding: 4px; border-radius: 10px; background: #2a2a2d; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
+.shelf-menu[hidden] { display: none; }
+.shelf-menu button { padding: 6px 10px; border: none; border-radius: 6px; background: none; color: inherit; text-align: left; font-size: var(--t12); }
+.shelf-menu button:hover:not(:disabled), .shelf-menu button:focus-visible { background: rgba(255, 255, 255, 0.12); }
+.shelf-menu button:disabled { opacity: 0.35; }
+.shelf.dropping .shelf-grid { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 10px; }

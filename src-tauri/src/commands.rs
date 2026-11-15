@@ -1,11 +1,12 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, clipboard, appearance, bridge, brightness, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, sound, window, AppState};
+use crate::{actions, bluetooth, clipboard, appearance, bridge, brightness, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, shelf, sound, window, AppState};
 use crate::brightness::BrightDisplay;
 use crate::sound::{AudioDevice, SoundState};
 use crate::clipboard::Clip;
 use crate::notes::Note;
+use crate::shelf::ShelfItem;
 use crate::reminders::{Reminder, Repeat};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -353,6 +354,27 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Res<T> + Send + 'static
 }
 
 #[tauri::command]
+pub async fn bt_state() -> Res<bluetooth::BtState> {
+    blocking(bluetooth::state).await
+}
+
+#[tauri::command]
+pub async fn bt_set_radio(on: bool) -> Res<()> {
+    blocking(move || bluetooth::set_radio(on)).await
+}
+
+/// `id` must be in the current device list.
+#[tauri::command]
+pub async fn bt_connect(id: String) -> Res<()> {
+    blocking(move || bluetooth::connect(id)).await
+}
+
+#[tauri::command]
+pub async fn bt_disconnect(id: String) -> Res<()> {
+    blocking(move || bluetooth::disconnect(id)).await
+}
+
+#[tauri::command]
 pub async fn sound_state() -> Res<SoundState> {
     blocking(sound::state).await
 }
@@ -532,4 +554,66 @@ pub fn set_clip_paused(app: AppHandle, paused: bool) -> Res<()> {
     app.state::<AppState>().db.lock().unwrap().set("clip_paused", &paused.to_string()).map_err(err)?;
     emit_settings(&app);
     Ok(())
+}
+
+/// Shelf (spec §23.6): the webview sends ids only; paths come from the DB.
+fn shelf_path(app: &AppHandle, id: i64) -> Res<String> {
+    app.state::<AppState>().db.lock().unwrap().shelf_path(id).map_err(err)?.ok_or_else(|| "unknown shelf item".to_string())
+}
+
+fn edit_shelf(app: &AppHandle, f: impl FnOnce(&db::Db) -> rusqlite::Result<()>) -> Res<Vec<ShelfItem>> {
+    f(&app.state::<AppState>().db.lock().unwrap()).map_err(err)?;
+    let list = shelf::list(app)?; // after the DB lock is released
+    let _ = app.emit("shelf", &list);
+    Ok(list)
+}
+
+/// Async + blocking pool: listing touches the file system and extracts icons.
+#[tauri::command]
+pub async fn list_shelf(app: AppHandle) -> Res<Vec<ShelfItem>> {
+    tauri::async_runtime::spawn_blocking(move || shelf::list(&app)).await.map_err(err)?
+}
+
+#[tauri::command]
+pub fn open_shelf(app: AppHandle, id: i64) -> Res<()> {
+    let p = shelf_path(&app, id)?;
+    if !std::path::Path::new(&p).exists() {
+        return Err(format!("not found: {p}"));
+    }
+    launcher::os::shell_open(&p)
+}
+
+#[tauri::command]
+pub fn reveal_shelf(app: AppHandle, id: i64) -> Res<()> {
+    let p = shelf_path(&app, id)?;
+    if !std::path::Path::new(&p).exists() {
+        return Err(format!("not found: {p}"));
+    }
+    shelf::os::reveal(&p)
+}
+
+/// The path text goes to the clipboard without entering history.
+#[tauri::command]
+pub fn copy_shelf_path(app: AppHandle, id: i64) -> Res<()> {
+    clipboard::write(&shelf_path(&app, id)?)
+}
+
+#[tauri::command]
+pub fn remove_shelf(app: AppHandle, id: i64) -> Res<Vec<ShelfItem>> {
+    edit_shelf(&app, |db| db.remove_shelf(id))
+}
+
+#[tauri::command]
+pub fn clear_shelf(app: AppHandle) -> Res<Vec<ShelfItem>> {
+    edit_shelf(&app, |db| db.clear_shelf())
+}
+
+/// Native drag of the stored file (called on pointer-drag from a shelf tile). Sync command = main thread, as OLE needs.
+#[tauri::command]
+pub fn drag_out(app: AppHandle, window: WebviewWindow, id: i64) -> Res<()> {
+    let p = shelf_path(&app, id)?;
+    if !std::path::Path::new(&p).exists() {
+        return Err(format!("not found: {p}"));
+    }
+    shelf::os::drag_out(&window, &p)
 }
