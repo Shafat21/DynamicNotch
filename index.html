@@ -37,10 +37,10 @@
               <span class="spacer"></span>
               <span class="top-clock" id="top-clock"></span>
               <div class="quick">
-                <button class="qb" id="btn-pal-status" title="Pal"></button>
-                <button class="qb" id="btn-pin" title="Keep open" aria-pressed="false"><span data-icon="pin"></span></button>
-                <button class="qb" data-settings title="Settings"><span class="qb-ic" data-badge="settings" data-icon="cog"></span></button>
-                <button class="qb" id="btn-collapse" title="Collapse"><span data-icon="chevronUp"></span></button>
+                <button class="qb glass-btn icon" id="btn-pal-status" title="Pal"></button>
+                <button class="qb glass-btn icon" id="btn-pin" title="Keep open" aria-pressed="false"><span data-icon="pin"></span></button>
+                <button class="qb glass-btn icon" data-settings title="Settings"><span class="qb-ic" data-badge="settings" data-icon="cog"></span></button>
+                <button class="qb glass-btn icon" id="btn-collapse" title="Collapse"><span data-icon="chevronUp"></span></button>
               </div>
             </div>
 
@@ -131,7 +131,7 @@
                     <span class="card-ic badge-only" data-badge="launcher" data-icon="launcher"></span>
                     <span class="lbl">LAUNCHER</span>
                     <div class="launcher" id="launcher"></div>
-                    <button class="app add" data-add-app data-icon="plus" title="Add app"></button>
+                    <button class="app add glass-btn icon" data-add-app data-icon="plus" title="Add app"></button>
                   </div>
                   <div class="strip-notes" id="card-notes" title="Notes: press Enter to add">
                     <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
@@ -184,9 +184,9 @@
                 <div id="agenda-list"></div>
                 <form class="location-form" id="cal-form" hidden>
                   <input id="cal-input" placeholder="Paste your calendar's secret iCal link" maxlength="2100" autocomplete="off" spellcheck="false" />
-                  <button type="submit" class="btn primary">Save</button>
-                  <button type="button" class="btn" id="cal-remove">Remove</button>
-                  <button type="button" class="btn" id="cal-cancel">Cancel</button>
+                  <button type="submit" class="btn glass-btn primary">Save</button>
+                  <button type="button" class="btn glass-btn" id="cal-remove">Remove</button>
+                  <button type="button" class="btn glass-btn" id="cal-cancel">Cancel</button>
                 </form>
               </section>
 
@@ -212,7 +212,7 @@
                 <div class="panel-head">
                   <span class="panel-title">Launcher</span>
                   <span class="muted">Right-click an app twice to remove it</span>
-                  <button class="action-btn" data-add-app data-icon="plus" data-size="16" title="Add app"></button>
+                  <button class="action-btn glass-btn icon" data-add-app data-icon="plus" data-size="16" title="Add app"></button>
                 </div>
                 <div class="launcher launcher-grid" id="launcher-grid"></div>
               </section>
@@ -232,8 +232,8 @@
                 <div class="hourly" id="hourly"></div>
                 <form class="location-form" id="location-form" hidden>
                   <input id="location-input" placeholder="City name" maxlength="100" autocomplete="off" />
-                  <button type="submit" class="btn primary">Save</button>
-                  <button type="button" class="btn" id="location-cancel">Cancel</button>
+                  <button type="submit" class="btn glass-btn primary">Save</button>
+                  <button type="button" class="btn glass-btn" id="location-cancel">Cancel</button>
                 </form>
               </section>
 
@@ -271,10 +271,10 @@
                       <select id="task-cat">
                         <option>Work</option><option>Health</option><option>Personal</option><option>Study</option><option>Other</option>
                       </select>
-                      <button type="submit" class="btn">Add</button>
-                      <button type="button" class="btn" id="task-delete">Delete Selected</button>
+                      <button type="submit" class="btn glass-btn">Add</button>
+                      <button type="button" class="btn glass-btn" id="task-delete">Delete Selected</button>
                     </form>
-                    <button class="btn primary wide" id="task-done">Done</button>
+                    <button class="btn glass-btn primary wide" id="task-done">Done</button>
                   </div>
                 </div>
               </section>
@@ -325,8 +325,8 @@
                     <input type="datetime-local" id="rem-pick" aria-label="Reminder time" hidden />
                     <span class="muted ell" id="rem-summary"></span>
                     <span class="spacer"></span>
-                    <button type="button" class="btn" id="rem-cancel">Cancel</button>
-                    <button type="submit" class="btn primary">Set reminder</button>
+                    <button type="button" class="btn glass-btn" id="rem-cancel">Cancel</button>
+                    <button type="submit" class="btn glass-btn primary">Set reminder</button>
                   </div>
                 </form>
               </section>

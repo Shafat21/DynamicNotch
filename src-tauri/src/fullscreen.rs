@@ -35,6 +35,7 @@ pub fn tick(app: &AppHandle) {
             }
         }
         publish(app, "fullscreen", hide);
+        crate::glass::refresh(app); // hidden → empty clip, visible → the island again
         if !hide {
             crate::reminders::tick(app); // reminders held back while hidden go out now
         }

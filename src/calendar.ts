@@ -39,7 +39,7 @@ function eventRow(e: CalEvent, h: Handlers, now: number, cls: string): HTMLEleme
   const det = el("div", "cal-det");
   det.append(el("div", "cal-title", e.title), el("div", "cal-when", relLabel(e, now)));
   row.append(el("span", "cal-bar"), det);
-  if (e.join) row.append(button("cal-join", "Join", () => h.join(e.id)));
+  if (e.join) row.append(button("cal-join glass-btn primary green", "Join", () => h.join(e.id)));
   return row;
 }
 

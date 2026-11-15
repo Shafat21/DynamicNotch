@@ -98,8 +98,8 @@ export function renderBanner(): void {
   $("reminder").replaceChildren(
     ic,
     text,
-    button("pill", "Snooze 10 min", () => answer("snooze_reminder", d.id)),
-    button("pill light", "Done", () => answer("done_reminder", d.id)),
+    button("pill glass-btn", "Snooze 10 min", () => answer("snooze_reminder", d.id)),
+    button("pill glass-btn primary white", "Done", () => answer("done_reminder", d.id)),
   );
 }
 

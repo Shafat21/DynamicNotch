@@ -59,10 +59,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 10px 30px rgba(8, 10, 24, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
   transition: border-radius 0.85s var(--ease);
 }
-/* glass until Task 6's real blur: the theme gradient, translucent */
-[data-bg="glass"] #island {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-from) 70%, transparent), color-mix(in srgb, var(--bg-to) 70%, transparent));
+/* Glass (spec §6.5): Rust puts the real desktop blur (Acrylic) behind the window, clipped to the island;
+   this is the frost tint, rim and sheen on top. No outer shadow: the clip would cut it. */
+[data-bg="glass"] {
+  --text: #fff;
+  --muted: rgb(255 255 255 / 0.68);
+  --line: rgb(255 255 255 / 0.12);
+  --card-bg: rgb(255 255 255 / calc(var(--card-opacity) * 0.13));
 }
+[data-bg="glass"] #island {
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgb(255 255 255 / 0.12), transparent 60%),
+    rgb(var(--glass-tint-rgb, 27 32 51) / var(--glass-frost, 0.45));
+  box-shadow: inset 0 0 2px 1px #ffffff59, inset 0 0 10px 4px #ffffff26, inset 0 4px 16px #11111a0d, inset 0 8px 24px #11111a0d, inset 0 6px 56px #11111a0d;
+  box-shadow: inset 0 0 2px 1px lab(100% 0 0 / .35), inset 0 0 10px 4px lab(100% 0 0 / .15), inset 0 4px 16px lab(5.32203% 1.61424 -5.88284 / .0509804), inset 0 8px 24px lab(5.32203% 1.61424 -5.88284 / .0509804), inset 0 6px 56px lab(5.32203% 1.61424 -5.88284 / .0509804);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+[data-bg="glass"] #island::after, [data-bg="glass"] .ear { display: none; }
+[data-bg="glass"] :is(input, select, #note-body) { background: rgb(255 255 255 / 0.10); border: 1px solid rgb(255 255 255 / 0.18); }
+[data-bg="glass"] :is(input, #note-body)::placeholder { color: rgb(255 255 255 / 0.55); }
+[data-bg="glass"] :is(input, select, #note-body):focus { border-color: var(--accent); }
 /* hairline border when no media animation is running */
 #island::after {
   content: "";
@@ -265,8 +281,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rem-title { font-size: calc(16px * var(--text-scale)); font-weight: 700; letter-spacing: -0.01em; }
 .pill { flex: none; border: none; border-radius: 999px; padding: 8px 16px; font-size: var(--t13); font-weight: 600; background: rgba(255, 255, 255, 0.12); color: var(--text); }
 .pill:hover { background: rgba(255, 255, 255, 0.18); }
-.pill.light { background: #fff; color: #111; }
-.pill.light:hover { background: #e6e6ea; }
 .pill:disabled { opacity: 0.5; cursor: default; }
 .rem-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .rem-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -372,8 +386,7 @@ button.card:hover, .card[role="button"]:hover { filter: brightness(1.1); }
 .cal-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-when { font-size: var(--t12); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-note { font-size: var(--t11); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-join { flex: none; border: none; border-radius: 999px; padding: 3px 10px; background: #22c55e; color: #06210f; font-size: var(--t12); font-weight: 600; }
-.cal-join:hover { background: #4ade80; }
+.cal-join { flex: none; font-size: var(--t12); }
 .cal-prompt { margin: 8px 0 0; padding: 0; text-align: left; }
 
 /* ---------- pages ---------- */
@@ -701,3 +714,71 @@ button.snd-ic:hover { background: rgba(255, 255, 255, 0.1); }
 .shelf-menu button:hover:not(:disabled), .shelf-menu button:focus-visible { background: rgba(255, 255, 255, 0.12); }
 .shelf-menu button:disabled { opacity: 0.35; }
 .shelf.dropping .shelf-grid { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 10px; }
+
+/* ---------- liquid-glass buttons (user's reference, adapted to the dark island) ----------
+   .glass-btn = text button with a soft outer shadow; .icon = compact, no outer shadow;
+   .primary = tinted (accent; .green / .white keep Join's / Done's identity). Sizes in em. */
+@property --angle-1 { syntax: "<angle>"; inherits: false; initial-value: -75deg; }
+@property --angle-2 { syntax: "<angle>"; inherits: false; initial-value: -45deg; }
+.glass-btn {
+  --bw: clamp(1px, 0.0625em, 4px);
+  --hover-time: 400ms; --hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --g0: rgb(255 255 255 / 0.05); --g1: rgb(255 255 255 / 0.18);
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
+  border-radius: 999px; font-weight: 600; letter-spacing: -0.01em;
+  color: rgb(255 255 255 / 0.92); text-shadow: 0 0.1em 0.15em rgb(0 0 0 / 0.35);
+  box-shadow: inset 0 0.125em 0.125em rgb(0 0 0 / 0.05), inset 0 -0.125em 0.125em rgb(255 255 255 / 0.3), 0 0.25em 0.125em -0.125em rgb(0 0 0 / 0.3), inset 0 0 0.1em 0.25em rgb(255 255 255 / 0.08);
+  transition: transform var(--hover-time) var(--hover-ease), box-shadow var(--hover-time) var(--hover-ease), filter var(--hover-time) var(--hover-ease), background var(--hover-time) var(--hover-ease);
+}
+.glass-btn:not(.icon) { padding: 0.5em 1.15em; filter: drop-shadow(0 0.3em 0.3em rgb(0 0 0 / 0.3)); }
+.prompt .glass-btn:not(.icon), .rem-foot .glass-btn { padding: 0.42em 1.15em; }
+.cal-join.glass-btn { padding: 0.25em 0.85em; }
+.glass-btn.icon { padding: 0; color: var(--text); }
+.glass-btn.primary { --tint: var(--accent); --tint-fg: #0b0d16; }
+.glass-btn.primary.green { --tint: #22c55e; --tint-fg: #06210f; }
+.glass-btn.primary.white { --tint: #fff; --tint-fg: #111; }
+.glass-btn.primary {
+  --g0: color-mix(in srgb, var(--tint) 78%, transparent); --g1: color-mix(in srgb, var(--tint), #fff 22%);
+  color: var(--tint-fg); text-shadow: 0 0.06em 0 rgb(255 255 255 / 0.3);
+}
+/* tripled class: beats the host classes' own fills (.btn.primary, .qb:hover, ...); states only change --g0/--g1 */
+.glass-btn.glass-btn.glass-btn { border: none; background: linear-gradient(-75deg, var(--g0), var(--g1), var(--g0)); }
+/* sheen: diagonal highlight that sweeps on hover */
+.glass-btn::before {
+  content: ""; position: absolute; inset: calc(var(--bw) / 2); border-radius: inherit; pointer-events: none;
+  background: linear-gradient(var(--angle-2), rgb(255 255 255 / 0) 0%, rgb(255 255 255 / 0.4) 40% 50%, rgb(255 255 255 / 0) 55%);
+  background-size: 200% 200%; background-position: 0% 50%; background-repeat: no-repeat; mix-blend-mode: screen;
+  transition: background-position calc(var(--hover-time) * 1.25) var(--hover-ease), --angle-2 calc(var(--hover-time) * 1.25) var(--hover-ease);
+}
+/* rim: conic white highlights over darker shadow sides, masked to a thin ring */
+.glass-btn::after {
+  content: ""; position: absolute; inset: calc(var(--bw) / -2); border-radius: inherit; padding: var(--bw); box-sizing: border-box; pointer-events: none;
+  background:
+    conic-gradient(from var(--angle-1) at 50% 50%, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0) 5% 40%, rgb(255 255 255 / 0.55) 50%, rgb(255 255 255 / 0) 60% 95%, rgb(255 255 255 / 0.55)),
+    linear-gradient(180deg, rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.35));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  transition: --angle-1 500ms ease;
+}
+.glass-btn:hover:not(:disabled) {
+  --g1: rgb(255 255 255 / 0.24);
+  transform: scale(0.975);
+  box-shadow: inset 0 0.125em 0.125em rgb(0 0 0 / 0.05), inset 0 -0.125em 0.125em rgb(255 255 255 / 0.4), 0 0.15em 0.05em -0.1em rgb(0 0 0 / 0.35), inset 0 0 0.05em 0.1em rgb(255 255 255 / 0.25);
+}
+.glass-btn.primary:hover:not(:disabled) { --g1: color-mix(in srgb, var(--tint), #fff 40%); }
+.glass-btn:not(.icon):hover:not(:disabled) { filter: drop-shadow(0 0.15em 0.15em rgb(0 0 0 / 0.35)); }
+.glass-btn:hover:not(:disabled)::before { background-position: 25% 50%; }
+.glass-btn:hover:not(:disabled)::after { --angle-1: -125deg; }
+.glass-btn:active:not(:disabled) {
+  transform: perspective(12em) rotate3d(1, 0, 0, 25deg) scale(0.975);
+  box-shadow: inset 0 0.125em 0.125em rgb(0 0 0 / 0.05), inset 0 -0.125em 0.125em rgb(255 255 255 / 0.4), 0 0.125em 0.125em -0.125em rgb(0 0 0 / 0.3), inset 0 0 0.1em 0.25em rgb(255 255 255 / 0.15), inset 0 0.25em 0.05em 0 rgb(0 0 0 / 0.2);
+}
+.glass-btn:active:not(:disabled)::before { background-position: 50% 15%; --angle-2: -15deg; }
+.glass-btn:active:not(:disabled)::after { --angle-1: -75deg; }
+.glass-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.glass-btn:disabled { opacity: 0.45; cursor: default; filter: none; }
+.qb.glass-btn.on { color: var(--accent); --g0: color-mix(in srgb, var(--accent) 14%, transparent); --g1: color-mix(in srgb, var(--accent) 30%, transparent); }
+@media (prefers-reduced-motion: reduce) {
+  .glass-btn, .glass-btn::after { transition: none; }
+  .glass-btn::before { display: none; }
+  .glass-btn:hover:not(:disabled), .glass-btn:active:not(:disabled) { transform: none; }
+}
