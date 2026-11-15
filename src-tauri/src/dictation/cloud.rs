@@ -16,8 +16,6 @@ pub fn endpoint(provider: &str) -> Result<&'static str, String> {
 
 /// 16 kHz mono 16-bit PCM WAV, in memory.
 pub fn wav(samples: &[f32]) -> Vec<u8> {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
     let data_len = samples.len() as u32 * 2;
     let mut out = Vec::with_capacity(44 + data_len as usize);
     out.extend_from_slice(b"RIFF");
@@ -40,8 +38,6 @@ pub fn wav(samples: &[f32]) -> Vec<u8> {
 
 /// multipart/form-data body: text fields, then one `file` part (audio/wav).
 pub fn multipart(boundary: &str, fields: &[(&str, &str)], file_name: &str, file: &[u8]) -> Vec<u8> {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
     let mut out = Vec::with_capacity(file.len() + 512);
     for (k, v) in fields {
         out.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n").as_bytes());

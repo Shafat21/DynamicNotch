@@ -7,8 +7,6 @@ use std::sync::{Arc, Mutex};
 
 /// Downmix interleaved frames to mono, then box-average down (or pick nearest up) to 16 kHz.
 pub fn resample_to_16k(samples: &[f32], rate: u32, channels: u16) -> Vec<f32> {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
     let ch = channels.max(1) as usize;
     let mono: Vec<f32> = samples.chunks_exact(ch).map(|f| f.iter().sum::<f32>() / ch as f32).collect();
     if rate == 16_000 || rate == 0 {

@@ -57,8 +57,6 @@ pub fn installed(app: &AppHandle, name: &str) -> bool {
 
 /// Stream `r` into `w`, hashing on the way; Err unless exactly `total` bytes with the expected SHA-256 arrived.
 pub fn copy_verified(mut r: impl Read, mut w: impl Write, sha256: &str, total: u64, mut progress: impl FnMut(u64, u64)) -> Result<(), String> {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
     let mut done = 0u64;

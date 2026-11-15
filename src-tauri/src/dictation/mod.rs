@@ -74,8 +74,6 @@ impl Default for Machine {
 
 impl Machine {
     pub fn press(&mut self, now: u64) -> Step {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
         if self.phase != Phase::Idle {
             return Step::None;
         }
@@ -90,8 +88,6 @@ impl Machine {
     }
 
     pub fn release(&mut self, now: u64) -> Step {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
         match self.phase {
             Phase::Recording { start } if now.saturating_sub(start) < MIN_HOLD_MS => {
                 self.phase = Phase::Idle;
@@ -103,8 +99,6 @@ impl Machine {
     }
 
     pub fn tick(&mut self, now: u64) -> Step {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
         match self.phase {
             Phase::Recording { start } if now.saturating_sub(start) >= MAX_MS => self.finish(),
             _ => Step::None,
@@ -113,8 +107,6 @@ impl Machine {
 
     /// Esc: drop the recording, or forget the running transcription (its result is ignored).
     pub fn cancel(&mut self) -> Step {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
         let was = self.phase;
         self.phase = Phase::Idle;
         if was == Phase::Idle {
@@ -126,8 +118,6 @@ impl Machine {
 
     /// True when `job` is the transcription we're waiting for (not cancelled / stale).
     pub fn done(&mut self, job: u64) -> bool {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
         if self.phase == (Phase::Transcribing { job }) {
             self.phase = Phase::Idle;
             return true;

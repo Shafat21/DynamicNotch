@@ -41,8 +41,6 @@ impl Hook {
 
     /// One physical key event → (dictation event, inject the mask key before this key-up passes on).
     pub fn on_key(&mut self, vk: u32, down: bool, want: Option<Mods>) -> (Option<Msg>, bool) {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
         match MODS.iter().position(|m| *m == vk) {
             Some(i) if down => self.down |= 1 << i,
             Some(i) => self.down &= !(1 << i),

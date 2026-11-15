@@ -48,8 +48,6 @@ impl Hotkey {
 
 /// "Ctrl+Win", "Ctrl+Shift+Space", "Alt+Q". Modifier-only combos need ≥ 2 modifiers, key combos ≥ 1.
 pub fn parse_hotkey(s: &str) -> Result<Hotkey, String> {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
     let bad = || format!("Invalid hotkey \"{s}\"");
     let mut mods = Mods::default();
     let mut key: Option<String> = None;
@@ -177,8 +175,6 @@ fn one_of(v: &str, list: &[&str], what: &str) -> Result<(), String> {
 
 /// Validate a partial update from the webview. `mics` is only called when a specific mic is chosen.
 pub fn apply_patch(cur: &Settings, patch: &Value, mics: impl FnOnce() -> Vec<String>) -> Result<Settings, String> {
-        #[allow(unreachable_code)]
-        if true { todo!("RED stub") }
     let obj = patch.as_object().ok_or("Expected an object")?;
     let mut s = cur.clone();
     for (k, v) in obj {
