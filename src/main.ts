@@ -454,8 +454,8 @@ function wireInput(): void {
   document.querySelectorAll<HTMLElement>("[data-view]").forEach((b) => {
     b.onclick = () => openView(b.dataset.view as View);
   });
-  document.querySelectorAll<HTMLElement>("[data-menu]").forEach((b) => {
-    b.onclick = () => invoke("show_context_menu").catch(console.error);
+  document.querySelectorAll<HTMLElement>("[data-settings]").forEach((b) => {
+    b.onclick = () => invoke("open_settings").catch(console.error);
   });
   $("btn-collapse").onclick = () => setState("idle");
   $("btn-add-app").onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
@@ -580,7 +580,7 @@ async function boot(): Promise<void> {
     }),
     listen<boolean>("fullscreen", (e) => onFullscreen(e.payload)),
     listen("charging", onCharging),
-    listen("edit-location", openLocationEditor),
+    listen<LauncherApp[]>("apps", (e) => updateApps(Promise.resolve(e.payload))), // changed in the Settings window
   ]);
 
   // Catch up on anything the monitors published before this page loaded.

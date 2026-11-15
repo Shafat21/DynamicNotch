@@ -1,10 +1,11 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, appearance, bridge, db, emit_settings, launcher, menu, monitors, window, AppState};
-use serde_json::Value;
+use crate::{actions, appearance, bridge, db, display, emit_settings, fullscreen, launcher, menu, monitors, window, AppState};
+use serde_json::{json, Value};
 use std::collections::HashMap;
-use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::DialogExt;
 
 type Res<T> = Result<T, String>;
@@ -16,6 +17,86 @@ fn err(e: impl std::fmt::Display) -> String {
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Res<db::Settings> {
     crate::current_settings(&app)
+}
+
+/// Focus the Settings window, or create it (single instance).
+pub fn show_settings(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.unminimize();
+        return w.set_focus();
+    }
+    tauri::WebviewWindowBuilder::new(app, "settings", tauri::WebviewUrl::App("settings.html".into()))
+        .title("Dynamic Notch Island Settings")
+        .inner_size(900.0, 640.0)
+        .min_inner_size(760.0, 520.0)
+        .decorations(true)
+        .resizable(true)
+        .build()?;
+    Ok(())
+}
+
+/// async: building a webview inside a sync (main-thread) command deadlocks on Windows (wry#583).
+#[tauri::command]
+pub async fn open_settings(app: AppHandle) -> Res<()> {
+    show_settings(&app).map_err(err)
+}
+
+/// The General settings the Settings window may change (allow-list; values checked by the setters).
+#[derive(Debug, PartialEq)]
+pub enum General {
+    Display(String),
+    IslandSize(String),
+    HideFullscreen(bool),
+    Autostart(bool),
+}
+
+pub fn parse_general(key: &str, value: &Value) -> Res<General> {
+    match (key, value) {
+        ("display", Value::String(s)) => Ok(General::Display(s.clone())),
+        ("island_size", Value::String(s)) => Ok(General::IslandSize(s.clone())),
+        ("hide_fullscreen", Value::Bool(b)) => Ok(General::HideFullscreen(*b)),
+        ("autostart", Value::Bool(b)) => Ok(General::Autostart(*b)),
+        ("display" | "island_size" | "hide_fullscreen" | "autostart", _) => Err(format!("invalid value for {key}")),
+        _ => Err(format!("unknown setting {key}")),
+    }
+}
+
+/// Apply one General setting through the same functions the menu used; returns the new settings.
+#[tauri::command]
+pub fn set_general(app: AppHandle, key: String, value: Value) -> Res<db::Settings> {
+    match parse_general(&key, &value)? {
+        General::Display(name) => display::set_display(&app, &name),
+        General::IslandSize(size) => display::set_island_size(&app, &size),
+        General::HideFullscreen(on) => fullscreen::set_hide_fullscreen(&app, on),
+        General::Autostart(on) => {
+            let al = app.autolaunch();
+            if on { al.enable() } else { al.disable() }.map_err(err)
+        }
+    }?;
+    emit_settings(&app);
+    crate::current_settings(&app)
+}
+
+/// Plugged-in monitors for the Display dropdown: `name` is what `set_general("display")` takes.
+#[tauri::command]
+pub fn list_displays(app: AppHandle) -> Res<Vec<Value>> {
+    let infos = display::monitors(&app).map_err(err)?.1;
+    Ok(infos
+        .iter()
+        .enumerate()
+        .map(|(i, m)| json!({ "name": m.name, "label": format!("{}: {} ({}×{})", i + 1, m.name, m.width, m.height) }))
+        .collect())
+}
+
+/// About-page links by id (the webview never sends a URL).
+#[tauri::command]
+pub fn open_link(id: String) -> Res<()> {
+    let url = match id.as_str() {
+        "repo" => "https://github.com/Shafat21/DynamicNotch",
+        "issues" => "https://github.com/Shafat21/DynamicNotch/issues",
+        _ => return Err(format!("unknown link {id}")),
+    };
+    launcher::os::shell_open(url)
 }
 
 /// Run `f` on the stored appearance + layout, persist the result and publish it (sticky `appearance`).
@@ -201,15 +282,19 @@ pub async fn pick_app(app: AppHandle) -> Res<Vec<db::App>> {
         .flatten();
         state.db.lock().unwrap().add_app(&name, "path", &path.to_string_lossy(), icon.as_deref()).map_err(err)?;
     }
-    let apps = state.db.lock().unwrap().apps().map_err(err);
-    apps
+    let apps = state.db.lock().unwrap().apps().map_err(err)?;
+    let _ = app.emit("apps", &apps); // island and Settings window stay in sync
+    Ok(apps)
 }
 
 #[tauri::command]
-pub fn remove_app(state: State<AppState>, id: i64) -> Res<Vec<db::App>> {
+pub fn remove_app(app: AppHandle, id: i64) -> Res<Vec<db::App>> {
+    let state = app.state::<AppState>();
     let db = state.db.lock().unwrap();
     db.remove_app(id).map_err(err)?;
-    db.apps().map_err(err)
+    let apps = db.apps().map_err(err)?;
+    let _ = app.emit("apps", &apps);
+    Ok(apps)
 }
 
 #[tauri::command]
@@ -233,4 +318,22 @@ pub async fn connect_claude(app: AppHandle) -> Res<()> {
 #[tauri::command]
 pub async fn disconnect_claude(app: AppHandle) -> Res<()> {
     tauri::async_runtime::spawn_blocking(move || bridge::set_connected(&app, false)).await.map_err(err)?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn general_keys_are_allow_listed_and_typed() {
+        assert_eq!(parse_general("display", &json!("primary")), Ok(General::Display("primary".into())));
+        assert_eq!(parse_general("island_size", &json!("Large")), Ok(General::IslandSize("Large".into())));
+        assert_eq!(parse_general("hide_fullscreen", &json!(false)), Ok(General::HideFullscreen(false)));
+        assert_eq!(parse_general("autostart", &json!(true)), Ok(General::Autostart(true)));
+        assert!(parse_general("autostart", &json!("yes")).is_err()); // wrong type
+        assert!(parse_general("display", &json!(1)).is_err());
+        assert!(parse_general("bridge_token", &json!("x")).is_err()); // not allow-listed
+        assert!(parse_general("", &json!(null)).is_err());
+    }
 }

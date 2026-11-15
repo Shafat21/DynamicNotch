@@ -4,5 +4,11 @@ import { defineConfig } from "vite";
 export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
-  build: { target: "chrome120", outDir: "dist", emptyOutDir: true },
+  build: {
+    target: "chrome120",
+    outDir: "dist",
+    emptyOutDir: true,
+    // island + Settings window (created on demand by `open_settings`)
+    rollupOptions: { input: { main: "index.html", settings: "settings.html" } },
+  },
 });

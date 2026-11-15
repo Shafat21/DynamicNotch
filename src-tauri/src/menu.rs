@@ -1,10 +1,9 @@
-//! Right-click menu (native popup). Item ids: "anim:<style>", "style:<style>", "display:<name|primary>",
-//! "size:<size>", "hide_fullscreen", "autostart", "location", "claude", "quit".
+//! Right-click menu (native popup). Item ids: "settings", "anim:<style>", "style:<style>", "claude", "quit".
+//! Display, size, fullscreen, autostart and location moved to the Settings window (spec §22.4).
 
-use crate::{bridge, db, display, emit_settings, fullscreen, AppState};
+use crate::{bridge, commands, db, emit_settings, AppState};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Emitter, Manager, WebviewWindow, Wry};
-use tauri_plugin_autostart::ManagerExt;
+use tauri::{AppHandle, Manager, WebviewWindow, Wry};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
@@ -20,28 +19,15 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     for st in db::ISLAND_STYLES {
         style.append(&check(format!("style:{st}"), st, s.island_style == st)?)?;
     }
-    let screens = Submenu::with_id(app, "display", "Display", true)?;
-    screens.append(&check("display:primary".into(), "Primary display", s.display == "primary")?)?;
-    for (i, m) in display::monitors(app)?.1.iter().enumerate() {
-        let label = format!("{}: {} ({}×{})", i + 1, m.name, m.width, m.height);
-        screens.append(&check(format!("display:{}", m.name), &label, s.display == m.name)?)?;
-    }
-    let size = Submenu::with_id(app, "size", "Island Size", true)?;
-    for sz in db::ISLAND_SIZES {
-        size.append(&check(format!("size:{sz}"), sz, s.island_size == sz)?)?;
-    }
 
     Menu::with_items(
         app,
         &[
+            &MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
             &anim,
             &style,
-            &screens,
-            &size,
             &PredefinedMenuItem::separator(app)?,
-            &check("hide_fullscreen".into(), "Hide in fullscreen apps", s.hide_fullscreen)?,
-            &check("autostart".into(), "Start with Windows", s.autostart)?,
-            &MenuItem::with_id(app, "location", "Change Location", true, None::<&str>)?,
             &MenuItem::with_id(app, "claude", claude, true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?,
@@ -59,23 +45,16 @@ pub fn handle(app: &AppHandle, id: &str) {
         state.db.lock().unwrap().set("animation_style", st).map_err(|e| e.to_string())
     } else if let Some(st) = id.strip_prefix("style:").filter(|s| db::ISLAND_STYLES.contains(s)) {
         state.db.lock().unwrap().set("island_style", st).map_err(|e| e.to_string())
-    } else if let Some(name) = id.strip_prefix("display:") {
-        display::set_display(app, name)
-    } else if let Some(sz) = id.strip_prefix("size:") {
-        display::set_island_size(app, sz)
     } else {
         match id {
-            "autostart" => {
-                let al = app.autolaunch();
-                let r = if al.is_enabled().unwrap_or(false) { al.disable() } else { al.enable() };
-                r.map_err(|e| e.to_string())
-            }
-            "hide_fullscreen" => {
-                let on = state.db.lock().unwrap().settings().map(|s| s.hide_fullscreen).unwrap_or(true);
-                fullscreen::set_hide_fullscreen(app, !on)
-            }
-            "location" => {
-                let _ = app.emit("edit-location", ());
+            "settings" => {
+                let app = app.clone();
+                // off the menu thread, like the Claude dialog below
+                std::thread::spawn(move || {
+                    if let Err(e) = commands::show_settings(&app) {
+                        eprintln!("open settings failed: {e}");
+                    }
+                });
                 Ok(())
             }
             "claude" => {

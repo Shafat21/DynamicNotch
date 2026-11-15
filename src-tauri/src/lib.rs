@@ -59,7 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .on_window_event(|win, event| {
-            if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
+            if let (tauri::WindowEvent::ScaleFactorChanged { .. }, "main") = (event, win.label()) {
                 // off the event thread: the OS applies its own DPI resize after this handler returns
                 let app = win.app_handle().clone();
                 std::thread::spawn(move || {
@@ -101,6 +101,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
+            commands::open_settings,
+            commands::set_general,
+            commands::list_displays,
+            commands::open_link,
             commands::get_appearance,
             commands::set_appearance,
             commands::apply_theme,
