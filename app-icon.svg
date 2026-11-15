@@ -1,14 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <radialGradient id="glow" cx="30%" cy="45%" r="70%">
-      <stop offset="0" stop-color="#00a0ff" stop-opacity="0.9"/>
-      <stop offset="0.6" stop-color="#5a00ff" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232325"/>
+      <stop offset="1" stop-color="#1b1b1d"/>
+    </linearGradient>
+    <filter id="blush" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
   </defs>
-  <rect width="1024" height="1024" rx="224" fill="#0b0b0f"/>
-  <rect x="152" y="392" width="720" height="240" rx="120" fill="#000"/>
-  <rect x="152" y="392" width="720" height="240" rx="120" fill="url(#glow)"/>
-  <rect x="152" y="392" width="720" height="240" rx="120" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="8"/>
-  <circle cx="272" cy="512" r="40" fill="#00a0ff"/>
+  <rect x="84" y="84" width="856" height="856" rx="200" fill="url(#tile)"/>
+  <!-- notch island: wide pill whose lower middle flows into a rounded bulge -->
+  <path fill="#f7f7f7" d="M265 358 H759 A95 95 0 0 1 759 548 H727 C665 548 641 578 642 600 C630 640 612 700 512 700 C412 700 394 640 382 600 C383 578 359 548 297 548 H265 A95 95 0 0 1 265 358 Z"/>
+  <!-- Pal, calm mood -->
+  <g fill="#e9a0a8" opacity="1" filter="url(#blush)">
+    <circle cx="407" cy="531" r="26"/>
+    <circle cx="617" cy="531" r="26"/>
+  </g>
+  <g fill="#1f1f21">
+    <rect x="419" y="406" width="54" height="100" rx="27"/>
+    <rect x="551" y="406" width="54" height="100" rx="27"/>
+  </g>
+  <path d="M478 552 C482 583 542 583 546 552" fill="none" stroke="#1f1f21" stroke-width="22" stroke-linecap="round"/>
 </svg>

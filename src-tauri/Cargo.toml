@@ -17,10 +17,11 @@ tauri = { version = "2", features = [] }
 tauri-plugin-autostart = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 sysinfo = "0.37"
 ureq = { version = "3", features = ["json"] }
+tiny_http = "0.12"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
 rrule = "0.14.0"
 chrono-tz = "0.10"
@@ -44,6 +45,7 @@ windows = { version = "0.61", features = [
   "Win32_UI_WindowsAndMessaging",
   "Win32_Graphics_Gdi",
   "Win32_Foundation",
+  "Win32_Security_Cryptography",
   "Win32_Storage_FileSystem",
 ] }
 

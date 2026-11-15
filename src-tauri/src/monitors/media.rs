@@ -22,15 +22,14 @@ pub(super) struct Media {
     state: &'static str, // "Playing" | "Paused" | "Idle"
     title: String,
     artist: String,
-    accent: String,
-    art: String,   // image data URI, "" if none
-    duration: f64, // seconds, 0 if unknown
+    accent: String, // album art itself goes out separately as `media-art`, only on track change
+    duration: f64,  // seconds, 0 if unknown
     seekable: bool,
 }
 
 impl Media {
     pub(super) fn idle() -> Self {
-        Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into(), art: String::new(), duration: 0.0, seekable: true }
+        Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into(), duration: 0.0, seekable: true }
     }
 }
 
@@ -47,6 +46,11 @@ pub(super) fn art_data_uri(bytes: &[u8]) -> Option<String> {
         _ => return None,
     };
     Some(format!("data:image/{mime};base64,{}", crate::launcher::base64(bytes)))
+}
+
+/// A track's thumbnail often lands a moment after its title: keep re-reading it for up to 5 s.
+pub(super) fn should_retry_art(elapsed_ms: u64, have_art: bool) -> bool {
+    !have_art && elapsed_ms <= 5_000
 }
 
 /// Seek target must be finite and within a known (non-zero) duration.
@@ -173,5 +177,12 @@ mod tests {
         assert!(validate_seek(201.0, 200.0).is_err());
         assert!(validate_seek(f64::NAN, 200.0).is_err());
         assert!(validate_seek(10.0, 0.0).is_err()); // unknown duration → no seeking
+    }
+    #[test]
+    fn art_retry_window() {
+        assert!(should_retry_art(0, false));
+        assert!(should_retry_art(5_000, false));
+        assert!(!should_retry_art(5_001, false));
+        assert!(!should_retry_art(1_000, true));
     }
 }

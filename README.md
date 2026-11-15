@@ -1,103 +1,170 @@
-# DynamicNotch
+<div align="center">
 
-A sleek, animated **Dynamic Island for Windows**, built with **Rust + Tauri 2** and **SQLite**.
+<img src="docs/assets/icon.png" width="128" alt="Dynamic Notch Island icon">
 
-A small pill at the top of your screen shows the time and expands into live panels when you
-hover it: system stats, music with synced lyrics, weather, tasks, month progress and quick controls.
+# Dynamic Notch Island
 
-> Architecture, internals and roadmap are in [plan.md](plan.md).
+A Dynamic Island for Windows and Linux, with Pal, your Claude Code companion.
+
+[![Latest release](https://img.shields.io/github/v/release/Shafat21/DynamicNotch?include_prereleases)](https://github.com/Shafat21/DynamicNotch/releases)
+[![Downloads](https://img.shields.io/github/downloads/Shafat21/DynamicNotch/total)](https://github.com/Shafat21/DynamicNotch/releases)
+[![Stars](https://img.shields.io/github/stars/Shafat21/DynamicNotch)](https://github.com/Shafat21/DynamicNotch/stargazers)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
+![Built with Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-black?logo=rust)
+
+<br>
+
+[![Download for Windows](https://img.shields.io/badge/Download_for-Windows-0078D4?style=for-the-badge&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMy40IDkuOCAydjkuNUgwek0xMSAxLjggMjQgMHYxMS41SDExek0wIDEyLjVoOS44VjIyTDAgMjAuNnpNMTEgMTIuNWgxM1YyNGwtMTMtMS44eiIvPjwvc3ZnPg%3D%3D)](https://github.com/Shafat21/DynamicNotch/releases/latest)
+[![Download for Linux](https://img.shields.io/badge/Download_for-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Shafat21/DynamicNotch/releases/latest)
+
+**Windows:** `.exe` installer &nbsp;·&nbsp; **Linux:** `.deb`, `.rpm`, `.AppImage`
+
+</div>
 
 ---
 
+A small pill sits at the top of your screen and shows the time. Hover it and it morphs into a dashboard;
+when Claude Code needs you, Pal tells you and you can answer right from the island.
+
+> Architecture, internals and roadmap are in [plan.md](plan.md).
+
 ## Features
 
-- **Fluid morphing.** Smooth size transitions with a shine sweep between states.
-- **Hover panels.** Scroll on the island to switch between them:
-  - **System Status**: CPU, RAM, storage, network up/down
-  - **Music**: title/artist, play/pause/next/prev, **synced lyrics** (lrclib.net), animations tinted by the album art
-  - **Weather**: current conditions + next 5 hours (Open-Meteo, no API key)
-  - **Tasks**: "Next Up" list with an inline editor (add/delete), saved in SQLite
-  - **Month Progress**: dot grid of the current month
-  - **Basics**: control balls for Shutdown, Restart, Sleep, Explorer, Settings, Task Manager, Chrome, YouTube, CMD
-- **Notifications.** Windows toast notifications appear in the island.
-- **Caps Lock / Num Lock** indicators.
-- **Charging animation** when you plug in the charger.
-- **Styles.** Island: Default, Liquid Glass, Notch Nook. Music animation: Glow Sweep, Fluid Blobs, Neon Border.
-- **Click-through.** The desktop under the island stays usable; only the pill takes the mouse.
-- **Safe controls.** Shutdown/Restart need a second click to confirm.
-- **Start with Windows.** Optional, off by default.
+**Pal**
+- An animated face with 8 moods: calm, happy, listening, thinking, needs-you, done, napping and broke.
+- Lives in the idle pill next to the clock and on the assistant card; moods follow what Claude Code is doing.
+
+**Claude Code companion**
+- Live status of your Claude Code sessions (working, waiting for you, done, error).
+- Answer permission prompts (allow / deny) and questions from the island instead of the terminal.
+
+**Dashboard (hover the island)**
+- **Music player:** album art, title/artist, seek by click or drag, play/pause/next/prev, synced lyrics.
+- **Calendar:** today's agenda from your iCal link, with Join buttons for online meetings.
+- **Focus timer:** 25 minutes by default, adjust in 5 minute steps.
+- **System stats:** CPU, RAM, storage, network up/down.
+- **Weather:** current conditions and the next hours.
+- **Tasks:** a "Next Up" list with an inline editor, saved locally.
+- **Month progress:** a dot grid of the current month.
+
+**Quick app launcher**
+- Pin your apps to the dashboard and start them with one click.
+
+**Fits your desktop**
+- **Liquid Glass** style with real background blur on Windows and KDE Plasma (CSS glass elsewhere).
+- **Hides in fullscreen** games, videos and apps, and comes back when you leave fullscreen.
+- **Choose the display** (primary or a specific screen) and **responsive scaling** that follows resolution,
+  DPI and monitor changes (Island Size: Auto, Small, Medium, Large).
+- **Caps Lock / Num Lock** indicators, **charging** animation and **notifications** in the island.
+- **Click-through:** the desktop under the island stays usable; only the pill takes the mouse.
+
+## Platform support
+
+| Platform | Status |
+|---|---|
+| Windows 10 / 11 | ✅ Supported |
+| Linux, GNOME (Wayland via XWayland) | ✅ Supported |
+| Linux, KDE Plasma (layer-shell) | 🧪 Untested |
+| macOS | ❌ Not supported |
+
+## Install
+
+**Windows:** download the `.exe` installer from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest)
+and run it.
+
+**Linux:** download the package for your distro from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest):
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./*.deb
+
+# Fedora / openSUSE
+sudo dnf install ./*.rpm
+
+# Any distro
+chmod +x *.AppImage
+./*.AppImage
+```
+
+On Linux, notifications are read by monitoring the D-Bus session bus (if your system refuses this,
+everything else still works). The NVIDIA rendering workaround is applied automatically.
 
 ## Usage
 
 | Action | What happens |
 |---|---|
-| Hover the island | Expands into the current panel |
-| Scroll on the island | Next/previous panel |
-| Right-click | Menu: animation style, island style, Start with Windows, Change Location, Quit |
-| Pencil in Tasks | Open the task editor |
-| Pencil in Weather | Change city |
-| `<` `>` in Basics | Rotate the control balls |
+| Hover the island | Opens the dashboard |
+| Click a tile | Opens its panel (music, calendar, timer, ...) |
+| ⌂ | Back to the dashboard |
+| Right-click | Menu: styles, Display, Island Size, Hide in fullscreen apps, Connect Claude Code, Start with Windows / Start at login, Quit |
+| ＋ in the launcher | Add an app |
+| Right-click an app twice | Remove it from the launcher |
+| ＋ on the calendar | Paste your iCal link |
 
-## Install & run (from source)
+## Claude Code
 
-**Requirements:** Windows 10/11, [Rust](https://rustup.rs) (MSVC toolchain), [Node.js](https://nodejs.org) 20+,
-WebView2 (built into Windows 11).
+Right-click the island and choose **Connect Claude Code**:
+
+- Adds Dynamic Notch Island's hooks to `~/.claude/settings.json`. A backup of the file is kept next to it.
+- **Disconnect** removes only the hooks it added; your other settings are untouched.
+- The hooks talk to a local endpoint on `127.0.0.1:47863`, protected by a random token. Nothing leaves your machine.
+- Permission prompts and questions wait **15 seconds** in the island; if you don't answer, Claude Code falls
+  back to asking in the terminal.
+
+## Build from source
+
+**Windows:** [Rust](https://rustup.rs) (MSVC toolchain), [Node.js](https://nodejs.org) 20+, WebView2
+(built into Windows 11).
+
+**Linux (Debian/Ubuntu):** Rust, Node.js 20+, and:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-layer-shell-dev build-essential curl wget file \
+  libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+Then:
 
 ```bash
 git clone https://github.com/Shafat21/DynamicNotch.git
 cd DynamicNotch
 npm install
-npm run tauri dev
+npm run tauri dev      # run in development
+npm run tauri build    # installers in src-tauri/target/release/bundle/
+cd src-tauri && cargo test
 ```
 
-### Build a release
+Dual-booting to test on Linux? See [plan.md](plan.md).
+
+## Releasing
+
+Push a tag `vX.Y.Z` and GitHub Actions builds Windows and Linux packages into a **draft release**.
+Review it and publish.
 
 ```bash
-npm run tauri build
-```
-
-The exe and NSIS installer are written to `src-tauri/target/release/bundle/`.
-
-### Tests
-
-```bash
-cd src-tauri
-cargo test
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## Data & privacy
 
-- Settings and tasks are stored locally in SQLite:
-  `%APPDATA%\com.dynamicnotch.app\dynamic_notch.db`
-- Network calls: **Open-Meteo** (weather + city search) and **lrclib.net** (lyrics, sends artist + title only).
-  No accounts, no telemetry.
+- Settings, tasks and launcher apps are stored locally in SQLite:
+  - Windows: `%APPDATA%\com.dynamicnotch.app\dynamic_notch.db`
+  - Linux: `~/.local/share/com.dynamicnotch.app/dynamic_notch.db`
+- Network calls: **Open-Meteo** (weather and city search), **LRCLIB** (lyrics; sends artist and title only)
+  and **your calendar link**. The calendar link stays on your machine.
+- No accounts, no telemetry.
 
-## Notification access
+## Star History
 
-To show Windows notifications in the island, allow access under
-**Settings → Privacy & security → Notifications**. If access is denied, every other feature still works.
-
-## Tech stack
-
-| Layer | Tech |
-|---|---|
-| App shell | Tauri 2 (WebView2) |
-| Backend | Rust: `windows` crate (media sessions, notifications, Win32), `sysinfo`, `rusqlite`, `ureq`, `image` |
-| Frontend | TypeScript + CSS (Vite), Material Design Icons |
-| Storage | SQLite (bundled) |
-
-## Project structure
-
-```
-src/            frontend (state machine, panels, styles)
-src-tauri/src/  Rust backend
-  monitors/     perf, media, weather, notify, system (keys, power, accent)
-  db.rs         SQLite settings + tasks
-  commands.rs   API called from the frontend
-```
-
-See [plan.md](plan.md) for the full file map, event/command contract and roadmap.
+[![Star History Chart](https://api.star-history.com/svg?repos=Shafat21/DynamicNotch&type=Date)](https://star-history.com/#Shafat21/DynamicNotch&Date)
 
 ## Credits
 
 Weather by [Open-Meteo](https://open-meteo.com), lyrics by [LRCLIB](https://lrclib.net).
+
+## License
+
+[Apache-2.0](LICENSE)

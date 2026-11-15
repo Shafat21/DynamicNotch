@@ -1,12 +1,12 @@
-//! Windows media sessions (GSMTC): polls every 100 ms and publishes `media` / `lyric`.
+//! Windows media sessions (GSMTC): polls every 100 ms and publishes `media` / `media-art` / `media-progress` / `lyric`.
 
-use super::{art_data_uri, current_line, dominant_color, fetch_lyrics, key, Lyrics, Media, LYRIC_LEAD_SECS};
+use super::{art_data_uri, current_line, dominant_color, fetch_lyrics, key, should_retry_art, Lyrics, Media, LYRIC_LEAD_SECS};
 use crate::publish;
 use serde_json::json;
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::thread;
 use tauri::AppHandle;
 use windows::core::{Result, BOOL, PWSTR};
@@ -31,6 +31,7 @@ fn run(app: &AppHandle) -> Result<()> {
     let mut lyrics: Lyrics = Vec::new();
     let mut line = String::new();
     let (tx, rx) = mpsc::channel::<(String, Lyrics)>();
+    let (mut art_since, mut have_art) = (Instant::now(), false); // art retry window, reset per track
     publish(app, "media", &last);
 
     let mut tick: u64 = 0;
@@ -42,14 +43,17 @@ fn run(app: &AppHandle) -> Result<()> {
         if tick.is_multiple_of(5) {
             let mut cur = session.as_ref().and_then(|s| read_state(s).ok()).unwrap_or_else(Media::idle);
             let track_changed = cur.title != last.title || cur.artist != last.artist;
-            (cur.accent, cur.art) = match (&session, track_changed) {
-                (Some(s), true) if cur.state != "Idle" => {
+            cur.accent = last.accent.clone();
+            if track_changed {
+                let mut art = String::new();
+                if let (Some(s), false) = (&session, cur.state == "Idle") {
                     let bytes = thumbnail(s).unwrap_or_default();
-                    (dominant_color(&bytes).unwrap_or_else(|| "#000000".into()), art_data_uri(&bytes).unwrap_or_default())
+                    cur.accent = dominant_color(&bytes).unwrap_or_else(|| "#000000".into());
+                    art = art_data_uri(&bytes).unwrap_or_default();
                 }
-                (_, true) => (last.accent.clone(), String::new()),
-                _ => (last.accent.clone(), last.art.clone()),
-            };
+                (art_since, have_art) = (Instant::now(), !art.is_empty());
+                publish(app, "media-art", json!({ "art": art }));
+            }
             if cur != last {
                 last = cur;
                 publish(app, "media", &last);
@@ -64,6 +68,18 @@ fn run(app: &AppHandle) -> Result<()> {
                             let _ = tx.send((key(&artist, &title), fetch_lyrics(&artist, &title)));
                         });
                     }
+                }
+            }
+        }
+
+        if tick.is_multiple_of(10) && last.state != "Idle" && should_retry_art(art_since.elapsed().as_millis() as u64, have_art) {
+            let bytes = session.as_ref().and_then(thumbnail).unwrap_or_default();
+            if let Some(art) = art_data_uri(&bytes) {
+                have_art = true;
+                publish(app, "media-art", json!({ "art": art }));
+                if let Some(accent) = dominant_color(&bytes) {
+                    last.accent = accent;
+                    publish(app, "media", &last);
                 }
             }
         }
@@ -94,7 +110,7 @@ fn run(app: &AppHandle) -> Result<()> {
     }
 }
 
-/// State, title, artist, duration and seekability; the caller fills in accent/art.
+/// State, title, artist, duration and seekability; the caller fills in the accent.
 fn read_state(s: &Session) -> Result<Media> {
     let info = s.GetPlaybackInfo()?;
     let state = match info.PlaybackStatus()? {
@@ -105,10 +121,13 @@ fn read_state(s: &Session) -> Result<Media> {
     let props = s.TryGetMediaPropertiesAsync()?.get()?;
     let title = props.Title()?.to_string();
     let title = if title.is_empty() { "Unknown Title".to_string() } else { title };
-    let tl = s.GetTimelineProperties()?;
-    let duration = ((tl.EndTime()?.Duration - tl.StartTime()?.Duration) as f64 / 1e7).max(0.0);
-    let seekable = info.Controls()?.IsPlaybackPositionEnabled()?;
-    Ok(Media { state, title, artist: props.Artist()?.to_string(), accent: String::new(), art: String::new(), duration, seekable })
+    // Timeline/controls are optional extras: a player without them still shows as playing.
+    let duration = s
+        .GetTimelineProperties()
+        .and_then(|tl| Ok((tl.EndTime()?.Duration - tl.StartTime()?.Duration) as f64 / 1e7))
+        .map_or(0.0, |d| d.max(0.0));
+    let seekable = info.Controls().and_then(|c| c.IsPlaybackPositionEnabled()).unwrap_or(true);
+    Ok(Media { state, title, artist: props.Artist()?.to_string(), accent: String::new(), duration, seekable })
 }
 
 /// Current playback position; while playing, extrapolated from the last timeline update.

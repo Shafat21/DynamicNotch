@@ -8,7 +8,7 @@ import { hydrateIcons, icon } from "./icons";
 import { createPal, greet, updateMood } from "./pal";
 import { getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 
-type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; art: string; duration: number; seekable: boolean };
+type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
@@ -33,7 +33,7 @@ const ui = {
   editingLocation: false,
   editingCalendar: false,
   calendar: null as CalPayload | null,
-  media: { state: "Idle", title: "", artist: "", accent: "#000000", art: "", duration: 0, seekable: true } as Media,
+  media: { state: "Idle", title: "", artist: "", accent: "#000000", duration: 0, seekable: true } as Media,
   progress: { position: 0, duration: 0 } as Progress,
   seekPreview: null as number | null, // seconds while dragging the progress bar
   showLyric: false,
@@ -225,11 +225,15 @@ function formatTime(secs: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
-const setArt = (img: HTMLImageElement, art: string) => {
-  img.hidden = !art;
-  if (art) img.src = art; // data URI built by the backend
-  else img.removeAttribute("src");
-};
+/** Album art arrives only on track change (or a late retry), separately from `media`. */
+function onArt({ art }: { art: string }): void {
+  for (const id of ["player-art", "tile-media-art"]) {
+    const img = $<HTMLImageElement>(id);
+    img.hidden = !art;
+    if (art) img.src = art; // data URI built by the backend
+    else img.removeAttribute("src");
+  }
+}
 
 function onMedia(m: Media): void {
   const idle = m.state === "Idle";
@@ -241,8 +245,6 @@ function onMedia(m: Media): void {
   $("player-title").textContent = idle ? "Nothing playing" : m.title;
   $("player-artist").textContent = idle ? "" : m.artist;
   $("player-eq").classList.toggle("on", m.state === "Playing");
-  setArt($<HTMLImageElement>("player-art"), m.art);
-  setArt($<HTMLImageElement>("tile-media-art"), m.art);
   $("tile-media-title").textContent = idle ? "Nothing playing" : m.title;
   $("tile-media-artist").textContent = idle ? "" : m.artist;
   $("tile-media").style.setProperty("--accent", m.accent);
@@ -385,7 +387,7 @@ function wirePlayer(): void {
     return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * ui.progress.duration;
   };
   track.onpointerdown = (e) => {
-    if (!ui.media.seekable || ui.progress.duration <= 0) return;
+    if (e.button !== 0 || !e.isPrimary || !ui.media.seekable || ui.progress.duration <= 0) return;
     track.setPointerCapture(e.pointerId);
     ui.seekPreview = secondsAt(e);
     renderProgress();
@@ -536,6 +538,7 @@ async function boot(): Promise<void> {
     listen<Media>("media", (e) => onMedia(e.payload)),
     listen<string>("lyric", (e) => onLyric(e.payload)),
     listen<Progress>("media-progress", (e) => onProgress(e.payload)),
+    listen<{ art: string }>("media-art", (e) => onArt(e.payload)),
     listen<Weather>("weather", (e) => onWeather(e.payload)),
     listen<CalPayload>("calendar", (e) => onCalendar(e.payload)),
     listen<string>("accent", (e) => document.documentElement.style.setProperty("--sys-accent", e.payload)),
@@ -558,6 +561,7 @@ async function boot(): Promise<void> {
   if (snap.media) onMedia(snap.media as Media);
   if (snap.lyric) onLyric(snap.lyric as string);
   if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
+  if (snap["media-art"]) onArt(snap["media-art"] as { art: string });
 
   ui.tasks = await invoke<Task[]>("list_tasks");
   onSettings(await invoke<Settings>("get_settings"));
