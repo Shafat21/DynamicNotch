@@ -2,7 +2,8 @@
 //! by track ("You" = microphone, "Them" = the computer's sound), echo of the others in the microphone
 //! dropped, then Summary / Key points / To-dos from Claude Code (optional) and the Transcript.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 use crate::dictation::{cleanup, local};
 use chrono::{DateTime, Local};
@@ -29,8 +30,8 @@ pub struct Line {
 
 /// Stretches of speech (sample ranges): 30 ms frames louder than the track's own noise floor, joined across
 /// pauses under 0.8 s, with 0.2 s of margin. Silent tracks give none.
-pub fn speech_segments(s: &[f32]) -> Vec<(usize, usize)> {
-    let rms: Vec<f32> = s.chunks(FRAME).map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt()).collect();
+pub fn speech_segments(s: &[i16]) -> Vec<(usize, usize)> {
+    let rms: Vec<f32> = s.chunks(FRAME).map(|c| (c.iter().map(|&v| (v as f32 / 32768.0).powi(2)).sum::<f32>() / c.len() as f32).sqrt()).collect();
     if rms.is_empty() {
         return Vec::new();
     }
@@ -54,13 +55,15 @@ pub fn speech_segments(s: &[f32]) -> Vec<(usize, usize)> {
 }
 
 /// Both tracks to labelled lines in time order. `progress` gets 0..1 as the audio is transcribed.
-pub fn transcribe_call(model: &Path, mic: &[f32], system: &[f32], progress: &mut dyn FnMut(f32)) -> Result<Vec<Line>, String> {
+pub fn transcribe_call(model: &Path, mic: &[i16], system: &[i16], progress: &mut dyn FnMut(f32)) -> Result<Vec<Line>, String> {
     let parts: Vec<(bool, usize, usize)> = speech_segments(mic).into_iter().map(|(a, b)| (true, a, b)).chain(speech_segments(system).into_iter().map(|(a, b)| (false, a, b))).collect();
     let total: usize = parts.iter().map(|p| p.2 - p.1).sum::<usize>().max(1);
     let (mut done, mut mine, mut theirs) = (0, Vec::new(), Vec::new());
     progress(0.0);
     for (you, a, b) in parts {
-        let text = local::transcribe(model, &(if you { mic } else { system })[a..b])?;
+        // only this stretch as f32: a 3 h call stays i16 in memory (~345 MB per track)
+        let chunk: Vec<f32> = (if you { mic } else { system })[a..b].iter().map(|&v| v as f32 / 32768.0).collect();
+        let text = local::transcribe(model, "auto", &chunk)?;
         done += b - a;
         progress(done as f32 / total as f32);
         if text.trim().is_empty() {
@@ -202,13 +205,16 @@ pub fn compose(started: DateTime<Local>, lines: &[Line], summary: Result<&Summar
     }
     out += "\nTranscript\n";
     const CUT: &str = "… (transcript cut: too long for one note)";
+    let mut count = out.chars().count();
     for line in transcript(lines).lines() {
-        if out.chars().count() + line.chars().count() + CUT.chars().count() + 2 > max {
+        let n = line.chars().count() + 1;
+        if count + n + CUT.chars().count() + 1 > max {
             out += CUT;
             return out;
         }
         out += line;
         out.push('\n');
+        count += n;
     }
     out.trim_end().to_string()
 }
@@ -217,8 +223,12 @@ pub fn compose(started: DateTime<Local>, lines: &[Line], summary: Result<&Summar
 mod tests {
     use super::*;
 
-    fn tone(seconds: f64) -> Vec<f32> {
-        (0..(RATE as f64 * seconds) as usize).map(|i| (i as f32 * 0.07).sin() * 0.3).collect()
+    fn tone(seconds: f64) -> Vec<i16> {
+        (0..(RATE as f64 * seconds) as usize).map(|i| ((i as f32 * 0.07).sin() * 0.3 * 32767.0) as i16).collect()
+    }
+
+    fn quiet(seconds: f64, level: i16) -> Vec<i16> {
+        vec![level; (RATE as f64 * seconds) as usize]
     }
 
     fn line(start: f64, end: f64, you: bool, text: &str) -> Line {
@@ -227,21 +237,21 @@ mod tests {
 
     #[test]
     fn speech_stretches_are_found_and_short_pauses_kept_inside() {
-        let mut s = vec![0.001; RATE]; // 1 s room noise
+        let mut s = quiet(1.0, 33); // 1 s room noise (~0.001)
         s.extend(tone(2.0));
-        s.extend(vec![0.001; RATE / 2]); // 0.5 s pause: same stretch
+        s.extend(quiet(0.5, 33)); // 0.5 s pause: same stretch
         s.extend(tone(1.0));
-        s.extend(vec![0.001; 3 * RATE]); // 3 s: a new stretch
+        s.extend(quiet(3.0, 33)); // 3 s: a new stretch
         s.extend(tone(1.5));
-        s.extend(vec![0.0; RATE / 10]);
+        s.extend(quiet(0.1, 0));
         s.extend(tone(0.1)); // a click: too short
-        s.extend(vec![0.0; RATE]);
+        s.extend(quiet(1.0, 0));
         let seg = speech_segments(&s);
         assert_eq!(seg.len(), 2, "{seg:?}");
         let secs = |x: usize| x as f64 / RATE as f64;
         assert!((secs(seg[0].0) - 0.8).abs() < 0.1 && (secs(seg[0].1) - 4.7).abs() < 0.1, "{seg:?}");
         assert!((secs(seg[1].0) - 7.3).abs() < 0.1, "{seg:?}");
-        assert!(speech_segments(&vec![0.0; RATE * 5]).is_empty());
+        assert!(speech_segments(&quiet(5.0, 0)).is_empty());
         assert!(speech_segments(&[]).is_empty());
     }
 

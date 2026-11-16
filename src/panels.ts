@@ -14,38 +14,74 @@ function el(tag: string, cls: string, text?: string): HTMLElement {
 }
 
 // ---------- tasks ----------
-let selectedTask: number | null = null;
-export const getSelectedTask = () => selectedTask;
+/** Same order and colours as db.rs (CATEGORIES / category_color); the chip cycles through them. */
+export const TASK_CATS: [name: string, color: string][] = [
+  ["Work", "#00A0FF"], ["Health", "#00FF80"], ["Personal", "#FF5050"], ["Study", "#FFB000"], ["Other", "#A070FF"],
+];
+const UNDO_MS = 1100; // a crossed-off task can be un-crossed until it goes
+let onDone: (id: number) => void = () => {};
+const pending = new Map<number, number>(); // task id → removal timer
 
-function taskRow(t: Task): HTMLElement {
+/** `check`: Tasks tab rows get the cross-off button; Home card rows are read-only. */
+function taskRow(t: Task, check: boolean): HTMLElement {
   const row = el("div", "task-row");
-  const bar = el("div", "task-bar");
-  bar.style.background = t.color;
+  row.style.setProperty("--cat", t.color);
   const det = el("div", "task-det");
-  det.append(el("div", "task-name", t.name), el("div", "task-cat", t.category));
-  row.append(bar, det, el("div", "task-time", t.time));
+  // narrow Home card: the time shares the category line so the name keeps the width
+  det.append(el("div", "task-name", t.name), el("div", "task-cat", !check && t.time ? `${t.category} · ${t.time}` : t.category));
+  if (check) {
+    const b = el("button", "task-check") as HTMLButtonElement;
+    b.type = "button";
+    const sync = () => {
+      const on = pending.has(t.id);
+      row.classList.toggle("done", on);
+      b.ariaPressed = String(on);
+      b.title = on ? "Undo" : "Done: cross it off";
+      b.setAttribute("aria-label", on ? `Undo: keep ${t.name}` : `Done: ${t.name}`);
+    };
+    b.onclick = () => {
+      if (pending.has(t.id)) {
+        clearTimeout(pending.get(t.id));
+        pending.delete(t.id);
+      } else {
+        pending.set(t.id, window.setTimeout(() => (pending.delete(t.id), onDone(t.id)), UNDO_MS));
+      }
+      sync();
+    };
+    b.innerHTML = icon("check", 12); // static SVG from our icon set
+    row.append(b);
+    sync();
+  } else {
+    row.append(el("div", "task-bar"));
+  }
+  row.append(det);
+  if (check && t.time) row.append(el("div", "task-time", t.time));
   return row;
+}
+
+/** `done(id)` removes a task once its cross-off can no longer be undone. */
+export function initTasks(done: (id: number) => void): void {
+  onDone = done;
+  const chip = $("task-cat");
+  const set = (i: number) => {
+    const [name, color] = TASK_CATS[i];
+    chip.dataset.cat = name;
+    chip.style.setProperty("--cat", color);
+    chip.querySelector("span")!.textContent = name;
+    chip.title = `Category: ${name} (click to change)`;
+    chip.setAttribute("aria-label", chip.title);
+  };
+  chip.onclick = () => set((TASK_CATS.findIndex(([n]) => n === chip.dataset.cat) + 1) % TASK_CATS.length);
+  set(0);
 }
 
 export function renderTasks(tasks: Task[]): void {
   $("task-count").textContent = `${tasks.length} task${tasks.length === 1 ? "" : "s"}`;
-  $("task-list").replaceChildren(...tasks.slice(0, 3).map(taskRow));
-  // Home card: the next two
-  $("card-task-list").replaceChildren(...(tasks.length ? tasks.slice(0, 2).map(taskRow) : [el("div", "muted", "No tasks")]));
-
-  if (!tasks.some((t) => t.id === selectedTask)) selectedTask = null;
-  const edit = $("edit-list");
-  edit.replaceChildren(
-    ...tasks.map((t) => {
-      const li = el("li", t.id === selectedTask ? "sel" : "", `${t.name} • ${t.time}`);
-      li.append(el("small", "", t.category.toUpperCase()));
-      li.onclick = () => {
-        selectedTask = selectedTask === t.id ? null : t.id;
-        renderTasks(tasks);
-      };
-      return li;
-    }),
+  $("task-list").replaceChildren(
+    ...(tasks.length ? tasks.map((t) => taskRow(t, true)) : [el("div", "task-empty muted", "Nothing next. Add a task above.")]),
   );
+  // Home card: the next two
+  $("card-task-list").replaceChildren(...(tasks.length ? tasks.slice(0, 2).map((t) => taskRow(t, false)) : [el("div", "muted", "No tasks")]));
 }
 
 // ---------- month progress (rebuilt on every show, so it never goes stale) ----------
@@ -54,8 +90,10 @@ export function renderMonth(now = new Date()): void {
   $("month-title").textContent = `${now.toLocaleDateString("en-US", { month: "long" })} Progress`;
   $("month-pct").textContent = `${Math.floor((now.getDate() / days) * 100)}%`;
   $("month-dots").replaceChildren(
-    ...Array.from({ length: days }, (_, i) => el("div", i < now.getDate() ? "dot on" : "dot")),
+    ...Array.from({ length: days }, (_, i) => el("div", i + 1 === now.getDate() ? "dot on today" : i < now.getDate() ? "dot on" : "dot")),
   );
+  const left = days - now.getDate();
+  $("month-left").textContent = left ? `${left} day${left === 1 ? "" : "s"} left · day ${now.getDate()} of ${days}` : `Last day of the month · day ${days} of ${days}`;
 }
 
 // ---------- launcher (Home strip + Launcher tab) ----------
@@ -66,19 +104,29 @@ const ACTION_ICONS: Record<string, string> = {
   shutdown: "power", restart: "restart", sleep: "sleep", explorer: "folder", settings: "cog",
   taskmgr: "taskmgr", chrome: "chrome", youtube: "youtube", cmd: "console",
 };
+// Tint of each built-in action's badge (Launcher tab) and glyph (Home strip).
+const ACTION_COLORS: Record<string, string> = {
+  shutdown: "#ff6b6b", restart: "#ffa94d", sleep: "#9775fa", explorer: "#ffd43b", settings: "#74c0fc",
+  taskmgr: "#69db7c", chrome: "#4dabf7", youtube: "#ff6b6b", cmd: "#ced4da",
+};
 const CONFIRM = new Set(["shutdown", "restart"]);
 let armTimer = 0;
+
+/** A steady colour per name for apps shown as a letter. */
+const hue = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
 function disarm(): void {
   clearTimeout(armTimer);
   document.querySelectorAll<HTMLElement>(".launcher .armed").forEach((b) => {
     b.classList.remove("armed", "launch", "remove");
     b.title = b.dataset.name!;
+    b.querySelector(".app-name")!.textContent = b.dataset.name!;
   });
 }
 
-/** Two-step confirm: the first call arms `b` for 3 s and returns false; a second call of the same kind returns true. */
-function confirmed(b: HTMLElement, kind: "launch" | "remove", hint: string): boolean {
+/** Two-step confirm: the first call arms `b` for 3 s and returns false; a second call of the same kind returns true.
+ *  `short` replaces the tile's label meanwhile (Launcher tab), `hint` is the tooltip. */
+function confirmed(b: HTMLElement, kind: "launch" | "remove", hint: string, short: string): boolean {
   if (b.classList.contains(kind)) {
     disarm();
     return true;
@@ -86,13 +134,15 @@ function confirmed(b: HTMLElement, kind: "launch" | "remove", hint: string): boo
   disarm();
   b.classList.add("armed", kind);
   b.title = hint;
+  b.querySelector(".app-name")!.textContent = short;
   armTimer = window.setTimeout(disarm, 3000);
   return false;
 }
 
 export function renderApps(apps: LauncherApp[], onLaunch: (a: LauncherApp) => void, onRemove: (a: LauncherApp) => void): void {
   clearTimeout(armTimer);
-  for (const id of ["launcher", "launcher-grid"]) $(id).replaceChildren(...apps.map((a) => appButton(a, onLaunch, onRemove)));
+  $("launcher").replaceChildren(...apps.map((a) => appButton(a, onLaunch, onRemove)));
+  $("launcher-grid").replaceChildren(...apps.map((a) => appButton(a, onLaunch, onRemove)), $("launcher-add")); // Add tile last
   fitDock();
 }
 
@@ -119,28 +169,34 @@ export function fitDock(): void {
 }
 
 function appButton(a: LauncherApp, onLaunch: (a: LauncherApp) => void, onRemove: (a: LauncherApp) => void): HTMLElement {
+  // .app-ic: the icon (the whole tile on the Home strip, a tinted badge in the Launcher tab); .app-name: tab only
   const b = el("button", "app");
+  const ic = el("span", "app-ic");
   b.title = b.dataset.name = a.name;
   b.setAttribute("aria-label", a.name);
   if (a.icon) {
     const img = document.createElement("img");
     img.src = a.icon;
     img.alt = "";
-    b.append(img);
+    ic.append(img);
+    b.classList.add("has-img");
   } else if (a.kind === "action" && ACTION_ICONS[a.target]) {
-    b.innerHTML = icon(ACTION_ICONS[a.target], 20);
+    ic.innerHTML = icon(ACTION_ICONS[a.target], 20); // static SVG markup from our icon set
+    b.style.setProperty("--app-c", ACTION_COLORS[a.target] ?? "var(--text)");
   } else {
-    b.textContent = [...a.name][0]?.toUpperCase() ?? "?";
+    ic.textContent = [...a.name][0]?.toUpperCase() ?? "?";
+    b.style.setProperty("--app-c", `hsl(${hue(a.name)} 70% 68%)`);
   }
+  b.append(ic, el("span", "app-name", a.name));
   b.onclick = () => {
-    if (a.kind === "action" && CONFIRM.has(a.target) && !confirmed(b, "launch", `Click again to ${a.name}`)) return;
+    if (a.kind === "action" && CONFIRM.has(a.target) && !confirmed(b, "launch", `Click again to ${a.name}`, "Click again")) return;
     disarm();
     onLaunch(a);
   };
   b.oncontextmenu = (e) => {
     e.preventDefault();
     e.stopPropagation(); // keep the island menu closed
-    if (confirmed(b, "remove", "Right-click again to remove")) onRemove(a);
+    if (confirmed(b, "remove", "Right-click again to remove", "Remove?")) onRemove(a);
   };
   return b;
 }

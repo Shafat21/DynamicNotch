@@ -1,7 +1,8 @@
 //! Call capture: the microphone and the computer's sound (WASAPI loopback on Windows, a monitor source on
 //! Linux), each streamed to its own 16 kHz mono 16-bit WAV file while the call goes on.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
@@ -10,7 +11,7 @@ use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -106,18 +107,55 @@ fn header(out: &mut impl Write, samples: u32) -> std::io::Result<()> {
     out.write_all(&data.to_le_bytes())
 }
 
-/// Any 16-bit PCM WAV → 16 kHz mono (a file cut short by a crash still reads: the data runs to the end).
-pub fn read_wav(path: &Path) -> Result<Vec<f32>, String> {
-    let mut bytes = Vec::new();
-    File::open(path).and_then(|mut f| f.read_to_end(&mut bytes)).map_err(|e| format!("{}: {e}", path.display()))?;
-    if bytes.len() < 44 || &bytes[..4] != b"RIFF" || u16::from_le_bytes([bytes[34], bytes[35]]) != 16 {
+/// A 16-bit PCM WAV as 16 kHz mono i16, kept as i16 (half the memory of f32; segments are converted when
+/// transcribed). Our own files (16 kHz mono) stream straight in; other rates/channels are resampled. A file cut
+/// short by a crash or a failed write still reads: the data runs to the end of the file, whatever the header says.
+pub fn read_track(path: &Path) -> Result<Vec<i16>, String> {
+    let err = |e: std::io::Error| format!("{}: {e}", path.display());
+    let mut f = std::io::BufReader::new(File::open(path).map_err(err)?);
+    let mut head = vec![0u8; 4096];
+    let n = read_full(&mut f, &mut head).map_err(err)?;
+    head.truncate(n);
+    if head.len() < 44 || &head[..4] != b"RIFF" || u16::from_le_bytes([head[34], head[35]]) != 16 {
         return Err(format!("{}: not a 16-bit WAV file", path.display()));
     }
-    let ch = u16::from_le_bytes([bytes[22], bytes[23]]);
-    let rate = u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
-    let data = bytes.windows(4).position(|w| w == b"data").map_or(44, |p| p + 8);
-    let pcm: Vec<f32> = bytes[data.min(bytes.len())..].as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b) as f32 / 32768.0).collect();
-    Ok(crate::dictation::audio::resample_to_16k(&pcm, rate, ch))
+    let ch = u16::from_le_bytes([head[22], head[23]]);
+    let rate = u32::from_le_bytes([head[24], head[25], head[26], head[27]]);
+    let data = head.windows(4).position(|w| w == b"data").map_or(44, |p| p + 8).min(head.len());
+    let mut pcm: Vec<i16> = Vec::with_capacity(f.get_ref().metadata().map_or(0, |m| m.len() as usize / 2));
+    pcm.extend(head[data..].as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b)));
+    // a sample split across the end of a read buffer
+    let mut carry: Option<u8> = (head[data..].len() % 2 == 1).then(|| head[head.len() - 1]);
+    let mut buf = vec![0u8; 1 << 16];
+    loop {
+        let n = f.read(&mut buf).map_err(err)?;
+        if n == 0 {
+            break;
+        }
+        let mut chunk = &buf[..n];
+        if let Some(lo) = carry.take() {
+            pcm.push(i16::from_le_bytes([lo, chunk[0]]));
+            chunk = &chunk[1..];
+        }
+        pcm.extend(chunk.as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b)));
+        carry = (chunk.len() % 2 == 1).then(|| chunk[chunk.len() - 1]);
+    }
+    if rate == RATE && ch == 1 {
+        return Ok(pcm);
+    }
+    let f: Vec<f32> = pcm.iter().map(|&v| v as f32 / 32768.0).collect();
+    Ok(crate::dictation::audio::resample_to_16k(&f, rate, ch).iter().map(|&v| (v.clamp(-1.0, 1.0) * 32767.0) as i16).collect())
+}
+
+fn read_full(f: &mut impl Read, buf: &mut [u8]) -> std::io::Result<usize> {
+    let mut n = 0;
+    while n < buf.len() {
+        match f.read(&mut buf[n..])? {
+            0 => break,
+            k => n += k,
+        }
+    }
+    Ok(n)
 }
 
 /// Free bytes on the disk holding `path`.
@@ -130,7 +168,13 @@ pub fn free_bytes(path: &Path) -> Option<u64> {
 pub struct Track {
     stop: Arc<AtomicBool>,
     level: Arc<AtomicU32>,
+    /// Why capture stopped early (write failed, device gone). What was written before stays on disk.
+    failed: Arc<Mutex<Option<String>>>,
     thread: Option<JoinHandle<Result<u64, String>>>,
+}
+
+fn fail(slot: &Mutex<Option<String>>, e: String) {
+    slot.lock().unwrap_or_else(|p| p.into_inner()).get_or_insert(e);
 }
 
 impl Track {
@@ -138,10 +182,16 @@ impl Track {
         let stop = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicU32::new(0));
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
-        let (s, l) = (stop.clone(), level.clone());
+        let failed = Arc::new(Mutex::new(None));
+        let (s, l, fl) = (stop.clone(), level.clone(), failed.clone());
         let thread = std::thread::spawn(move || {
             let (tx, rx) = mpsc::channel::<Vec<f32>>();
-            let opened = open(&source, tx, l).and_then(|(stream, rate)| Ok((stream, rate, WavWriter::create(&path).map_err(|e| e.to_string())?)));
+            let opened = open(&source, tx, l, fl.clone()).and_then(|(stream, rate)| {
+                if s.load(Ordering::Relaxed) {
+                    return Err("cancelled".to_string()); // opened too late: `start` gave up, write no file
+                }
+                Ok((stream, rate, WavWriter::create(&path).map_err(|e| e.to_string())?))
+            });
             let (stream, rate, mut wav) = match opened {
                 Ok(x) => x,
                 Err(e) => {
@@ -150,40 +200,47 @@ impl Track {
                 }
             };
             let _ = ready_tx.send(Ok(()));
-            let io = |e: std::io::Error| e.to_string();
+            let io = |e: std::io::Error| format!("couldn't write the recording: {e}");
             let mut down = Down::new(rate);
             let mut out = Vec::new();
             let (t0, mut last) = (Instant::now(), Instant::now());
-            while !s.load(Ordering::Relaxed) {
-                match rx.recv_timeout(Duration::from_millis(100)) {
-                    Ok(block) => {
-                        last = Instant::now();
-                        out.clear();
-                        down.push(&block, &mut out);
-                        wav.write(&out).map_err(io)?;
+            // a failed write ends this track but keeps (and closes) what was written; `failed` tells the controller
+            let written = || -> std::io::Result<()> {
+                while !s.load(Ordering::Relaxed) && fl.lock().unwrap_or_else(|p| p.into_inner()).is_none() {
+                    match rx.recv_timeout(Duration::from_millis(100)) {
+                        Ok(block) => {
+                            last = Instant::now();
+                            out.clear();
+                            down.push(&block, &mut out);
+                            wav.write(&out)?;
+                        }
+                        Err(RecvTimeoutError::Timeout) => {}
+                        Err(RecvTimeoutError::Disconnected) => break,
                     }
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Err(RecvTimeoutError::Disconnected) => break,
+                    // shortcut: loopback delivers nothing while the computer is silent, so silence is padded in to keep
+                    // both tracks on one clock; a drifting device clock isn't corrected (fine for "who spoke when")
+                    let due = (t0.elapsed().as_secs_f64() * RATE as f64) as u64;
+                    if last.elapsed() > Duration::from_millis(300) && wav.samples < due {
+                        wav.write(&vec![0.0; (due - wav.samples) as usize])?;
+                    }
                 }
-                // shortcut: loopback delivers nothing while the computer is silent, so silence is padded in to keep
-                // both tracks on one clock; a drifting device clock isn't corrected (fine for "who spoke when")
-                let due = (t0.elapsed().as_secs_f64() * RATE as f64) as u64;
-                if last.elapsed() > Duration::from_millis(300) && wav.samples < due {
-                    wav.write(&vec![0.0; (due - wav.samples) as usize]).map_err(io)?;
+                drop(stream);
+                while let Ok(block) = rx.try_recv() {
+                    out.clear();
+                    down.push(&block, &mut out);
+                    wav.write(&out)?;
                 }
-            }
-            drop(stream);
-            while let Ok(block) = rx.try_recv() {
-                out.clear();
-                down.push(&block, &mut out);
-                wav.write(&out).map_err(io)?;
+                Ok(())
+            };
+            if let Err(e) = written() {
+                fail(&fl, io(e));
             }
             let n = wav.samples;
             wav.finish().map_err(io)?;
             Ok(n)
         });
         match ready_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => Ok(Self { stop, level, thread: Some(thread) }),
+            Ok(Ok(())) => Ok(Self { stop, level, failed, thread: Some(thread) }),
             Ok(Err(e)) => Err(e),
             Err(_) => {
                 stop.store(true, Ordering::Relaxed);
@@ -195,6 +252,11 @@ impl Track {
     /// Peak of the latest buffer, 0..1.
     pub fn level(&self) -> f32 {
         f32::from_bits(self.level.load(Ordering::Relaxed))
+    }
+
+    /// Set when capture stopped by itself (a failed write, the device gone).
+    pub fn failed(&self) -> Option<String> {
+        self.failed.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// Closes the device and the file. Returns the samples written.
@@ -213,7 +275,7 @@ impl Drop for Track {
     }
 }
 
-fn open(source: &Source, tx: Sender<Vec<f32>>, level: Arc<AtomicU32>) -> Result<(cpal::Stream, u32), String> {
+fn open(source: &Source, tx: Sender<Vec<f32>>, level: Arc<AtomicU32>, failed: Arc<Mutex<Option<String>>>) -> Result<(cpal::Stream, u32), String> {
     let host = cpal::default_host();
     let (dev, cfg) = match source {
         Source::Mic(name) => {
@@ -230,17 +292,17 @@ fn open(source: &Source, tx: Sender<Vec<f32>>, level: Arc<AtomicU32>) -> Result<
     let (rate, ch, fmt) = (cfg.sample_rate(), cfg.channels(), cfg.sample_format());
     let config: cpal::StreamConfig = cfg.into();
     let stream = match fmt {
-        SampleFormat::F32 => build::<f32>(&dev, config, ch, tx, level),
-        SampleFormat::I16 => build::<i16>(&dev, config, ch, tx, level),
-        SampleFormat::I32 => build::<i32>(&dev, config, ch, tx, level),
-        SampleFormat::U16 => build::<u16>(&dev, config, ch, tx, level),
+        SampleFormat::F32 => build::<f32>(&dev, config, ch, tx, level, failed),
+        SampleFormat::I16 => build::<i16>(&dev, config, ch, tx, level, failed),
+        SampleFormat::I32 => build::<i32>(&dev, config, ch, tx, level, failed),
+        SampleFormat::U16 => build::<u16>(&dev, config, ch, tx, level, failed),
         f => return Err(format!("Unsupported audio format {f}")),
     }?;
     stream.play().map_err(|e| format!("Audio device unavailable: {e}"))?;
     Ok((stream, rate))
 }
 
-fn build<T>(dev: &cpal::Device, config: cpal::StreamConfig, ch: u16, tx: Sender<Vec<f32>>, level: Arc<AtomicU32>) -> Result<cpal::Stream, String>
+fn build<T>(dev: &cpal::Device, config: cpal::StreamConfig, ch: u16, tx: Sender<Vec<f32>>, level: Arc<AtomicU32>, failed: Arc<Mutex<Option<String>>>) -> Result<cpal::Stream, String>
 where
     T: SizedSample,
     f32: FromSample<T>,
@@ -253,7 +315,12 @@ where
             level.store(mono.iter().fold(0f32, |p, v| p.max(v.abs())).min(1.0).to_bits(), Ordering::Relaxed);
             let _ = tx.send(mono);
         },
-        |e| eprintln!("notetaker: audio error: {e}"),
+        move |e: cpal::Error| {
+            crate::dictation::audio::log_stream_error("notetaker", &e);
+            if crate::dictation::audio::stream_error_is_fatal(e.kind()) {
+                fail(&failed, format!("the audio device went away ({e})"));
+            }
+        },
         None,
     )
     .map_err(|e| format!("Audio device unavailable: {e}"))
@@ -286,9 +353,16 @@ mod tests {
         let mut w = WavWriter::create(&path).unwrap();
         w.write(&[0.0, 0.5, -0.5, 1.0]).unwrap();
         w.finish().unwrap();
-        let back = read_wav(&path).unwrap();
+        assert_eq!(read_track(&path).unwrap(), [0, 16383, -16383, 32767]);
+        // longer than the 4 KB header read (so a sample straddles buffers) and never finished (header says 0
+        // samples): everything written still reads back
+        let mut w = WavWriter::create(&path).unwrap();
+        let ramp: Vec<f32> = (0..50_000).map(|i| (i % 2000) as f32 / 2000.0 - 0.5).collect();
+        w.write(&ramp).unwrap();
+        drop(w);
+        let back = read_track(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
-        assert_eq!(back.len(), 4);
-        assert!((back[1] - 0.5).abs() < 1e-3 && (back[2] + 0.5).abs() < 1e-3);
+        assert_eq!(back.len(), 50_000);
+        assert!(back.iter().zip(&ramp).all(|(&a, &b)| (a as f32 / 32767.0 - b).abs() < 1e-3));
     }
 }

@@ -3,6 +3,7 @@ import "./settings.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { icon } from "./icons";
+import { initTooltips } from "../tooltip";
 import { acceptLook, store, type Look, type Settings } from "./store";
 import { h } from "./ui";
 import { renderGeneral } from "./pages/general";
@@ -42,6 +43,7 @@ function show(id: string): void {
 }
 
 async function boot(): Promise<void> {
+  initTooltips();
   const [look, settings] = await Promise.all([invoke<Look>("get_appearance"), invoke<Settings>("get_settings")]);
   acceptLook(look);
   store.settings = settings;

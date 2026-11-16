@@ -1,6 +1,7 @@
 // Settings → Dictation: the stats strip (words dictated, words/min, days in a row, top apps) and the
 // local history with search, copy and delete. All text via textContent.
-// Layout ideas from Coucou's dictation / insights pages (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+// Layout ideas from Coucou's dictation / insights pages (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+// (full text: THIRD_PARTY_NOTICES.md).
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { button, h, page, report, section } from "../ui";

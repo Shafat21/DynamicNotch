@@ -1,9 +1,11 @@
-//! Offline transcription: NVIDIA Parakeet (25 languages, detected by itself) through sherpa-onnx,
-//! linked statically. The recognizer is loaded on first use (about 2 s) and kept for the next dictation.
+//! Offline transcription through sherpa-onnx, linked statically: NVIDIA Parakeet (25 European languages)
+//! or Whisper large-v3-turbo (99 languages, Bangla included; language detected unless one is forced).
+//! The recognizer is loaded on first use (2–5 s) and kept for the next dictation; one model at a time.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
-use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig};
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig, OfflineWhisperModelConfig};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -15,32 +17,58 @@ const MAX_CHUNK_SECONDS: f64 = 28.0;
 const LEAD_SILENCE: usize = RATE / 2;
 const TAIL_SILENCE: usize = RATE * 3 / 10;
 
-static REC: Mutex<Option<(PathBuf, Arc<OfflineRecognizer>)>> = Mutex::new(None);
+/// (model folder, Whisper language, recognizer)
+#[allow(clippy::type_complexity)]
+static REC: Mutex<Option<(PathBuf, String, Arc<OfflineRecognizer>)>> = Mutex::new(None);
 
-fn recognizer(dir: &Path) -> Result<Arc<OfflineRecognizer>, String> {
+/// The Whisper language for a `language` setting: "" = detect ("auto" or anything that isn't a code).
+pub fn whisper_language(setting: &str) -> &str {
+    if setting.len() == 2 && setting.bytes().all(|b| b.is_ascii_lowercase()) {
+        setting
+    } else {
+        ""
+    }
+}
+
+fn recognizer(dir: &Path, language: &str) -> Result<Arc<OfflineRecognizer>, String> {
+    let model = super::models::of(dir);
+    let language = if model.is_whisper() { whisper_language(language) } else { "" }; // Parakeet always detects
     let mut slot = REC.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((_, r)) = slot.as_ref().filter(|(d, _)| d == dir) {
+    if let Some((_, _, r)) = slot.as_ref().filter(|(d, l, _)| d == dir && l == language) {
         return Ok(r.clone());
     }
     if !super::models::present(dir) {
         return Err("Download the offline model first — Settings → Features → Dictation".into());
     }
+    *slot = None; // free the previous model before loading another (each takes about 1 GB of memory)
     let p = |f: &str| Some(dir.join(f).to_string_lossy().into_owned());
     let mut config = OfflineRecognizerConfig::default();
-    config.model_config.transducer = OfflineTransducerModelConfig { encoder: p("encoder.int8.onnx"), decoder: p("decoder.int8.onnx"), joiner: p("joiner.int8.onnx") };
-    config.model_config.tokens = p("tokens.txt");
-    config.model_config.model_type = Some("nemo_transducer".into());
+    if model.is_whisper() {
+        config.model_config.whisper = OfflineWhisperModelConfig {
+            encoder: p("turbo-encoder.int8.onnx"),
+            decoder: p("turbo-decoder.int8.onnx"),
+            language: Some(language.into()),
+            task: Some("transcribe".into()), // never translate into English
+            tail_paddings: -1,
+            ..Default::default()
+        };
+        config.model_config.tokens = p("turbo-tokens.txt");
+    } else {
+        config.model_config.transducer = OfflineTransducerModelConfig { encoder: p("encoder.int8.onnx"), decoder: p("decoder.int8.onnx"), joiner: p("joiner.int8.onnx") };
+        config.model_config.tokens = p("tokens.txt");
+        config.model_config.model_type = Some("nemo_transducer".into());
+    }
     config.model_config.num_threads = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(1, 4) as i32);
     let r = Arc::new(OfflineRecognizer::create(&config).ok_or("Loading the offline model failed")?);
-    *slot = Some((dir.to_path_buf(), r.clone()));
+    *slot = Some((dir.to_path_buf(), language.to_string(), r.clone()));
     Ok(r)
 }
 
 /// Load the model in the background so the first dictation isn't slowed down.
-pub fn preload(dir: PathBuf) {
+pub fn preload(dir: PathBuf, language: String) {
     if super::models::present(&dir) {
         std::thread::spawn(move || {
-            let _ = recognizer(&dir);
+            let _ = recognizer(&dir, &language);
         });
     }
 }
@@ -82,9 +110,9 @@ pub fn split_for_model(samples: &[f32], max_seconds: f64) -> Vec<(usize, &[f32])
     out
 }
 
-/// 16 kHz mono → text. `dir` = the model folder.
-pub fn transcribe(dir: &Path, samples: &[f32]) -> Result<String, String> {
-    let rec = recognizer(dir)?;
+/// 16 kHz mono → text. `dir` = the model folder; `language` = the setting ("auto" or a code; Whisper only).
+pub fn transcribe(dir: &Path, language: &str, samples: &[f32]) -> Result<String, String> {
+    let rec = recognizer(dir, language)?;
     // dictation and the notetaker share one recognizer: one decode at a time
     static DECODE: Mutex<()> = Mutex::new(());
     let _one = DECODE.lock().unwrap_or_else(|e| e.into_inner());
@@ -139,20 +167,31 @@ mod tests {
 
     #[test]
     fn missing_model_is_a_clear_error() {
-        let e = transcribe(Path::new("Z:/no/model"), &[0.0; 16_000]).unwrap_err();
+        let e = transcribe(Path::new("Z:/no/model"), "auto", &[0.0; 16_000]).unwrap_err();
         assert!(e.contains("Download the offline model"), "{e}");
+    }
+
+    #[test]
+    fn whisper_detects_the_language_unless_one_is_forced() {
+        assert_eq!(whisper_language("auto"), "");
+        assert_eq!(whisper_language("bn"), "bn");
+        assert_eq!(whisper_language("EN"), "");
+        assert_eq!(whisper_language(""), "");
     }
 
     /// Real model + a known WAV (16-bit PCM mono, any rate). Generate one with Windows SAPI:
     /// `DN_TEST_WAV=… cargo test --lib transcribes_a_known_wav -- --ignored --nocapture`
     /// The model dir defaults to %APPDATA%\com.dynamicnotch.app\models\<ID> (override: DN_MODEL_DIR).
+    /// DN_MODEL=whisper for the multilingual model, DN_LANG to force a language, DN_EXPECT="a,b" words to find.
     #[test]
     #[ignore]
     fn transcribes_a_known_wav() {
         let wav = std::env::var("DN_TEST_WAV").expect("DN_TEST_WAV");
+        let id = if std::env::var("DN_MODEL").as_deref() == Ok("whisper") { super::super::models::WHISPER.id } else { super::super::models::ID };
         let dir = std::env::var("DN_MODEL_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-            PathBuf::from(std::env::var("APPDATA").unwrap()).join("com.dynamicnotch.app").join("models").join(super::super::models::ID)
+            PathBuf::from(std::env::var("APPDATA").unwrap()).join("com.dynamicnotch.app").join("models").join(id)
         });
+        let lang = std::env::var("DN_LANG").unwrap_or_else(|_| "auto".into());
         let bytes = std::fs::read(wav).unwrap();
         assert_eq!(&bytes[..4], b"RIFF");
         let ch = u16::from_le_bytes([bytes[22], bytes[23]]);
@@ -161,10 +200,15 @@ mod tests {
         let pcm: Vec<f32> = bytes[data..].as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b) as f32 / 32768.0).collect();
         let samples = super::super::audio::resample_to_16k(&pcm, rate, ch);
         let t0 = std::time::Instant::now();
-        let text = transcribe(&dir, &samples).unwrap();
-        println!("TRANSCRIPT ({:.1} s audio, {:?}): {text}", samples.len() as f64 / 16_000.0, t0.elapsed());
+        recognizer(&dir, &lang).unwrap();
+        let load = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let text = transcribe(&dir, &lang, &samples).unwrap();
+        let secs = samples.len() as f64 / 16_000.0;
+        println!("TRANSCRIPT ({secs:.1} s audio, load {load:?}, decode {:?}, RTF {:.2}): {text}", t1.elapsed(), t1.elapsed().as_secs_f64() / secs);
         let lower = text.to_lowercase();
-        for w in ["quick", "brown", "fox", "jumps", "lazy", "dog"] {
+        let expect = std::env::var("DN_EXPECT").unwrap_or_else(|_| "quick,brown,fox,jumps,lazy,dog".into());
+        for w in expect.split(',') {
             assert!(lower.contains(w), "missing {w:?} in {text:?}");
         }
     }

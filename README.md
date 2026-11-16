@@ -193,14 +193,16 @@ A confirm dialog shows the file and the events first; the file is backed up as `
 - **Text:** dictionary (always-spell words), replacements, snippets (say a trigger phrase, paste a text) and an optional
   clean-up (Natural / Polished) by your own Claude Code login (`claude -p`; only the text is sent). Off by default.
 - **History & stats:** Settings → Dictation (search, copy, delete; words dictated, words/min, days in a row, top apps), stored in the local database.
-- **Privacy:** audio stays in memory and is never written to disk. The API key is stored in Windows Credential Manager
+- **Privacy:** dictation and voice-note audio stays in memory and is never written to disk; temporary call audio (Notetaker)
+  is written to the app data folder and deleted after processing. The API key is stored in Windows Credential Manager
   (Secret Service on Linux), not in the database. With cloud dictation the audio is sent to the provider you chose.
 - **Build:** the offline engine links sherpa-onnx (with onnxruntime) statically; its prebuilt libraries are downloaded during the first `cargo build`.
 - **Voice notes:** the mic button in the Notes editor and on the Home notes input (click to start/stop, or hold) inserts the text at the caret.
 - **Notetaker:** "Record a call" (Notes tab or the island's top bar) records your microphone and the computer's sound (up to 3 h)
   into temporary files in the app data folder. On Stop it transcribes offline ("You" / "Them"), asks your Claude Code login for a
-  summary, key points and to-dos (transcript only if that fails) and saves a call note; the audio files are then deleted. Tell the
-  people in the call you're recording.
+  summary, key points and to-dos only if you tick "Summarise with Claude" (off by default; transcript only otherwise) and saves
+  a call note; the audio files are then deleted (leftovers from a crash are removed at the next start). Tell the people in the
+  call you're recording.
 
 ## Build from source
 
@@ -245,6 +247,11 @@ git push origin v0.2.0
 - Network calls: **Open-Meteo** (weather and city search), **LRCLIB** (lyrics; sends artist and title only),
   **your calendar link**, **your chosen dictation provider** (OpenAI or Groq, only when cloud dictation is used) and
   **Hugging Face** (only when you download the offline dictation model). The calendar link stays on your machine.
+- **Claude Code (Anthropic)**, through your own `claude` login, both opt-in: the dictation clean-up (Natural / Polished) sends
+  the dictated text, and "Summarise with Claude" in the Notes call panel sends call transcripts (both sides of the call).
+  Audio is never sent.
+- Call recordings: temporary WAV files in `%APPDATA%\com.dynamicnotch.app\notetaker\` (Linux:
+  `~/.local/share/com.dynamicnotch.app/notetaker/`), deleted after processing, on cancel, on exit and at the next start.
 - Connecting a coding agent edits only that agent's config file (backed up first), and only after you confirm.
 - No accounts, no telemetry.
 
@@ -264,6 +271,7 @@ Weather by [Open-Meteo](https://open-meteo.com), lyrics by [LRCLIB](https://lrcl
 Offline speech recognition by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) with NVIDIA's
 [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0).
 Portions of the dictation and notetaker code adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+Full license texts: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 

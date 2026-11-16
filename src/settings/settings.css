@@ -94,6 +94,7 @@ select, input[type="text"], input[type="url"], input[type="password"] {
   background: var(--field);
 }
 select { min-width: 220px; cursor: pointer; }
+
 input[aria-invalid="true"] { border-color: #ff6b6b; }
 .inline-form { display: flex; gap: 6px; }
 .inline-form input { width: 240px; }

@@ -2,8 +2,25 @@
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+
+/// Whether a cpal stream error ends the capture. Only a vanished device (or audio host) does; buffer
+/// under/overruns (WASAPI glitches under load) and other hiccups are logged and recording goes on.
+pub fn stream_error_is_fatal(kind: cpal::ErrorKind) -> bool {
+    matches!(kind, cpal::ErrorKind::DeviceNotAvailable | cpal::ErrorKind::HostUnavailable)
+}
+
+/// Log a stream error, at most once per 10 s (xruns can fire many times a second); fatal ones always.
+pub fn log_stream_error(who: &str, e: &cpal::Error) {
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+    let last = LAST.load(Ordering::Relaxed);
+    if stream_error_is_fatal(e.kind()) || now.saturating_sub(last) >= 10_000 {
+        LAST.store(now, Ordering::Relaxed);
+        eprintln!("{who}: audio error: {e}");
+    }
+}
 
 /// Downmix interleaved frames to mono, then box-average down (or pick nearest up) to 16 kHz.
 pub fn resample_to_16k(samples: &[f32], rate: u32, channels: u16) -> Vec<f32> {
@@ -95,7 +112,7 @@ where
             }
             level.store(peak.min(1.0).to_bits(), Ordering::Relaxed);
         },
-        |e| eprintln!("dictation: microphone error: {e}"),
+        |e| log_stream_error("dictation", &e), // non-fatal: the recording keeps what arrives
         None,
     )
     .map_err(|e| format!("Microphone unavailable: {e}"))
@@ -104,6 +121,15 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_vanished_device_ends_a_capture() {
+        use cpal::ErrorKind::*;
+        assert!(stream_error_is_fatal(DeviceNotAvailable) && stream_error_is_fatal(HostUnavailable));
+        for k in [Xrun, BackendError, DeviceBusy, DeviceChanged, RealtimeDenied, Other] {
+            assert!(!stream_error_is_fatal(k), "{k:?} should not stop recording");
+        }
+    }
 
     #[test]
     fn resample_44k_stereo_to_16k_mono() {

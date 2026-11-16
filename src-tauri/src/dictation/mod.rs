@@ -6,7 +6,8 @@
 //! level?, ms?, locked?, escCancels?, page?, text?, pasted?, inserted?, error?}; `dictation-history` after each saved one.
 //! Works while a fullscreen app hides the island too; the UI decides what to show.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 pub mod audio;
 pub mod cleanup;
@@ -236,24 +237,27 @@ pub fn load_words(app: &AppHandle) -> text::Words {
 
 pub const NEED_MODEL: &str = "Download the offline model — Settings → Features → Dictation";
 
-/// The engine that will run, checked on press (before recording) so it fails fast.
-/// "auto": offline once the model is installed, else cloud if a key is saved.
+/// The engine that will run ("cloud" or an offline model id), checked on press (before recording) so it
+/// fails fast. "auto": offline once a model is installed (the chosen one, else the other), else cloud if a
+/// key is saved.
 fn preflight(app: &AppHandle, s: &Settings) -> Result<&'static str, String> {
-    let local = models::installed(app);
-    match s.engine.as_str() {
-        "cloud" => cloud::get_key(&s.cloud_provider).map(|_| "cloud"),
-        _ if local => Ok("local"),
-        "auto" if cloud::has_key(&s.cloud_provider) => Ok("cloud"),
+    let local = models::chosen(app, &s.speech);
+    match (s.engine.as_str(), local) {
+        ("cloud", _) => cloud::get_key(&s.cloud_provider).map(|_| "cloud"),
+        (_, Some(m)) => Ok(m.id),
+        ("auto", None) if cloud::has_key(&s.cloud_provider) => Ok("cloud"),
         _ => Err(NEED_MODEL.into()),
     }
 }
 
 fn transcribe(app: &AppHandle, engine: &str, s: &Settings, samples: &[f32]) -> Result<String, String> {
     if engine == "cloud" {
+        // no language = whisper-1 / Groq Whisper detect it
         let lang = (s.language != "auto").then_some(s.language.as_str());
         cloud::transcribe(&s.cloud_provider, &s.cloud_model, &cloud::get_key(&s.cloud_provider)?, samples, lang)
     } else {
-        local::transcribe(&models::dir(app)?, samples)
+        let m = if engine == models::WHISPER.id { &models::WHISPER } else { &models::PARAKEET };
+        local::transcribe(&models::dir(app, m)?, &s.language, samples)
     }
 }
 
@@ -422,8 +426,9 @@ pub fn spawn(app: AppHandle) {
     if let Err(e) = bind(&app, &hk) {
         eprintln!("dictation: hotkey {}: {e}", hk.canonical());
     }
-    if let Ok(d) = models::dir(&app) {
-        local::preload(d);
+    let s = load(&app);
+    if let Some(d) = models::chosen(&app, &s.speech).and_then(|m| models::dir(&app, m).ok()) {
+        local::preload(d, s.language);
     }
     std::thread::spawn(move || run(app, rx));
 }

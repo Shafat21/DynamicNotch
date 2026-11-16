@@ -1,10 +1,12 @@
 //! What happens to the words before they are pasted (dictionary, replacements, snippets, tidy-up) and
 //! the numbers of the stats strip. Pure, nothing here touches the OS.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 
 /// A phrase written another way: "cloud code" → "Claude Code".
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,8 +74,10 @@ pub struct Prepared {
 }
 
 /// Snippet triggers set aside first, then the replacements, then the dictionary's spelling.
+/// Text is NFC-normalised first, so a trigger typed one way matches the same letters written another
+/// (e.g. Bangla য় as one code point or as য + nukta).
 pub fn prepare(text: &str, w: &Words) -> Prepared {
-    let mut out = text.to_string();
+    let mut out: String = text.nfc().collect();
     let mut marks = BTreeMap::new();
     for (i, s) in w.snippets.iter().enumerate() {
         if s.text.is_empty() {
@@ -109,25 +113,33 @@ pub fn keeps_marks(text: &str, snippets: &BTreeMap<String, String>) -> bool {
     snippets.keys().all(|m| text.contains(m.as_str()))
 }
 
-/// Sentence tidy-up: single spaces, no space before , . ! ? ; :, first letter capitalised.
+/// A letter of the Latin script (ASCII, Latin-1, Extended-A/B, Extended Additional).
+fn is_latin(c: char) -> bool {
+    c.is_ascii_alphabetic() || (c.is_alphabetic() && matches!(c as u32, 0xC0..=0x24F | 0x1E00..=0x1EFF))
+}
+
+/// Sentence tidy-up: single spaces, no space before , . ! ? ; : and the Bangla/Hindi full stop ।, and
+/// the first letter capitalised only when it is Latin (other scripts are left exactly as said).
 /// Run before `finish` so a snippet's own text (newlines, spacing) is left alone.
 pub fn tidy(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for word in text.split_whitespace() {
-        if !out.is_empty() && !word.starts_with([',', '.', '!', '?', ';', ':']) {
+        if !out.is_empty() && !word.starts_with([',', '.', '!', '?', ';', ':', '।']) {
             out.push(' ');
         }
         out.push_str(word);
     }
     let mut c = out.chars();
     match c.next() {
-        Some(f) => f.to_uppercase().chain(c).collect(),
-        None => out,
+        Some(f) if is_latin(f) => f.to_uppercase().chain(c).collect(),
+        _ => out,
     }
 }
 
+/// Letters, digits and combining marks: Bangla's virama (্) and nukta (়) are marks, not letters, and
+/// must not split "ক্ষমা" into pieces.
 fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric()
+    c.is_alphanumeric() || is_combining_mark(c)
 }
 
 /// The letters-and-digits runs of a phrase: "Rendez-vous !" → ["Rendez", "vous"].
@@ -137,12 +149,14 @@ pub fn tokens(s: &str) -> Vec<String> {
 
 /// Every occurrence of `phrase`, ignoring case and what separates its words ("rendez vous",
 /// "Rendez-vous"), but only as whole words: "art" never matches in "partir".
+/// Both sides are compared NFC-normalised.
 pub fn replacing(phrase: &str, replacement: &str, text: &str) -> String {
-    let wanted: Vec<String> = tokens(phrase).into_iter().map(|t| t.to_lowercase()).collect();
+    let phrase: String = phrase.nfc().collect();
+    let wanted: Vec<String> = tokens(&phrase).into_iter().map(|t| t.to_lowercase()).collect();
     if wanted.is_empty() {
         return text.to_string();
     }
-    let chars: Vec<char> = text.chars().collect();
+    let chars: Vec<char> = text.nfc().collect();
     // runs of word characters: (start, end, lowercase)
     let mut runs: Vec<(usize, usize, String)> = Vec::new();
     let mut i = 0;
@@ -178,7 +192,7 @@ pub fn replacing(phrase: &str, replacement: &str, text: &str) -> String {
 /// match every lone "c".
 pub fn is_plain_word(word: &str) -> bool {
     let letters = word.chars().filter(|c| c.is_alphanumeric()).count();
-    letters >= 2 && word.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '\'' | '’'))
+    letters >= 2 && word.chars().all(|c| is_word_char(c) || matches!(c, ' ' | '-' | '\'' | '’'))
 }
 
 /// Words as people count them: "c'est" is one word, a lone "?" none.
@@ -298,6 +312,43 @@ mod tests {
         assert_eq!(tidy("  hello   world , how are you ?  "), "Hello world, how are you?");
         assert_eq!(tidy("élan ⟦1⟧ ok"), "Élan ⟦1⟧ ok");
         assert_eq!(tidy(""), "");
+    }
+
+    #[test]
+    fn bangla_is_left_as_said() {
+        let s = "আমি বাংলায় কথা বলছি।";
+        assert_eq!(tidy(s), s);
+        assert_eq!(tidy("আমি  বাংলায়  কথা বলছি ।"), s); // only spacing changes
+        assert_eq!(apply(s, &words(&["Supabase"], &[("cloud code", "Claude Code")], &[])), s);
+        assert_eq!(word_count(s), 4);
+        // mixed: English inside Bangla, Bangla first so no capital; English first gets one
+        assert_eq!(tidy("আমি cloud code ব্যবহার করি"), "আমি cloud code ব্যবহার করি");
+        assert_eq!(tidy("meeting কাল সকালে"), "Meeting কাল সকালে");
+        assert_eq!(tidy("ünd also"), "Ünd also");
+    }
+
+    #[test]
+    fn bangla_replacements_match_whole_words_with_their_marks() {
+        let w = words(&[], &[("cloud code", "Claude Code"), ("ক্ষমা", "দুঃখিত")], &[]);
+        assert_eq!(apply("আমি cloud code ব্যবহার করি, ক্ষমা করবেন", &w), "আমি Claude Code ব্যবহার করি, দুঃখিত করবেন");
+        // a word that only shares letters (ক্ষমাশীল) is a different word: untouched
+        assert_eq!(replacing("ক্ষমা", "X", "ক্ষমাশীল"), "ক্ষমাশীল");
+        // virama doesn't split a word: "ক" alone never matches inside "ক্ষমা"
+        assert_eq!(replacing("ক", "X", "ক্ষমা"), "ক্ষমা");
+        assert_eq!(tokens("ক্ষমা করবেন"), vec!["ক্ষমা", "করবেন"]);
+        assert!(is_plain_word("ক্ষমা") && is_plain_word("বাংলায়"));
+        // the dictionary leaves Bangla spelling alone (no case to fix) and doesn't break it
+        assert_eq!(apply("বাংলায় লিখি", &words(&["বাংলায়"], &[], &[])), "বাংলায় লিখি");
+    }
+
+    #[test]
+    fn snippets_compare_normalised_unicode() {
+        // য় written as one code point (U+09DF) in the trigger, as য + nukta (U+09AF U+09BC) when heard
+        let w = words(&[], &[], &[("আমার ঠিকানা\u{09DF}", "ঢাকা ১২০৫")]);
+        let heard = "এটা আমার ঠিকানা\u{09AF}\u{09BC}";
+        assert_eq!(apply(heard, &w), "এটা ঢাকা ১২০৫");
+        let w = words(&[], &[], &[("café", "Café Bangla")]);
+        assert_eq!(apply("go to cafe\u{0301} now", &w), "go to Café Bangla now"); // e + combining acute
     }
 
     #[test]

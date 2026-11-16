@@ -133,7 +133,7 @@ export async function openNote(id: number): Promise<void> {
 // ---------- voice notes ----------
 type Field = HTMLTextAreaElement | HTMLInputElement;
 const HOLD_MS = 300; // held longer: releasing finishes; a click keeps listening until the next click
-let mic: { btn: HTMLElement; field: Field; sel: [number, number] } | null = null;
+let mic: { btn: HTMLElement; field: Field; sel: [number, number]; note: number | null } | null = null;
 let micState: "idle" | "recording" | "transcribing" = "idle";
 let downAt = 0;
 let fresh = false; // this press started the recording
@@ -157,15 +157,25 @@ function insert(f: Field, text: string, saved: [number, number]): void {
   f.dispatchEvent(new Event("input", { bubbles: true })); // the editor's autosave
 }
 
+async function appendTo(id: number, text: string): Promise<void> {
+  try {
+    const n = (await invoke<Note[]>("list_notes", { query: "" })).find((x) => x.id === id);
+    if (n) await invoke("update_note", { id, body: `${n.body}\n${text}` });
+    await refresh();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 function wireMic(btn: HTMLElement, field: Field): void {
   btn.onmousedown = (e) => e.preventDefault(); // keep the caret in the field
   btn.onpointerdown = (e) => {
     if (e.button !== 0 || micState !== "idle") return;
-    mic = { btn, field, sel: [field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length] };
+    mic = { btn, field, sel: [field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length], note: selected };
     downAt = Date.now();
     fresh = true;
     setMic("recording", "Listening… click to stop");
-    invoke("voice_note_start").catch(console.error);
+    invoke("voice_note_start").catch((err) => onDictation({ state: "error", error: String(err), page: true }));
   };
   btn.onpointerup = () => {
     if (mic?.btn !== btn) return;
@@ -180,7 +190,11 @@ function onDictation(e: DictEvent): void {
   if (!mic || (!e.page && e.state !== "idle")) return;
   if (e.state === "recording") return setMic("recording", "Listening… click to stop");
   if (e.state === "transcribing") return setMic("transcribing", "Transcribing…");
-  if (e.state === "done" && e.text) insert(mic.field, e.text, mic.sel);
+  if (e.state === "done" && e.text) {
+    // the editor moved on to another note meanwhile: the words go to the end of the note they were said for
+    if (mic.field === body() && mic.note !== null && mic.note !== selected) void appendTo(mic.note, e.text);
+    else insert(mic.field, e.text, mic.sel);
+  }
   const err = e.state === "error" ? e.error : undefined;
   setMic("idle");
   if (err) {

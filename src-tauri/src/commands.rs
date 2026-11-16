@@ -102,7 +102,8 @@ pub fn list_displays(app: AppHandle) -> Res<Vec<Value>> {
     Ok(infos
         .iter()
         .enumerate()
-        .map(|(i, m)| json!({ "name": m.name, "label": format!("{}: {} ({}×{})", i + 1, m.name, m.width, m.height) }))
+        // `name` (\\.\DISPLAY1) is the stored id; people see "Display 1" + resolution
+        .map(|(i, m)| json!({ "name": m.name, "label": format!("Display {}", i + 1), "width": m.width, "height": m.height, "primary": m.primary }))
         .collect())
 }
 

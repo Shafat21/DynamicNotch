@@ -19,9 +19,10 @@ import { initBluetooth, showBluetooth } from "./bluetooth";
 import { initSound, showSound } from "./sound";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
+import { hideTip, initTooltips } from "./tooltip";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
-import { fitDock, getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
+import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 import { renderHome } from "./ui/home";
 import { closeMore, fitTabs, initTabs, renderTabs, setActiveTab, visibleTabs } from "./ui/tabs";
 import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
@@ -48,7 +49,6 @@ const ui = {
   pinned: false, // pin button: stay open while the cursor is away
   hidden: false, // a fullscreen app is in front: island slid away, click-through
   charging: false,
-  editingTasks: false,
   editingLocation: false,
   editingCalendar: false,
   calendar: null as CalPayload | null,
@@ -262,8 +262,6 @@ function renderView(): void {
   $("tabbar").setAttribute("aria-disabled", String(prompt)); // visible but inert until the prompt closes
   document.querySelectorAll<HTMLElement>(".page").forEach((p) => (p.hidden = p.id !== `tab-${t}`));
   setActiveTab(t);
-  $("task-view").hidden = ui.editingTasks;
-  $("task-edit").hidden = !ui.editingTasks;
   $("location-form").hidden = !ui.editingLocation;
   $("cal-form").hidden = !ui.editingCalendar;
   renderCalendar();
@@ -283,7 +281,7 @@ function renderView(): void {
 export function openTab(id: string): void {
   if (ui.state === "prompt") return; // never leave a pending prompt for a tab
   ui.tab = id;
-  ui.editingTasks = ui.editingLocation = ui.editingCalendar = false;
+  ui.editingLocation = ui.editingCalendar = false;
   if (ui.state !== "hover") return;
   updateFx();
   renderView();
@@ -295,6 +293,7 @@ function onPerf(p: Perf): void {
   const set = (val: string, bar: string, v: number) => {
     $(val).textContent = `${Math.round(v)}%`;
     $(bar).style.width = `${Math.min(100, v)}%`;
+    $(bar).closest<HTMLElement>(".stat, #card-system")!.dataset.level = level(v, false); // amber from 80 %, red from 95 %
   };
   for (const [k, v] of [["cpu", p.cpu], ["ram", p.ram], ["disk", p.disk]] as const) set(`${k}-val`, `${k}-bar`, v);
   set("card-cpu", "card-cpu-bar", p.cpu);
@@ -460,6 +459,7 @@ let backendHover = false; // last `hover` event: the pointer is really over the 
 
 function onHover(inside: boolean): void {
   backendHover = inside;
+  if (!inside) hideTip(); // click-through from here on: the webview gets no pointerout
   if (ui.hidden) return;
   ui.hovering = inside;
   if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder" || (ui.state === "dictation" && !dictatingPage())) return;
@@ -678,31 +678,29 @@ function wireInput(): void {
   initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });
 
   // tasks
-  const toggleEditor = () => {
-    ui.editingTasks = !ui.editingTasks;
-    renderView();
-  };
-  $("btn-edit-tasks").onclick = toggleEditor;
-  $("task-done").onclick = toggleEditor;
+  // a crossed-off task goes once its undo window ends (panels.ts)
+  initTasks(async (id) => {
+    try {
+      ui.tasks = await invoke<Task[]>("delete_task", { id });
+      renderTasks(ui.tasks);
+    } catch (err) {
+      showEvent("Tasks", String(err), 3500);
+    }
+  });
   $("task-form").onsubmit = async (e) => {
     e.preventDefault();
     const name = $<HTMLInputElement>("task-name");
     const time = $<HTMLInputElement>("task-time");
     if (!name.value.trim()) return name.focus();
     try {
-      ui.tasks = await invoke<Task[]>("add_task", { name: name.value, time: time.value, category: $<HTMLSelectElement>("task-cat").value });
+      ui.tasks = await invoke<Task[]>("add_task", { name: name.value, time: time.value, category: $("task-cat").dataset.cat ?? "Other" });
       name.value = time.value = "";
       renderTasks(ui.tasks);
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
   };
-  $("task-delete").onclick = async () => {
-    const id = getSelectedTask();
-    if (id === null) return;
-    ui.tasks = await invoke<Task[]>("delete_task", { id });
-    renderTasks(ui.tasks);
-  };
+
 
   // calendar
   $("btn-cal-link").onclick = (e) => {
@@ -759,6 +757,7 @@ function wireInput(): void {
 // ---------- boot ----------
 async function boot(): Promise<void> {
   hydrateIcons();
+  initTooltips();
   // Pals follow the shared mood (assistant.ts feeds it from coding agent sessions)
   $("status-pal").append(createPal(22).el);
   $("status-pop").append(popPal.el);

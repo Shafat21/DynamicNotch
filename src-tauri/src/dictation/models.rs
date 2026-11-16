@@ -1,9 +1,12 @@
-//! The offline speech model: NVIDIA Parakeet TDT 0.6B v3 (int8, sherpa-onnx export), about 670 MB.
+//! The offline speech models (sherpa-onnx exports):
+//! - NVIDIA Parakeet TDT 0.6B v3 int8, about 670 MB: English + 24 European languages, fastest.
+//! - OpenAI Whisper large-v3-turbo int8, about 1.04 GB: 99 languages (Bangla, Hindi, …), detected by itself.
 //! Nothing is downloaded until the user clicks Download; the files come from Hugging Face at a pinned
 //! revision and are checked against their size and SHA-256 before they are renamed into place in
-//! `<app data>/models/parakeet-tdt-0.6b-v3-int8`. From then on everything runs offline.
+//! `<app data>/models/<id>`. From then on everything runs offline.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
@@ -19,8 +22,46 @@ pub struct ModelFile {
     pub sha256: &'static str,
 }
 
-/// The id is also the folder name; `model-progress` events carry it as `name`.
-pub const ID: &str = "parakeet-tdt-0.6b-v3-int8";
+/// One downloadable model. The id is also the folder name; `model-progress` events carry it as `name`.
+pub struct Model {
+    pub id: &'static str,
+    pub files: &'static [ModelFile],
+}
+
+pub const PARAKEET: Model = Model { id: "parakeet-tdt-0.6b-v3-int8", files: &FILES };
+pub const WHISPER: Model = Model { id: "whisper-large-v3-turbo-int8", files: &WHISPER_FILES };
+pub const ID: &str = PARAKEET.id;
+
+impl Model {
+    pub fn is_whisper(&self) -> bool {
+        self.id == WHISPER.id
+    }
+}
+
+// csukuangfj/sherpa-onnx-whisper-turbo at revision 2ca6ff69… (sizes and LFS SHA-256 from the HF API;
+// the tokens file is not in LFS, its hash was computed from the download).
+#[cfg(test)]
+const WHISPER_BASE: &str = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/";
+pub const WHISPER_FILES: [ModelFile; 3] = [
+    ModelFile {
+        name: "turbo-encoder.int8.onnx",
+        url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-encoder.int8.onnx",
+        size: 674_716_297,
+        sha256: "b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b",
+    },
+    ModelFile {
+        name: "turbo-decoder.int8.onnx",
+        url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-decoder.int8.onnx",
+        size: 361_080_764,
+        sha256: "20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547",
+    },
+    ModelFile {
+        name: "turbo-tokens.txt",
+        url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-tokens.txt",
+        size: 816_730,
+        sha256: "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+    },
+];
 
 // URLs, sizes and hashes as Coucou pins them (speech/mod.rs, revision 2bda32ec…).
 pub const FILES: [ModelFile; 4] = [
@@ -50,21 +91,42 @@ pub const FILES: [ModelFile; 4] = [
     },
 ];
 
-pub fn total_size() -> u64 {
-    FILES.iter().map(|f| f.size).sum()
+pub fn total_size(m: &Model) -> u64 {
+    m.files.iter().map(|f| f.size).sum()
 }
 
-pub fn dir(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("models").join(ID))
+pub fn dir(app: &AppHandle, m: &Model) -> Result<PathBuf, String> {
+    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("models").join(m.id))
+}
+
+/// The model a folder holds, by its name (`dir` puts each model in `models/<id>`).
+pub fn of(dir: &Path) -> &'static Model {
+    if dir.ends_with(WHISPER.id) {
+        &WHISPER
+    } else {
+        &PARAKEET
+    }
 }
 
 /// Every file is there with its size (the hash was checked when it came in).
 pub fn present(dir: &Path) -> bool {
-    FILES.iter().all(|f| std::fs::metadata(dir.join(f.name)).is_ok_and(|m| m.len() == f.size))
+    of(dir).files.iter().all(|f| std::fs::metadata(dir.join(f.name)).is_ok_and(|m| m.len() == f.size))
 }
 
-pub fn installed(app: &AppHandle) -> bool {
-    dir(app).is_ok_and(|d| present(&d))
+pub fn installed(app: &AppHandle, m: &Model) -> bool {
+    dir(app, m).is_ok_and(|d| present(&d))
+}
+
+/// The offline model to use: the preferred one ("multilingual" = Whisper, "european" = Parakeet) if
+/// installed, else the other one if that is installed.
+pub fn pick(pref: &str, whisper: bool, parakeet: bool) -> Option<&'static Model> {
+    let (first, second) = if pref == "european" { ((parakeet, &PARAKEET), (whisper, &WHISPER)) } else { ((whisper, &WHISPER), (parakeet, &PARAKEET)) };
+    [first, second].into_iter().find(|(ok, _)| *ok).map(|(_, m)| m)
+}
+
+/// `pick` with what is installed for this app.
+pub fn chosen(app: &AppHandle, pref: &str) -> Option<&'static Model> {
+    pick(pref, installed(app, &WHISPER), installed(app, &PARAKEET))
 }
 
 /// Stream `r` into `w`, hashing on the way; Err unless exactly `total` bytes with the expected SHA-256 arrived.
@@ -139,9 +201,9 @@ pub fn download_to(dir: &Path, files: &[ModelFile], mut progress: impl FnMut(u64
     Ok(())
 }
 
-pub fn download(app: &AppHandle, progress: impl FnMut(u64, u64)) -> Result<PathBuf, String> {
-    let d = dir(app)?;
-    download_to(&d, &FILES, progress)?;
+pub fn download(app: &AppHandle, m: &Model, progress: impl FnMut(u64, u64)) -> Result<PathBuf, String> {
+    let d = dir(app, m)?;
+    download_to(&d, m.files, progress)?;
     Ok(d)
 }
 
@@ -153,13 +215,29 @@ mod tests {
 
     #[test]
     fn model_files_are_pinned_and_add_up() {
-        assert_eq!(total_size(), 652_184_281 + 11_845_275 + 6_355_277 + 93_939);
+        assert_eq!(total_size(&PARAKEET), 652_184_281 + 11_845_275 + 6_355_277 + 93_939);
+        assert_eq!(total_size(&WHISPER), 674_716_297 + 361_080_764 + 816_730);
         for f in &FILES {
             assert_eq!(f.url, format!("{BASE}{}", f.name));
             assert_eq!(f.sha256.len(), 64);
             assert!(f.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
         }
+        for f in &WHISPER_FILES {
+            assert_eq!(f.url, format!("{WHISPER_BASE}{}", f.name));
+            assert!(f.sha256.len() == 64 && !f.url.contains(".en"), "multilingual, not English-only");
+        }
         assert!(!present(Path::new("Z:/definitely/not/here")));
+        assert!(of(Path::new("Z:/m/whisper-large-v3-turbo-int8")).is_whisper() && !of(Path::new("Z:/m/parakeet-tdt-0.6b-v3-int8")).is_whisper());
+    }
+
+    #[test]
+    fn the_preferred_model_is_used_if_installed_else_the_other() {
+        let id = |m: Option<&Model>| m.map(|m| m.id);
+        assert_eq!(id(pick("multilingual", true, true)), Some(WHISPER.id));
+        assert_eq!(id(pick("european", true, true)), Some(PARAKEET.id));
+        assert_eq!(id(pick("multilingual", false, true)), Some(PARAKEET.id)); // only Parakeet: keep it
+        assert_eq!(id(pick("european", true, false)), Some(WHISPER.id));
+        assert_eq!(id(pick("multilingual", false, false)), None);
     }
 
     #[test]

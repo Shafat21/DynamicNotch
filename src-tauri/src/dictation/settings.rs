@@ -83,6 +83,9 @@ pub fn parse_hotkey(s: &str) -> Result<Hotkey, String> {
 pub const ENGINES: [&str; 3] = ["auto", "local", "cloud"];
 pub const PROVIDERS: [&str; 2] = ["openai", "groq"];
 pub const OUTPUTS: [&str; 2] = ["paste", "copy"];
+/// Offline model: "multilingual" = Whisper (any language, Bangla too), "european" = Parakeet (faster).
+/// The other one is used when the chosen one isn't downloaded.
+pub const SPEECH: [&str; 2] = ["multilingual", "european"];
 
 pub fn default_cloud_model(provider: &str) -> &'static str {
     if provider == "groq" {
@@ -105,6 +108,7 @@ pub struct Settings {
     pub output: String,
     /// Claude clean-up: "verbatim" (off, as said), "natural" or "polished".
     pub cleanup: String,
+    pub speech: String,
 }
 
 impl Default for Settings {
@@ -119,12 +123,13 @@ impl Default for Settings {
             cloud_model: default_cloud_model("openai").into(),
             output: "paste".into(),
             cleanup: "verbatim".into(),
+            speech: "multilingual".into(),
         }
     }
 }
 
 /// (patch / JSON key, DB key)
-const KEYS: [(&str, &str); 8] = [
+const KEYS: [(&str, &str); 9] = [
     ("engine", "dictation_engine"),
     ("language", "dictation_language"),
     ("hotkey", "dictation_hotkey"),
@@ -133,6 +138,7 @@ const KEYS: [(&str, &str); 8] = [
     ("cloudModel", "dictation_cloud_model"),
     ("output", "dictation_output"),
     ("cleanup", "dictation_cleanup"),
+    ("speech", "dictation_speech"),
 ];
 
 impl Settings {
@@ -145,6 +151,7 @@ impl Settings {
             "cloudProvider" => &mut self.cloud_provider,
             "cloudModel" => &mut self.cloud_model,
             "output" => &mut self.output,
+            "speech" => &mut self.speech,
             _ => &mut self.cleanup,
         }
     }
@@ -202,6 +209,7 @@ pub fn apply_patch(cur: &Settings, patch: &Value, mics: impl FnOnce() -> Vec<Str
     }
     one_of(&s.output, &OUTPUTS, "output")?;
     one_of(&s.cleanup, &super::cleanup::STYLES, "clean-up style")?;
+    one_of(&s.speech, &SPEECH, "offline model")?;
     if obj.contains_key("mic") && !s.mic.is_empty() && !mics().contains(&s.mic) {
         return Err(format!("Microphone \"{}\" not found", s.mic));
     }
@@ -237,7 +245,9 @@ mod tests {
         assert_eq!(apply_patch(&cur, &json!({}), none).unwrap(), cur);
         let s = apply_patch(&cur, &json!({"engine": "cloud", "cleanup": "polished", "language": "de", "hotkey": "ctrl+alt"}), none).unwrap();
         assert_eq!((s.engine.as_str(), s.cleanup.as_str(), s.language.as_str(), s.hotkey.as_str()), ("cloud", "polished", "de", "Ctrl+Alt"));
-        assert_eq!((cur.engine.as_str(), cur.cleanup.as_str()), ("auto", "verbatim"));
+        assert_eq!((cur.engine.as_str(), cur.cleanup.as_str(), cur.speech.as_str()), ("auto", "verbatim", "multilingual"));
+        let s = apply_patch(&cur, &json!({"speech": "european", "language": "bn"}), none).unwrap();
+        assert_eq!((s.speech.as_str(), s.language.as_str()), ("european", "bn"));
         for bad in [
             json!({"engine": "gpu"}),
             json!({"model": "base"}),
@@ -249,6 +259,7 @@ mod tests {
             json!({"cloudModel": ""}),
             json!({"cloudModel": "x".repeat(65)}),
             json!({"output": "type"}),
+            json!({"speech": "klingon"}),
             json!({"engine": 1}),
             json!({"apiKey": "sk-..."}),
             json!("cloud"),

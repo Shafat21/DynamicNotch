@@ -223,10 +223,10 @@
               <section class="page" id="tab-launcher" hidden>
                 <div class="panel-head">
                   <span class="panel-title">Launcher</span>
-                  <span class="muted">Right-click an app twice to remove it</span>
-                  <button class="action-btn" data-add-app data-icon="plus" data-size="16" title="Add app"></button>
+                  <span class="muted small">Right-click twice to remove</span>
                 </div>
-                <div class="launcher launcher-grid" id="launcher-grid"></div>
+                <!-- #launcher-add stays last: renderApps re-appends it after the apps -->
+                <div class="launcher launcher-grid" id="launcher-grid"><button class="app app-add" id="launcher-add" data-add-app title="Add an app"><span class="app-ic" data-icon="plus" data-size="18"></span><span class="app-name">Add app</span></button></div>
               </section>
 
               <!-- Weather -->
@@ -259,36 +259,25 @@
                   <div class="stat"><div class="stat-label"><i data-icon="cpu" data-size="14"></i>CPU</div><div class="stat-val" id="cpu-val">0%</div><div class="bar"><div id="cpu-bar"></div></div></div>
                   <div class="stat"><div class="stat-label"><i data-icon="memory" data-size="14"></i>RAM</div><div class="stat-val" id="ram-val">0%</div><div class="bar"><div id="ram-bar"></div></div></div>
                   <div class="stat"><div class="stat-label"><i data-icon="disk" data-size="14"></i>STORAGE</div><div class="stat-val" id="disk-val">0%</div><div class="bar"><div id="disk-bar"></div></div></div>
-                  <div class="stat"><div class="stat-label"><i data-icon="web" data-size="14"></i>NETWORK</div><div class="net" id="net-down">↓ 0 KB/s</div><div class="net" id="net-up">↑ 0 KB/s</div></div>
+                  <div class="stat"><div class="stat-label"><i data-icon="web" data-size="14"></i>NETWORK</div><div class="net down" id="net-down">↓ 0 KB/s</div><div class="net up" id="net-up">↑ 0 KB/s</div></div>
                 </div>
               </section>
 
               <!-- Tasks: view mode + edit mode -->
               <section class="page" id="tab-tasks" hidden>
-                <div id="task-view">
-                  <div class="panel-head">
-                    <button class="action-btn" id="btn-edit-tasks" data-icon="pencil" data-size="16" title="Manage tasks"></button>
-                    <span class="panel-title">Next Up</span>
-                    <span class="muted" id="task-count">0 tasks</span>
-                    <button class="link-btn" data-goto="month">Month</button>
-                  </div>
-                  <div id="task-list"></div>
+                <div class="panel-head">
+                  <span class="panel-title">Next Up</span>
+                  <span class="muted small" id="task-count">0 tasks</span>
+                  <button class="link-btn" data-goto="month">Month</button>
                 </div>
-                <div id="task-edit" hidden>
-                  <ul class="edit-list" id="edit-list"></ul>
-                  <div>
-                    <form id="task-form" class="task-form">
-                      <input id="task-name" placeholder="Task Name" maxlength="100" autocomplete="off" />
-                      <input id="task-time" placeholder="Time (e.g. 3:00 PM)" maxlength="30" autocomplete="off" />
-                      <select id="task-cat">
-                        <option>Work</option><option>Health</option><option>Personal</option><option>Study</option><option>Other</option>
-                      </select>
-                      <button type="submit" class="btn">Add</button>
-                      <button type="button" class="btn" id="task-delete">Delete Selected</button>
-                    </form>
-                    <button class="btn primary wide" id="task-done">Done</button>
-                  </div>
-                </div>
+                <!-- quick add: category chip cycles on click (panels.ts), Enter adds -->
+                <form id="task-form" class="task-add">
+                  <button type="button" class="task-cat-btn" id="task-cat"><i></i><span></span></button>
+                  <input id="task-name" placeholder="Add a task…" maxlength="100" autocomplete="off" aria-label="Task name" />
+                  <input id="task-time" placeholder="Time" maxlength="30" autocomplete="off" aria-label="Time, e.g. 3:00 PM" title="Time, e.g. 3:00 PM" />
+                  <button type="submit" class="task-add-btn" title="Add task" data-icon="plus" data-size="16"></button>
+                </form>
+                <div id="task-list" class="task-list"></div>
               </section>
 
               <!-- Notes: list + editor (notes.ts) -->
@@ -387,7 +376,7 @@
                       <input type="range" class="slider" id="snd-tab-vol" min="0" max="100" step="1" aria-label="Volume" />
                       <span class="snd-val" id="snd-tab-vol-val">--</span>
                     </div>
-                    <select id="snd-tab-device" aria-label="Output device"></select>
+                    <div id="snd-tab-device"></div>
                     <div class="snd-err" id="snd-err" hidden>
                       <span class="muted small">Couldn't switch the output here.</span>
                       <button class="link-btn" data-action="sound-settings">Open sound settings</button>
@@ -419,6 +408,7 @@
                   <span class="month-pct" id="month-pct">0%</span>
                   <button class="action-btn" data-action="datetime" data-icon="open" data-size="16" title="Date &amp; time settings"></button>
                 </div>
+                <div class="muted small" id="month-left"></div>
                 <div class="dots" id="month-dots"></div>
               </section>
             </div>

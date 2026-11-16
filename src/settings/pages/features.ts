@@ -153,7 +153,7 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
       block("Dictionary", "Words always spelled exactly like this.", dict),
       block("Replacements", "What was heard → what gets written.", pairs(["from", "to"], ["Heard", "Written"], words.replacements, false, (v) => saveWords({ replacements: v }))),
       block("Snippets", "Say the trigger phrase to paste the whole text.", pairs(["trigger", "text"], ["Trigger phrase", "Text to paste"], words.snippets, true, (v) => saveWords({ snippets: v }))),
-      h("p", { className: "row-desc" }, "Audio stays in memory and is never saved. History and stats stay on this PC (Settings → Dictation)."),
+      h("p", { className: "row-desc" }, "Dictation audio stays in memory and is never saved (call recordings from the Notetaker are temporary files, deleted after processing). History and stats stay on this PC (Settings → Dictation)."),
     );
   };
 

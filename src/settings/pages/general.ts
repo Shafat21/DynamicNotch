@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { patchAppearance, setGeneral, store } from "../store";
-import { page, report, row, section, segmented, select, toggle } from "../ui";
+import { page, report, row, section, segmented, select, toggle, type Choice } from "../ui";
 
 export const OPEN_ON: [string, string][] = [["home", "Home"], ["last", "Last used tab"]];
 
@@ -12,11 +12,12 @@ export function renderGeneral(root: HTMLElement): void {
   };
   const set = (key: string, value: string | boolean) => setGeneral(key, value).catch(redraw);
 
-  const display = select("Display", [["primary", "Primary display"]], s.display, (v) => set("display", v));
-  invoke<{ name: string; label: string }[]>("list_displays")
-    .then((list) => {
-      for (const m of list) display.add(new Option(m.label, m.name, false, m.name === s.display));
-    })
+  const primary: Choice = ["primary", "Primary display", "whichever is main"];
+  const display = select("Display", [primary], s.display, (v) => set("display", v));
+  invoke<{ name: string; label: string; width: number; height: number; primary: boolean }[]>("list_displays")
+    .then((list) =>
+      display.setOptions([primary, ...list.map((m): Choice => [m.name, m.label, `${m.width} × ${m.height}`, m.primary ? "Primary" : undefined])], s.display),
+    )
     .catch((e) => report(`Couldn't list displays: ${e}`));
 
   const p = page("General");

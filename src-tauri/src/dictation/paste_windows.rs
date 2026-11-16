@@ -5,7 +5,8 @@
 //! Before Ctrl+V we wait (up to 1 s) for the dictation keys to come up, so the paste is a plain Ctrl+V
 //! and not Ctrl+Win+V; keys still held after that get key-ups.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 use std::time::{Duration, Instant};
 use windows::{

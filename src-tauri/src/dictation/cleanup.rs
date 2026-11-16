@@ -3,7 +3,8 @@
 //! the chosen style. Off by default. Only the text (never the audio) goes to Claude Code; any problem
 //! (not installed, not logged in, slow, odd reply) and the words are pasted as they were heard.
 //!
-//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License
+//! (full text: THIRD_PARTY_NOTICES.md).
 
 use super::text;
 use serde_json::Value;

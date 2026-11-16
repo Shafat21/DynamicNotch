@@ -70,6 +70,10 @@ pub fn emit_settings(app: &AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // first, so a second launch exits before setup runs
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            let _ = commands::show_settings(app);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .on_window_event(|win, event| {
@@ -119,6 +123,7 @@ pub fn run() {
             monitors::spawn_all(app.handle().clone());
             bridge::spawn(app.handle().clone());
             dictation::spawn(app.handle().clone());
+            notetaker::sweep(app.handle()); // leftover call audio from a crash or kill
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -206,7 +211,15 @@ pub fn run() {
             notetaker::notetaker_start,
             notetaker::notetaker_stop,
             notetaker::notetaker_cancel,
+            notetaker::notetaker_settings,
+            notetaker::set_notetaker_claude,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running DynamicNotch");
+        .build(tauri::generate_context!())
+        .expect("error while running DynamicNotch")
+        .run(|app, event| {
+            // call audio never outlives the app (a crash or kill is swept at the next start)
+            if matches!(event, tauri::RunEvent::Exit) {
+                notetaker::shutdown(app);
+            }
+        });
 }

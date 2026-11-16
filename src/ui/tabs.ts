@@ -37,6 +37,13 @@ function tabButton(id: string, label: string, iconName: string, badge?: string):
 
 export const closeMore = () => ($("more-menu").hidden = true);
 
+/** Keeps the open (possibly 2-column) More menu inside the island, under its button. */
+function placeMore(): void {
+  const menu = $("more-menu");
+  if (menu.hidden || !more) return;
+  menu.style.left = `${Math.max(0, Math.min(more.offsetLeft, menu.parentElement!.clientWidth - menu.offsetWidth))}px`;
+}
+
 export function renderTabs(items: LayoutItem[], current: string): void {
   order = items.filter((t) => t.visible && TABS[t.id]).map((t) => t.id);
   buttons = order.map((id) => {
@@ -50,8 +57,7 @@ export function renderTabs(items: LayoutItem[], current: string): void {
     e.stopPropagation();
     const menu = $("more-menu");
     menu.hidden = !menu.hidden;
-    // clamp so the (possibly 2-column) menu stays inside the island
-    menu.style.left = `${Math.max(0, Math.min(more!.offsetLeft, menu.parentElement!.clientWidth - menu.offsetWidth))}px`;
+    placeMore();
   };
   closeMore();
   active = current;
@@ -81,6 +87,7 @@ export function fitTabs(): void {
     clock.hidden = false;
     clock.hidden = clock.clientWidth < MIN_CLOCK;
   }
+  placeMore(); // refitting can move tabs in or out of an open menu, changing its width
   setActiveTab(active);
 }
 

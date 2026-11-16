@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { icon } from "./icons-line";
+import { select, type Select } from "./settings/ui";
 
 type SoundState = { volume: number; muted: boolean; deviceId: string };
 type AudioDevice = { id: string; name: string; default: boolean };
@@ -79,7 +80,8 @@ const VOLUMES = [
   ["snd-mute", "snd-vol", "snd-vol-val"],
   ["snd-tab-mute", "snd-tab-vol", "snd-tab-vol-val"],
 ] as const;
-const DEVICES = ["snd-device", "snd-tab-device"];
+const DEVICES = ["snd-device"]; // native select on the Home card; the tab has a themed one (tabDevice)
+let tabDevice: Select;
 
 function drawSound(): void {
   const s = snap.state;
@@ -109,12 +111,15 @@ function drawSound(): void {
     sel.disabled = snap.devices.length < 2;
     sel.title = snap.devices.find((d) => d.id === current)?.name ?? "No output device";
   }
+  const current = snap.devices.find((d) => d.default)?.id ?? s?.deviceId ?? "";
+  tabDevice.setOptions(snap.devices.map((d) => [d.id, d.name]), current);
+  tabDevice.querySelector("button")!.disabled = snap.devices.length < 2;
 }
 
-async function switchDevice(sel: HTMLSelectElement): Promise<void> {
+async function switchDevice(id: string): Promise<void> {
   const err = $("snd-err");
   try {
-    await invoke("set_audio_device", { id: sel.value });
+    await invoke("set_audio_device", { id });
     err.hidden = true;
   } catch (e) {
     console.error(e);
@@ -214,8 +219,10 @@ export function initSound(opts: { switchFailed: () => void }): void {
   }
   for (const id of DEVICES) {
     const sel = $<HTMLSelectElement>(id);
-    sel.onchange = () => void switchDevice(sel);
+    sel.onchange = () => void switchDevice(sel.value);
   }
+  tabDevice = select("Output device", [], "", (id) => void switchDevice(id));
+  $("snd-tab-device").append(tabDevice);
   holdWhileDragging($<HTMLInputElement>("snd-bright"));
   drawSound();
   void listen<SoundSnap>("sound", (e) => {
