@@ -110,7 +110,8 @@ fn recognizer(dir: &Path) -> Result<Arc<OfflineRecognizer>, String> {
         config.model_config.tokens = p("tokens.txt");
         config.model_config.model_type = Some("nemo_transducer".into());
     }
-    config.model_config.num_threads = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(1, 4) as i32);
+    let cap = std::env::var("DN_THREADS").ok().and_then(|v| v.parse().ok()).unwrap_or(4);
+    config.model_config.num_threads = std::thread::available_parallelism().map_or(2, |n| n.get().clamp(1, cap) as i32);
     let r = Arc::new(OfflineRecognizer::create(&config).ok_or("Loading the offline model failed")?);
     *slot = Some((dir.to_path_buf(), r.clone()));
     Ok(r)
@@ -162,11 +163,14 @@ pub fn split_for_model(samples: &[f32], max_seconds: f64) -> Vec<(usize, &[f32])
     out
 }
 
-fn decode(rec: &OfflineRecognizer, whisper: bool, language: &str, chunk: &[f32]) -> String {
+/// `long`: Whisper may write up to ~174 tokens (costs a full 30 s window); without it, 6 per second.
+fn decode(rec: &OfflineRecognizer, whisper: bool, language: &str, chunk: &[f32], long: bool) -> String {
     let mut audio = padded(chunk);
     if whisper {
         set_whisper_language(rec, language);
-        audio.resize(audio.len().max(WHISPER_WINDOW), 0.0);
+        if long {
+            audio.resize(audio.len().max(WHISPER_WINDOW), 0.0);
+        }
     }
     let stream = rec.create_stream();
     stream.accept_waveform(RATE as i32, &audio);
@@ -188,9 +192,13 @@ pub fn transcribe(dir: &Path, language: &str, samples: &[f32]) -> Result<String,
         if chunk.len() < RATE / 4 {
             continue;
         }
-        let mut t = decode(&rec, whisper, forced, chunk);
-        if whisper && codes.len() > 1 && !fits(&t, &codes) {
-            t = decode(&rec, whisper, codes[0], chunk); // heard as another language: the first expected one
+        // Latin-script speech fits in 6 tokens a second, so the first pass is short unless a non-Latin
+        // language is forced; a non-Latin result is decoded again with room for all of it
+        let latin = |c: &str| script(c).is_some_and(|b| b.contains(&0x41));
+        let mut t = decode(&rec, whisper, forced, chunk, !forced.is_empty() && !latin(forced));
+        if whisper && forced.is_empty() && !fits(&t, &["en"]) {
+            let again = if codes.len() > 1 && !fits(&t, &codes) { codes[0] } else { "" };
+            t = decode(&rec, whisper, again, chunk, true); // heard as another language: the first expected one
         }
         if !t.is_empty() {
             if !text.is_empty() {
