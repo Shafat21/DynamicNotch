@@ -76,6 +76,7 @@ export function renderAppearance(root: HTMLElement): void {
     section("Accent", row("Accent colour", "Tints the active tab, buttons and highlights.", h("div", { className: "accent-pick" }, accents, hex))),
     section(
       "Style",
+      seg("Layout", "Dashboard with tabs, or a compact notch with one card at a time.", "view", [["dashboard", "Dashboard"], ["compact", "Compact notch"]]),
       seg("Icon style", "Thin line icons or coloured badges.", "iconStyle", [["line", "Line"], ["badges", "Colour badges"]]),
       seg("Shape", "A floating pill or a notch joined to the top edge.", "shape", [["pill", "Pill"], ["notch", "Notch"]]),
       seg("Density", "Spacing inside cards.", "density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["airy", "Airy"]]),
