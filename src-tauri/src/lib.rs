@@ -210,6 +210,7 @@ pub fn run() {
             commands::remove_app,
             commands::launch_app,
             commands::set_hit_rect,
+            commands::power_status,
             commands::island_drag_start,
             commands::island_drag_move,
             commands::island_drag_end,

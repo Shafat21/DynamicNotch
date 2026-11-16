@@ -93,3 +93,24 @@
 .ct-list .task-name { font-size: var(--t13); }
 .ct-list .task-check { width: 16px; height: 16px; }
 .ct-list .task-cat { font-size: var(--t11); }
+
+/* ----- widgets card ----- */
+.cw { height: 100%; display: flex; gap: 10px; }
+.cw > div { border-radius: 14px; background: var(--hover); padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.cw-week { flex: 1.5; min-width: 0; }
+.cw-power { flex: 1; }
+.cw-label { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; color: var(--muted); }
+.cw-days { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+.cw-day { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding-bottom: 5px; }
+.cw-dow { font-size: 9px; color: var(--muted); font-weight: 700; }
+.cw-num { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-size: var(--t12); }
+.cw-day.past .cw-num { color: var(--muted); font-weight: 500; }
+.cw-day.today .cw-num { background: var(--accent); color: var(--accent-fg); }
+.cw-dot { position: absolute; bottom: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--success); }
+.cw-line { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.cw-pip { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.cw-pbody { display: flex; align-items: center; gap: 10px; }
+.cw-pct { display: block; font-size: 22px; font-weight: 800; line-height: 1.1; }
+.cw-state { color: var(--muted); }
+.cw-power.charging .cw-state { color: var(--success); }
+.cw-power .cmp-ring { stroke-width: 2.5; }

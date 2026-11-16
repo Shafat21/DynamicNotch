@@ -451,6 +451,12 @@ pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
 
 const NO_DRAG: &str = "Moving the island isn't available on Linux yet";
 
+/// AC / battery for the compact Widgets card.
+#[tauri::command]
+pub fn power_status() -> monitors::system::Power {
+    monitors::system::power()
+}
+
 /// Hold-and-drag, start: from now on keep window point (`x`, `y`) (CSS px, the pill's centre) under the pointer.
 #[tauri::command]
 pub fn island_drag_start(app: AppHandle, state: State<AppState>, x: f64, y: f64) -> Res<()> {

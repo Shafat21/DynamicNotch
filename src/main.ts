@@ -16,6 +16,7 @@ import { renderMusic } from "./compact/music";
 import { renderPomodoro } from "./compact/pomodoro";
 import { renderShelf, type ShelfMode } from "./compact/shelf";
 import { renderTodo } from "./compact/todo";
+import { renderWidgets } from "./compact/widgets";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initShelf, showShelf } from "./shelf";
 import { initNotes, openNote, showNotes } from "./notes";
@@ -262,6 +263,7 @@ const compact = initCompact(
     ...(Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => placeholder(el, id)])) as Record<CardId, (el: HTMLElement) => void>),
     music: (el) =>
       renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
+    widgets: (el) => renderWidgets(el, { calendar: ui.calendar, taskCount: ui.tasks.length }),
     shelf: (el) => renderShelf(el, { mode: cmpShelf, onMode: (m) => ((cmpShelf = m), compact.refresh()) }),
     todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh()) }),
     pomodoro: (el) => {
@@ -625,6 +627,7 @@ function openLocationEditor(): void {
 
 function onCalendar(p: CalPayload): void {
   ui.calendar = p;
+  compact.refresh();
   renderCalendar();
 }
 

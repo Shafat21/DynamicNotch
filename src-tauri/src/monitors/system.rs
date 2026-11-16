@@ -19,6 +19,23 @@ struct KeyLock {
     on: bool,
 }
 
+/// Power for the compact Widgets card: on AC or not, battery percent; None = unknown / no battery.
+#[derive(serde::Serialize, Clone, Copy, Debug, PartialEq)]
+pub struct Power {
+    pub plugged: Option<bool>,
+    pub percent: Option<u8>,
+}
+
+/// Windows' encoding (also used by the Linux reader): AC 0/1, 255 = unknown; percent 0..=100, else unknown.
+pub fn power_from_raw(ac: u8, percent: u8) -> Power {
+    Power { plugged: match ac { 0 => Some(false), 1 => Some(true), _ => None }, percent: (percent <= 100).then_some(percent) }
+}
+
+pub fn power() -> Power {
+    let (ac, pct) = os::power_raw();
+    power_from_raw(ac, pct)
+}
+
 pub fn spawn(app: AppHandle) {
     publish(&app, "accent", os::accent_color().unwrap_or_else(|| "#0078D7".into()));
 
@@ -49,4 +66,18 @@ pub fn spawn(app: AppHandle) {
             was_plugged = now;
         }
     });
+}
+
+#[cfg(test)]
+mod power_tests {
+    use super::*;
+
+    #[test]
+    fn power_maps_raw_status_and_unknowns() {
+        assert_eq!(power_from_raw(1, 82), Power { plugged: Some(true), percent: Some(82) });
+        assert_eq!(power_from_raw(0, 40), Power { plugged: Some(false), percent: Some(40) });
+        // 255 = unknown for both (Windows), and a PC with no battery reports 255 percent
+        assert_eq!(power_from_raw(255, 255), Power { plugged: None, percent: None });
+        assert_eq!(power_from_raw(1, 120), Power { plugged: Some(true), percent: None });
+    }
 }
