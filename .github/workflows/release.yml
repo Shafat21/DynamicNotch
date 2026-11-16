@@ -55,11 +55,20 @@ jobs:
         working-directory: src-tauri
         run: cargo test
 
+      # a pasted secret often ends with a newline, which the signer rejects: strip whitespace before it is used
+      - name: Clean the signing key
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "TAURI_SIGNING_PRIVATE_KEY=$(printf %s "$KEY" | tr -d '[:space:]')" >> "$GITHUB_ENV"
+          fi
+
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # signs the update files (in-app updater). Key made with `npx tauri signer generate --ci`: no password.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           # update files + latest.json only when the signing key secret is set; without it releases still build
