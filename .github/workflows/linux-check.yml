@@ -30,6 +30,10 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # a partly restored cache leaves sherpa-onnx's download folder without its libs; force a fresh download
+      - name: Reset sherpa-onnx download cache
+        run: rm -rf src-tauri/target/sherpa-onnx-prebuilt
+
       - name: Install Linux dependencies
         run: |
           sudo apt-get update

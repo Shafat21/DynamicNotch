@@ -34,6 +34,12 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # sherpa-onnx-sys reuses target/sherpa-onnx-prebuilt when the folder exists; a partly restored cache leaves it
+      # without the .a/.lib files ("could not find native static library"). Drop it so the build downloads it fresh.
+      - name: Reset sherpa-onnx download cache
+        shell: bash
+        run: rm -rf src-tauri/target/sherpa-onnx-prebuilt
+
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
