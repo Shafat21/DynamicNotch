@@ -37,6 +37,8 @@ pub struct AppState {
     pub last: Mutex<HashMap<&'static str, Value>>,
     /// Interactive area of the island, in logical px relative to the window.
     pub hit: Mutex<window::Rect>,
+    /// While the island is dragged: cursor minus window position at the start (physical px).
+    pub drag: Mutex<Option<(f64, f64)>>,
     /// Coding agent sessions seen by the hook bridge (memory only).
     pub sessions: Mutex<bridge::sessions::Sessions>,
     /// Permission / question prompts waiting for an answer in the island.
@@ -118,6 +120,7 @@ pub fn run() {
                 clips: Mutex::new(clips),
                 last: Mutex::new(HashMap::new()),
                 hit: Mutex::new(window::Rect::default()),
+                drag: Mutex::new(None),
                 sessions: Mutex::default(),
                 prompts: bridge::Prompts::default(),
                 usage: Mutex::default(),
@@ -207,6 +210,9 @@ pub fn run() {
             commands::remove_app,
             commands::launch_app,
             commands::set_hit_rect,
+            commands::island_drag_start,
+            commands::island_drag_move,
+            commands::island_drag_end,
             commands::show_context_menu,
             commands::answer_prompt,
             commands::set_agent,

@@ -1,6 +1,7 @@
 //! Window placement + click-through: the window is 1200x700 and transparent, but only the island
 //! should take the mouse. OS-specific code lives in `window_{windows,linux}.rs`.
 
+use crate::placement::{self, Edge};
 use crate::{display, publish};
 use serde::Deserialize;
 use serde_json::json;
@@ -41,15 +42,23 @@ pub fn place(app: &AppHandle) -> tauri::Result<()> {
     let (work_w, work_h) = (wa.size.width as f64 / sf, wa.size.height as f64 / sf);
     let ui = display::dashboard_fit(display::ui_scale(work_h, &s.island_size), work_w);
     let (w, h) = display::fit_window(work_w, work_h, ui);
+    // shortcut: Linux stays top-centre until placement is tried on real hardware
+    let p = if cfg!(windows) { placement::parse(&s.placement) } else { placement::Placement::default() };
+    let side = matches!(p.edge, Edge::Left | Edge::Right);
+    // pill size for clamping: the idle pill (about 180x40) or the side tab (40x120), scaled
+    let pill = if side { (40.0, 120.0) } else { (180.0, 40.0) };
+    let work = (wa.position.x as f64, wa.position.y as f64, wa.size.width as f64, wa.size.height as f64);
+    let (x, y) = placement::window_pos(p, work, (w * sf, h * sf), (pill.0 * ui * sf, pill.1 * ui * sf));
+    // the top edge hangs from the monitor's very top (over a top taskbar), as before
+    let y = if p.edge == Edge::Top { os::top_y(m) as f64 } else { y };
     // move first, so the logical size below uses the target monitor's scale factor
-    let x = m.position().x + (m.size().width as i32 - (w * sf).round() as i32) / 2;
-    win.set_position(PhysicalPosition::new(x, os::top_y(m)))?;
+    win.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))?;
     win.set_size(LogicalSize::new(w, h))?;
     let mon = &infos[i];
     publish(
         app,
         "display",
-        json!({ "uiScale": ui, "monitor": { "index": i, "name": mon.name, "width": mon.width, "height": mon.height, "scale": sf } }),
+        json!({ "uiScale": ui, "edge": p.edge, "monitor": { "index": i, "name": mon.name, "width": mon.width, "height": mon.height, "scale": sf } }),
     );
     Ok(())
 }

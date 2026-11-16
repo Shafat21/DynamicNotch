@@ -38,6 +38,8 @@ pub struct Settings {
     pub reminder_sound: bool,
     pub clip_remember: bool,
     pub clip_paused: bool,
+    /// `"<edge>:<pos>"` (placement.rs), where the island sits on its display.
+    pub placement: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -456,6 +458,7 @@ impl Db {
             reminder_sound: text("reminder_sound", "true")? != "false",
             clip_remember: text("clip_remember", "false")? == "true",
             clip_paused: text("clip_paused", "false")? == "true",
+            placement: text("placement", "top:0.5")?,
         })
     }
 
@@ -502,6 +505,12 @@ mod tests {
         assert_eq!(s.island_style, "Liquid Glass");
         assert_eq!(s.animation_style, "Fluid Blobs");
         assert_eq!((s.display.as_str(), s.island_size.as_str(), s.hide_fullscreen, s.reminder_sound), ("primary", "Auto", true, true));
+    }
+
+    #[test]
+    fn settings_default_placement_is_top_centre() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(db.settings().unwrap().placement, "top:0.5");
     }
 
     fn v1_conn(style: &str) -> Connection {
