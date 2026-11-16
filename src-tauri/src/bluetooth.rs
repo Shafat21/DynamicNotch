@@ -111,26 +111,34 @@ pub fn state() -> Result<BtState, String> {
     })
 }
 
-/// Devices connected in `after` that weren't in `before` (by id): what the "connected" toast announces.
-pub fn newly_connected(before: &[BtDevice], after: &[BtDevice]) -> Vec<BtDevice> {
-    after.iter().filter(|d| d.connected && !before.iter().any(|b| b.id == d.id && b.connected)).cloned().collect()
+/// Devices connected in `after` that were connected in none of the earlier polls (`history`, by id): what the
+/// "connected" toast announces. Two polls of history absorb a failed (empty) poll and a one-poll drop; mice and
+/// keyboards are left out, they reconnect every time they wake from sleep.
+pub fn newly_connected(history: &[Vec<BtDevice>], after: &[BtDevice]) -> Vec<BtDevice> {
+    let was_on = |id: &str| history.iter().flatten().any(|b| b.id == id && b.connected);
+    after.iter().filter(|d| d.connected && d.kind != "input" && !was_on(&d.id)).cloned().collect()
 }
 
 /// Watches for paired devices connecting and emits `bt-connected` {id, name, kind, connected} for each.
 /// shortcut: polls every 8 s (enumeration is not free); a WinRT DeviceWatcher would be instant — upgrade if the
 /// toast feels late.
+#[cfg_attr(not(windows), allow(dead_code))] // started on Windows only (lib.rs)
 pub fn watch(app: tauri::AppHandle) {
     use tauri::Emitter;
     std::thread::spawn(move || {
-        let mut last: Option<Vec<BtDevice>> = None; // the first look only sets the baseline: no toast at startup
+        // the last two polls; the first look only fills it: no toast at startup
+        let mut history: Vec<Vec<BtDevice>> = Vec::new();
         loop {
             if let Ok(st) = state() {
-                if let Some(prev) = &last {
-                    for d in newly_connected(prev, &st.devices) {
+                if !history.is_empty() {
+                    for d in newly_connected(&history, &st.devices) {
                         let _ = app.emit("bt-connected", &d);
                     }
                 }
-                last = Some(st.devices);
+                history.push(st.devices);
+                if history.len() > 2 {
+                    history.remove(0);
+                }
             }
             std::thread::sleep(std::time::Duration::from_secs(8));
         }
@@ -167,9 +175,26 @@ mod tests {
     fn newly_connected_lists_only_flips() {
         let before = [dev("a", false), dev("b", true), dev("c", false)];
         let after = [dev("a", true), dev("b", true), dev("c", false), dev("d", true)];
-        let ids: Vec<String> = newly_connected(&before, &after).into_iter().map(|d| d.id).collect();
+        let ids: Vec<String> = newly_connected(&[before.to_vec()], &after).into_iter().map(|d| d.id).collect();
         assert_eq!(ids, ["a", "d"]); // a turned on, d is new and connected; b was already on
-        assert!(newly_connected(&after, &after).is_empty());
+        assert!(newly_connected(&[after.to_vec()], &after).is_empty());
+    }
+
+    #[test]
+    fn a_failed_poll_or_a_one_poll_flap_is_not_a_connect() {
+        let on = vec![dev("a", true)];
+        // a poll that failed (empty) or saw it drop for a moment, then back: connected two polls ago, no toast
+        assert!(newly_connected(&[on.clone(), vec![]], &on).is_empty());
+        assert!(newly_connected(&[on.clone(), vec![dev("a", false)]], &on).is_empty());
+        // off for two polls, then on: that's a connect
+        assert_eq!(newly_connected(&[vec![dev("a", false)], vec![dev("a", false)]], &on).len(), 1);
+    }
+
+    #[test]
+    fn mice_and_keyboards_waking_up_do_not_toast() {
+        let mut mouse = dev("m", true);
+        mouse.kind = "input";
+        assert!(newly_connected(&[vec![], vec![]], &[mouse]).is_empty());
     }
 
     #[test]

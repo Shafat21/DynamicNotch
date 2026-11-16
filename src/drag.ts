@@ -8,18 +8,20 @@ const HOLD_MS = 450;
 const CANCEL_PX = 6;
 
 /** The part of the window that takes the pointer: the island (w x h, already scaled by k), `gap` px off its
- *  edge, plus a 15·k margin, in window CSS px. Top is the original centred formula, the others mirror it. */
-export function hitRectFor(edge: Edge, w: number, h: number, viewW: number, viewH: number, gap: number, k: number): { x: number; y: number; w: number; h: number } {
+ *  edge, plus a 15·k margin, in window CSS px. Along the edge it centres on `anchor` (the pill's centre,
+ *  display.anchor; default the window's middle), clamped inside the window as styles.css clamps #shell. */
+export function hitRectFor(edge: Edge, w: number, h: number, viewW: number, viewH: number, gap: number, k: number, anchor?: number): { x: number; y: number; w: number; h: number } {
   const m = 15 * k;
+  const at = (size: number, len: number) => Math.min(Math.max(anchor ?? len / 2, size / 2), len - size / 2) - size / 2;
   switch (edge) {
     case "top":
-      return { x: (viewW - w) / 2 - m, y: 0, w: w + 2 * m, h: gap + h + 2 * m };
+      return { x: at(w, viewW) - m, y: 0, w: w + 2 * m, h: gap + h + 2 * m };
     case "bottom":
-      return { x: (viewW - w) / 2 - m, y: viewH - gap - h - m, w: w + 2 * m, h: gap + h + 2 * m };
+      return { x: at(w, viewW) - m, y: viewH - gap - h - m, w: w + 2 * m, h: gap + h + 2 * m };
     case "left":
-      return { x: 0, y: (viewH - h) / 2 - m, w: gap + w + 2 * m, h: h + 2 * m };
+      return { x: 0, y: at(h, viewH) - m, w: gap + w + 2 * m, h: h + 2 * m };
     case "right":
-      return { x: viewW - gap - w - 2 * m, y: (viewH - h) / 2 - m, w: gap + w + 2 * m, h: h + 2 * m };
+      return { x: viewW - gap - w - 2 * m, y: at(h, viewH) - m, w: gap + w + 2 * m, h: h + 2 * m };
   }
 }
 

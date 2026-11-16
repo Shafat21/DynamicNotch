@@ -1,7 +1,7 @@
 // The compact notch (appearance.view = "compact"): header (ring, date, time), one card at a time, ‹ › arrows,
 // page dots, the wheel and ←/→ to flip. Cards render themselves from main.ts's data (render functions).
 import "./compact.css";
-import { CARD_NAMES, CARDS, step, type CardId } from "./pager";
+import { CARD_NAMES, CARDS, refreshes, step, type CardId } from "./pager";
 
 const KEY = "compact-card";
 const NS = "http://www.w3.org/2000/svg";
@@ -35,7 +35,7 @@ export function ring(size: number): { el: SVGSVGElement; set(fraction: number | 
   };
 }
 
-export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLElement) => void>, opts: { ring: () => number | null }): { show(): void; refresh(): void; select(id: CardId): void } {
+export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLElement) => void>, opts: { ring: () => number | null }): { show(): void; refresh(...only: CardId[]): void; select(id: CardId): void } {
   let i = Math.max(0, CARDS.indexOf(localStorage.getItem(KEY) as CardId));
   const r = ring(18);
   const date = el("span", "cmp-date");
@@ -103,5 +103,7 @@ export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLEl
   });
   window.setInterval(() => !root.hidden && clock(), 15_000);
 
-  return { show: render, refresh: () => !root.hidden && render(), select: (id) => ((i = Math.max(0, CARDS.indexOf(id))), render()) };
+  // Rebuilding a card drops typed text and refetches its lists: other cards only get the header clock / ring.
+  const refresh = (...only: CardId[]) => !root.hidden && (refreshes(CARDS[i], only) ? render() : clock());
+  return { show: render, refresh, select: (id) => ((i = Math.max(0, CARDS.indexOf(id))), render()) };
 }

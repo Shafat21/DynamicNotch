@@ -459,23 +459,22 @@ pub fn power_status() -> monitors::system::Power {
 
 /// Hold-and-drag, start: from now on keep window point (`x`, `y`) (CSS px, the pill's centre) under the pointer.
 #[tauri::command]
-pub fn island_drag_start(app: AppHandle, state: State<AppState>, x: f64, y: f64) -> Res<()> {
+pub fn island_drag_start(state: State<AppState>, x: f64, y: f64) -> Res<()> {
     if !cfg!(windows) {
         return Err(NO_DRAG.into());
     }
-    let win = app.get_webview_window("main").ok_or("no island window")?;
-    let sf = win.scale_factor().map_err(err)?;
-    *state.drag.lock().unwrap() = Some((x * sf, y * sf));
+    *state.drag.lock().unwrap() = Some((x, y)); // CSS px: scaled on each move, the monitor can change mid-drag
     Ok(())
 }
 
 /// Hold-and-drag, move: the window follows the pointer.
 #[tauri::command]
 pub fn island_drag_move(app: AppHandle, state: State<AppState>) -> Res<()> {
-    let Some((ox, oy)) = *state.drag.lock().unwrap() else { return Ok(()) };
+    let Some(anchor) = *state.drag.lock().unwrap() else { return Ok(()) };
     let win = app.get_webview_window("main").ok_or("no island window")?;
     let c = app.cursor_position().map_err(err)?;
-    win.set_position(tauri::PhysicalPosition::new((c.x - ox).round() as i32, (c.y - oy).round() as i32)).map_err(err)
+    let (x, y) = crate::placement::drag_window_pos((c.x, c.y), anchor, win.scale_factor().map_err(err)?);
+    win.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)
 }
 
 /// Hold-and-drag, end: snap to the nearest edge of the display under the pointer, save it, place the window.

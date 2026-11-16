@@ -48,7 +48,7 @@ pub fn place(app: &AppHandle) -> tauri::Result<()> {
     // pill size for clamping: the idle pill (about 180x40) or the side tab (40x120), scaled
     let pill = if side { (40.0, 120.0) } else { (180.0, 40.0) };
     let work = (wa.position.x as f64, wa.position.y as f64, wa.size.width as f64, wa.size.height as f64);
-    let (x, y) = placement::window_pos(p, work, (w * sf, h * sf), (pill.0 * ui * sf, pill.1 * ui * sf));
+    let (x, y, anchor) = placement::window_pos(p, work, (w * sf, h * sf), (pill.0 * ui * sf, pill.1 * ui * sf));
     // the top edge hangs from the monitor's very top (over a top taskbar), as before
     let y = if p.edge == Edge::Top { os::top_y(m) as f64 } else { y };
     // move first, so the logical size below uses the target monitor's scale factor
@@ -58,7 +58,7 @@ pub fn place(app: &AppHandle) -> tauri::Result<()> {
     publish(
         app,
         "display",
-        json!({ "uiScale": ui, "edge": p.edge, "monitor": { "index": i, "name": mon.name, "width": mon.width, "height": mon.height, "scale": sf } }),
+        json!({ "uiScale": ui, "edge": p.edge, "anchor": anchor / sf, "monitor": { "index": i, "name": mon.name, "width": mon.width, "height": mon.height, "scale": sf } }),
     );
     Ok(())
 }

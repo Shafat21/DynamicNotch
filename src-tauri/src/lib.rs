@@ -137,7 +137,9 @@ pub fn run() {
             reminders::spawn_scheduler(app.handle().clone());
             clipboard::spawn(app.handle().clone());
             sound::spawn(app.handle().clone());
-            bluetooth::watch(app.handle().clone()); // "AirBuds connected" toast
+            // "AirBuds connected" toast; not on Linux yet: there each poll spawns bluetoothctl several times
+            #[cfg(windows)]
+            bluetooth::watch(app.handle().clone());
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));

@@ -18,6 +18,7 @@ import { renderShelf, type ShelfMode } from "./compact/shelf";
 import { renderTodo } from "./compact/todo";
 import { renderWidgets } from "./compact/widgets";
 import { renderToast, TOAST_MS, type Toast } from "./toast";
+import { freshOnly, takesOver } from "./toast-queue";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initShelf, showShelf } from "./shelf";
 import { initNotes, openNote, showNotes } from "./notes";
@@ -41,7 +42,7 @@ type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
-type Display = { uiScale: number; edge?: Edge; monitor: { index: number; name: string; width: number; height: number; scale: number } };
+type Display = { uiScale: number; edge?: Edge; anchor?: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
 type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation" | "toast";
 
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
@@ -71,6 +72,7 @@ const ui = {
   look: DEFAULT_LOOK as Look,
   tasks: [] as Task[],
   edge: "top" as Edge, // which screen edge the island sits on (Rust placement)
+  anchor: undefined as number | undefined, // the pill's centre along that edge, window CSS px (off-centre near a corner)
   dragging: false, // hold-and-drag in progress: hover changes are ignored
   scale: 1, // display uiScale from Rust: sizes below are 1080p base px, multiplied in transition()
 };
@@ -97,7 +99,7 @@ function idleWidth(): number {
 /** Base px at 1080p (appearance sizes); geometry() multiplies by the display scale. */
 function targetSize(): [number, number] {
   const a = look();
-  if (ui.charging) return [850, a.collapsedH];
+  if (ui.charging && !side()) return [850, a.collapsedH]; // a side tab keeps its size: 850 px across would leave the screen
   if (ui.state === "idle") return side() ? [40, 120] : [idleWidth(), a.collapsedH]; // a slim tab on a side edge
   if (ui.state === "notify") return [380, a.collapsedH];
   if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
@@ -134,6 +136,7 @@ function geometry(): void {
   shell.dataset.shape = ui.edge === "top" ? look().shape : "pill";
   shell.dataset.edge = ui.edge;
   shell.dataset.view = look().view;
+  shell.style.setProperty("--ax", ui.anchor === undefined ? "50%" : `${ui.anchor}px`); // styles.css clamps #shell inside the window
   sendHitRect(w, h, k);
 }
 
@@ -173,7 +176,7 @@ function updateFx(): void {
 
 /** Tell Rust where the island is so it can toggle click-through. */
 function sendHitRect(w: number, h: number, k: number): void {
-  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : hitRectFor(ui.edge, w, h, window.innerWidth, window.innerHeight, pillTop(), k);
+  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : hitRectFor(ui.edge, w, h, window.innerWidth, window.innerHeight, pillTop(), k, ui.anchor);
   hitRect = rect;
   invoke("set_hit_rect", { rect }).catch(console.error);
 }
@@ -194,7 +197,12 @@ function trackHoverInPage(): void {
   document.documentElement.addEventListener("mouseleave", () => backendHover && onHover(false));
 }
 
+/** Live toasts waiting or showing (first = on screen); see showToast(). */
+const toasts: (Toast & { at: number })[] = [];
+let toastTimer = 0;
+
 function setState(s: State): void {
+  if (s === "idle" && toasts.length && !ui.hidden && nextToast()) return; // a toast that waited for the island to close
   if (s === "idle") {
     setPinned(false);
     if (look().openOn === "home") ui.tab = "home"; // otherwise the next hover reopens the last tab
@@ -267,7 +275,7 @@ const compact = initCompact(
       renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
     widgets: (el) => renderWidgets(el, { calendar: ui.calendar, taskCount: ui.tasks.length }),
     shelf: (el) => renderShelf(el, { mode: cmpShelf, onMode: (m) => ((cmpShelf = m), compact.refresh()) }),
-    todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh()) }),
+    todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh("todo")) }),
     pomodoro: (el) => {
       const f = focus?.state() ?? { left: 1500, total: 1500, running: false, end: 0 };
       renderPomodoro(el, {
@@ -402,7 +410,7 @@ function formatTime(secs: number): string {
 /** Album art arrives only on track change (or a late retry), separately from `media`. */
 function onArt({ art }: { art: string }): void {
   artUri = art;
-  compact.refresh();
+  compact.refresh("music");
   for (const id of ["player-art", "tile-media-art"]) {
     const img = $<HTMLImageElement>(id);
     img.hidden = !art;
@@ -415,7 +423,7 @@ function onMedia(m: Media): void {
   const idle = m.state === "Idle";
   if (m.title !== ui.media.title || m.artist !== ui.media.artist) ui.progress.position = 0;
   ui.media = m;
-  compact.refresh();
+  compact.refresh("music");
   ui.progress.duration = m.duration;
   if (idle) ui.lyric = "";
   document.querySelectorAll<HTMLElement>('[data-media="toggle"]').forEach((b) => {
@@ -436,7 +444,7 @@ function onMedia(m: Media): void {
 function onProgress(p: Progress): void {
   if (ui.seekPreview !== null) return; // the user is dragging; their preview wins
   ui.progress = p;
-  compact.refresh();
+  compact.refresh("music");
   renderProgress();
 }
 
@@ -462,7 +470,7 @@ function renderLyric(): void {
 
 function onLyric(text: string): void {
   ui.lyric = text;
-  compact.refresh();
+  compact.refresh("music");
   renderLyric();
 }
 
@@ -523,6 +531,7 @@ function onSessions(list: Session[]): void {
 function onDisplay(d: Display): void {
   ui.scale = d.uiScale;
   ui.edge = d.edge ?? "top";
+  ui.anchor = d.anchor;
   transition(); // the window may also have been resized: re-centre the hit rect
 }
 
@@ -546,6 +555,7 @@ function onCharging(): void {
 function onFullscreen(hidden: boolean): void {
   ui.hidden = hidden;
   if (hidden) dismissAll(); // the terminal asks instead
+  if (hidden) (toasts.length = 0), clearTimeout(toastTimer); // live toasts are moments: none queue up behind a game
   shell.classList.toggle("away", hidden);
   clearTimeout(revertTimer);
   ui.hovering = false;
@@ -591,14 +601,15 @@ function onPromptClosed(id: number): void {
 }
 
 /** Live toasts, shown one at a time below prompts, reminders and dictation; never while hidden. */
-const toasts: Toast[] = [];
-let toastTimer = 0;
 function showToast(t: Toast): void {
   if (ui.hidden) return;
-  toasts.push(t);
-  if (toasts.length === 1 && (ui.state === "idle" || ui.state === "hover" || ui.state === "notify")) nextToast();
+  toasts.push({ ...t, at: Date.now() });
+  if (takesOver(ui.state)) nextToast();
 }
-function nextToast(): void {
+/** Shows the first fresh queued toast; false when none is left. */
+function nextToast(): boolean {
+  toasts.splice(0, toasts.length, ...freshOnly(toasts, Date.now()));
+  if (!toasts.length) return false;
   clearTimeout(revertTimer);
   if (ui.state === "toast") transition(); // the next queued one
   else setState("toast");
@@ -606,12 +617,13 @@ function nextToast(): void {
   toastTimer = window.setTimeout(() => {
     toasts.shift();
     if (ui.state === "toast") settle(); // pre-empted by a prompt etc.: that one's settle() shows the rest
-  }, toasts[0]?.ms ?? TOAST_MS);
+  }, toasts[0].ms ?? TOAST_MS);
+  return true;
 }
 
 /** After a prompt, reminder, dictation or toast ends: the next prompt, reminder, a running dictation, a queued toast, then hover/idle. */
 function settle(): void {
-  if (toasts.length && !currentPrompt() && !currentDue() && !dictating()) return nextToast();
+  if (!currentPrompt() && !currentDue() && !dictating() && nextToast()) return;
   const next: State = currentPrompt() ? "prompt" : currentDue() ? "reminder" : dictating() ? "dictation" : ui.hovering || ui.pinned ? "hover" : "idle";
   if (next === ui.state) transition(); // the next queued one
   else setState(next);
@@ -656,7 +668,7 @@ function openLocationEditor(): void {
 
 function onCalendar(p: CalPayload): void {
   ui.calendar = p;
-  compact.refresh();
+  compact.refresh("widgets");
   renderCalendar();
 }
 
@@ -756,7 +768,7 @@ function wireInput(): void {
     b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
   });
   new ResizeObserver(() => fitDock()).observe($("card-launcher")); // morph, openW, textScale, density gaps, Home shown
-  focus = initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500), () => compact.refresh());
+  focus = initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500), () => compact.refresh("pomodoro"));
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
     b.onclick = () => invoke("run_action", { id: b.dataset.action }).catch(console.error);
@@ -807,7 +819,7 @@ function wireInput(): void {
     try {
       ui.tasks = await invoke<Task[]>("delete_task", { id });
       renderTasks(ui.tasks);
-      compact.refresh();
+      compact.refresh("todo", "widgets");
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
@@ -821,7 +833,7 @@ function wireInput(): void {
       ui.tasks = await invoke<Task[]>("add_task", { name: name.value, time: time.value, category: $("task-cat").dataset.cat ?? "Other" });
       name.value = time.value = "";
       renderTasks(ui.tasks);
-      compact.refresh();
+      compact.refresh("todo", "widgets");
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
@@ -888,7 +900,7 @@ async function boot(): Promise<void> {
   initTooltips();
   // hold anywhere that isn't a control, then drag to any screen edge (drag.ts, Rust moves the window)
   initDrag(shell, {
-    canStart: (t) => !ui.hidden && (ui.state === "idle" || ui.state === "hover") && !t.closest("button, input, textarea, select, a, [role=button], [contenteditable], .sel"),
+    canStart: (t) => !LINUX && !ui.hidden && (ui.state === "idle" || ui.state === "hover") && !t.closest("button, input, textarea, select, a, [role=button], [contenteditable], .sel"),
     anchor: () => ({ x: hitRect.x + hitRect.w / 2, y: hitRect.y + hitRect.h / 2 }),
     onStart: () => {
       ui.dragging = true;
@@ -921,8 +933,8 @@ async function boot(): Promise<void> {
     listen<{ name: string; kind: string }>("bt-connected", (e) =>
       showToast({ icon: e.payload.kind === "audio" ? "headphones" : e.payload.kind === "input" ? "keyboard" : e.payload.kind === "phone" ? "phone" : "bluetooth", title: e.payload.name, text: "Connected" }),
     ),
-    listen("shelf", () => cmpShelf === "files" && compact.refresh()), // a file dropped on the compact notch
-    listen("clips", () => cmpShelf === "clips" && compact.refresh()),
+    listen("shelf", () => cmpShelf === "files" && compact.refresh("shelf")), // a file dropped on the compact notch
+    listen("clips", () => cmpShelf === "clips" && compact.refresh("shelf")),
     listen<Perf>("perf", (e) => onPerf(e.payload)),
     listen<Media>("media", (e) => onMedia(e.payload)),
     listen<string>("lyric", (e) => onLyric(e.payload)),
@@ -965,7 +977,7 @@ async function boot(): Promise<void> {
   if (snap.usage) onUsage(snap.usage as Usage);
   const call = snap.notetaker as CallEvent | undefined;
   if (call && (call.state === "recording" || call.state === "processing")) setCall(call);
-  if (snap.display) [ui.scale, ui.edge] = [(snap.display as Display).uiScale, (snap.display as Display).edge ?? "top"]; // edge too: a saved side placement survives restarts // applied by onSettings' transition below
+  if (snap.display) [ui.scale, ui.edge, ui.anchor] = [(snap.display as Display).uiScale, (snap.display as Display).edge ?? "top", (snap.display as Display).anchor]; // edge too: a saved side placement survives restarts // applied by onSettings' transition below
   if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 
   ui.tasks = await invoke<Task[]>("list_tasks");
@@ -982,7 +994,7 @@ async function boot(): Promise<void> {
     if (ui.media.state === "Playing" && ui.seekPreview === null && ui.progress.duration > 0) {
       ui.progress.position = Math.min(ui.progress.position + 1, ui.progress.duration);
       renderProgress();
-      compact.refresh();
+      compact.refresh("music");
     }
   }, 1000);
   window.setInterval(renderCalendar, 30_000); // relative labels ("In 20 min") while visible

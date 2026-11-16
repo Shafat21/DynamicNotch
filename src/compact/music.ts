@@ -33,6 +33,14 @@ export function renderMusic(el: HTMLElement, s: MusicState): void {
   q(".cm-artist").textContent = idle ? "Play something in any app" : s.media.artist;
   q(".cm-play").innerHTML = icon(s.media.state === "Playing" ? "pause" : "play", 20); // static SVG
   const dur = s.progress.duration || s.media.duration;
+  const bar = q<HTMLElement>(".cm-bar");
+  // set on every render: the card is built once, the track (duration, seekable) changes under it
+  bar.onclick = (e) => {
+    e.stopPropagation();
+    if (!s.media.seekable || !dur) return;
+    const r = bar.getBoundingClientRect();
+    void invoke("media_seek", { seconds: ((e.clientX - r.left) / r.width) * dur }).catch(console.error);
+  };
   q<HTMLElement>(".cm-fill").style.width = `${dur ? Math.min(100, (s.progress.position / dur) * 100) : 0}%`;
   if (view === "player") {
     q(".cm-elapsed").textContent = mmss(s.progress.position);
@@ -55,13 +63,6 @@ function build(el: HTMLElement, view: "player" | "lyrics", s: MusicState): void 
   meta.append(node("div", "cm-title ell"), node("div", "cm-artist ell"));
   const bar = node("div", "cm-bar");
   bar.append(node("i", "cm-fill"));
-  bar.onclick = (e) => {
-    e.stopPropagation();
-    const dur = s.progress.duration || s.media.duration;
-    if (!s.media.seekable || !dur) return;
-    const r = bar.getBoundingClientRect();
-    void invoke("media_seek", { seconds: ((e.clientX - r.left) / r.width) * dur }).catch(console.error);
-  };
   const ctrl = node("div", "cm-ctrl");
   const lyr = btn("cm-lyr", "lyrics", view === "lyrics" ? "Back to the player" : "Lyrics", s.onFlip, 16);
   lyr.classList.toggle("on", view === "lyrics");

@@ -53,21 +53,33 @@ pub fn snap(cx: f64, cy: f64, work: (f64, f64, f64, f64)) -> Placement {
     Placement { edge, pos }
 }
 
-/// Window top-left so the pill (`pill` size, centred in the window across the edge) sits at `p`, hugging the
-/// edge of `work`, never past its ends.
-pub fn window_pos(p: Placement, work: (f64, f64, f64, f64), win: (f64, f64), pill: (f64, f64)) -> (f64, f64) {
+/// Window top-left, hugging the edge of `work` and never past its ends, so the pill (`pill` size) sits at `p`;
+/// plus the pill's centre along the edge, measured from the window's start (`anchor`). Near a corner the window
+/// stops at the screen edge and the anchor moves off its middle, so the open island can be kept on screen too.
+pub fn window_pos(p: Placement, work: (f64, f64, f64, f64), win: (f64, f64), pill: (f64, f64)) -> (f64, f64, f64) {
     let (x, y, w, h) = work;
-    let along = |start: f64, len: f64, size: f64| (start + p.pos * len).clamp(start + size / 2.0, start + len - size / 2.0);
+    // pill centre on the screen, then the window around it, both kept inside [start, start + len]
+    let place = |start: f64, len: f64, size: f64, win_len: f64| {
+        let c = (start + p.pos * len).clamp(start + size / 2.0, start + len - size / 2.0);
+        let ws = (c - win_len / 2.0).clamp(start, (start + len - win_len).max(start));
+        (ws, c - ws)
+    };
     match p.edge {
         Edge::Top | Edge::Bottom => {
-            let wx = along(x, w, pill.0) - win.0 / 2.0;
-            (wx, if p.edge == Edge::Top { y } else { y + h - win.1 })
+            let (wx, anchor) = place(x, w, pill.0, win.0);
+            (wx, if p.edge == Edge::Top { y } else { y + h - win.1 }, anchor)
         }
         Edge::Left | Edge::Right => {
-            let wy = along(y, h, pill.1) - win.1 / 2.0;
-            (if p.edge == Edge::Left { x } else { x + w - win.0 }, wy)
+            let (wy, anchor) = place(y, h, pill.1, win.1);
+            (if p.edge == Edge::Left { x } else { x + w - win.0 }, wy, anchor)
         }
     }
+}
+
+/// While dragging: the window's top-left (physical px) that keeps `anchor` (window CSS px, the pill centre)
+/// under the `cursor`, at the scale of the monitor the window is on now (it changes crossing monitors).
+pub fn drag_window_pos(cursor: (f64, f64), anchor: (f64, f64), sf: f64) -> (i32, i32) {
+    ((cursor.0 - anchor.0 * sf).round() as i32, (cursor.1 - anchor.1 * sf).round() as i32)
 }
 
 #[cfg(test)]
@@ -101,14 +113,38 @@ mod tests {
     #[test]
     fn window_keeps_pill_on_screen() {
         let (win, pill) = ((1200.0, 700.0), (40.0, 120.0));
-        let (_, y) = window_pos(Placement { edge: Edge::Left, pos: 0.0 }, WORK, win, pill);
+        let (_, y, _) = window_pos(Placement { edge: Edge::Left, pos: 0.0 }, WORK, win, pill);
         assert!(y + (win.1 - pill.1) / 2.0 >= 0.0, "pill top on screen");
-        let (x, y) = window_pos(Placement { edge: Edge::Right, pos: 1.0 }, WORK, win, pill);
+        let (x, y, _) = window_pos(Placement { edge: Edge::Right, pos: 1.0 }, WORK, win, pill);
         assert!(y + (win.1 + pill.1) / 2.0 <= 1040.0, "pill bottom on screen");
         assert_eq!(x, 1920.0 - 1200.0);
-        let (x, y) = window_pos(Placement { edge: Edge::Top, pos: 0.5 }, WORK, (1200.0, 700.0), (180.0, 40.0));
+        let (x, y, _) = window_pos(Placement { edge: Edge::Top, pos: 0.5 }, WORK, (1200.0, 700.0), (180.0, 40.0));
         assert_eq!((x, y), (360.0, 0.0)); // today's top-centre
-        let (_, y) = window_pos(Placement { edge: Edge::Bottom, pos: 0.5 }, WORK, (1200.0, 700.0), (180.0, 40.0));
+        let (_, y, _) = window_pos(Placement { edge: Edge::Bottom, pos: 0.5 }, WORK, (1200.0, 700.0), (180.0, 40.0));
         assert_eq!(y, 340.0);
+    }
+
+    #[test]
+    fn drag_keeps_the_anchor_under_the_pointer_at_each_scale() {
+        // the pill centre (300, 30 CSS px) stays under the cursor: at 100% ...
+        assert_eq!(drag_window_pos((1000.0, 500.0), (300.0, 30.0), 1.0), (700, 470));
+        // ... and on a 150% monitor the same CSS point is 1.5x further from the window corner
+        assert_eq!(drag_window_pos((3000.0, 500.0), (300.0, 30.0), 1.5), (2550, 455));
+    }
+
+    #[test]
+    fn window_stays_in_work_area_and_reports_the_pill_anchor() {
+        let (win, pill) = ((1200.0, 700.0), (180.0, 40.0));
+        // near the top-left corner: the window starts at the screen edge, the pill sits 96 px into it
+        let (x, y, anchor) = window_pos(Placement { edge: Edge::Top, pos: 0.05 }, WORK, win, pill);
+        assert_eq!((x, y, anchor), (0.0, 0.0, 96.0));
+        // near the top-right corner: mirrored
+        let (x, _, anchor) = window_pos(Placement { edge: Edge::Top, pos: 0.95 }, WORK, win, pill);
+        assert_eq!((x, anchor), (720.0, 1824.0 - 720.0));
+        // centred: the anchor is the window's middle, as before
+        assert_eq!(window_pos(Placement { edge: Edge::Top, pos: 0.5 }, WORK, win, pill).2, 600.0);
+        // a side tab near the top: the window starts at the work area's top
+        let (_, y, anchor) = window_pos(Placement { edge: Edge::Left, pos: 0.0 }, WORK, win, (40.0, 120.0));
+        assert_eq!((y, anchor), (0.0, 60.0));
     }
 }

@@ -92,7 +92,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --w: 180px; --h: 40px; --r: 20px; --scoop: 25px; --top: 10px; --ui: 1; --ch: 40px;
   position: absolute;
   top: var(--top);
-  left: 50%;
+  /* centred on the pill's spot (--ax, display.anchor), pushed back inside the window near a screen corner */
+  left: clamp(calc(var(--w) / 2), var(--ax, 50%), calc(100% - var(--w) / 2));
   width: var(--w);
   height: var(--h);
   translate: -50% 0;
@@ -101,7 +102,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #shell.away { translate: -50% -150%; opacity: 0; }
 /* other edges (placement.rs): anchored to that edge, growing away from it; cards are never rotated */
 #shell[data-edge="bottom"] { top: auto; bottom: var(--top); transition: width 0.85s var(--ease), height 0.85s var(--ease), bottom 0.3s ease, translate 0.4s ease, opacity 0.4s ease; }
-#shell[data-edge="left"], #shell[data-edge="right"] { top: 50%; translate: 0 -50%; }
+#shell[data-edge="left"], #shell[data-edge="right"] { top: clamp(calc(var(--h) / 2), var(--ax, 50%), calc(100% - var(--h) / 2)); translate: 0 -50%; }
 #shell[data-edge="left"] { left: var(--top); }
 #shell[data-edge="right"] { left: auto; right: var(--top); }
 #shell[data-edge="bottom"].away { translate: -50% 150%; }
