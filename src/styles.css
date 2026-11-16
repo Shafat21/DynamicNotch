@@ -670,7 +670,7 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 
 /* music (Task 18 player, re-laid out) */
 .music { display: grid; grid-template-columns: 1fr; gap: 14px; }
-.music.lyrics { grid-template-columns: 1.25fr 1fr; }
+.music.lyrics { grid-template-columns: 1.25fr 1fr; height: 100%; grid-template-rows: minmax(0, 1fr); } /* the song can be long: the panel scrolls inside the page, it does not grow it */
 .music:not(.lyrics) .lyrics-panel { display: none; }
 .music-main { display: flex; gap: 16px; align-items: flex-start; min-width: 0; }
 .player-art {
@@ -714,6 +714,15 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .lyric-hint { font-size: var(--t12); font-weight: 500; }
 @media (prefers-reduced-motion: reduce) { .lyric-line { animation: none; } }
 
+/* the whole song, scrolled so the line being sung sits in the middle */
+.lyrics-panel.ready { display: block; position: relative; padding: 0 18px; text-align: center; overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
+.lyrics-panel.ready::before, .lyrics-panel.ready::after { content: ""; display: block; height: 42%; }
+.lyr { padding: 5px 0; color: var(--text); font-size: var(--t15); font-weight: 700; line-height: 1.35; opacity: 0.26; text-wrap: balance;
+  transition: opacity 0.35s var(--ease), transform 0.35s var(--ease), color 0.35s var(--ease); }
+.lyr.near { opacity: 0.5; }
+.lyr.cur { opacity: 1; transform: scale(1.1); text-shadow: 0 0 20px color-mix(in srgb, var(--media) 70%, transparent); }
+@media (prefers-reduced-motion: reduce) { .lyr { transition: none; } }
 /* calendar tab (agenda) */
 #agenda-list { display: flex; flex-direction: column; gap: 8px; }
 .agenda-row .cal-title { font-size: var(--t13); }

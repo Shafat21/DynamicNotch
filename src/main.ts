@@ -40,6 +40,8 @@ import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
 type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
+type LyricLine = { t: number; text: string };
+type LyricData = { state: "loading" | "none" | "ready"; lines: LyricLine[] };
 type Weather = { city: string; temp: string; desc: string; icon: string; feels?: string | null; high?: string | null; low?: string | null; humidity?: number | null; wind?: number | null; rain?: number | null; hourly: { time: string; temp: string; icon: string; rain?: number | null }[] };
 type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
 type Display = { uiScale: number; edge?: Edge; anchor?: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
@@ -67,6 +69,8 @@ const ui = {
   seekPreview: null as number | null, // seconds while dragging the progress bar
   showLyric: true, // Music tab's lyrics panel (in memory)
   lyric: "",
+  lyricLines: { state: "none", lines: [] } as LyricData, // the whole song (lyric-lines), once found
+  lyricAt: -1, // index of the line being sung (lyric-at); -1 = before the first
   event: { title: "", text: "", mood: null as PalMood | null }, // mood: a coding agent pop shows Pal
   settings: { animationStyle: "Fluid Blobs" } as Settings,
   look: DEFAULT_LOOK as Look,
@@ -272,7 +276,7 @@ const compact = initCompact(
   {
     ...(Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => placeholder(el, id)])) as Record<CardId, (el: HTMLElement) => void>),
     music: (el) =>
-      renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
+      renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, next: ui.lyricLines.lines[ui.lyricAt + 1]?.text ?? "", art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
     widgets: (el) => renderWidgets(el, { calendar: ui.calendar, taskCount: ui.tasks.length }),
     shelf: (el) => renderShelf(el, { mode: cmpShelf, onMode: (m) => ((cmpShelf = m), compact.refresh()) }),
     todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh("todo")) }),
@@ -364,6 +368,7 @@ function renderView(): void {
   if (hover && t === "month") renderMonth();
   if (hover && t === "notes") showNotes();
   if (hover && t === "reminders") showReminders();
+  if (hover && t === "music") renderLyric(); // centre the line now that the panel has a size
   if (hover && t === "clipboard") void showClipboard();
   if (hover && t === "shelf") void showShelf();
   if (hover && (t === "devices" || (t === "home" && !$("card-devices").hidden))) void showBluetooth();
@@ -458,19 +463,52 @@ function renderProgress(): void {
   $("player-fill").style.width = duration > 0 ? `${(pos / duration) * 100}%` : "0";
 }
 
+/** The Music tab's lyrics: the whole song, the line being sung lit and centred, its neighbours dimmed. */
+let lyricsBuilt: LyricLine[] | null = null;
 function renderLyric(): void {
   $("music").classList.toggle("lyrics", ui.showLyric);
-  const panel = $("player-lyric");
-  panel.classList.toggle("empty", !ui.lyric);
-  if (ui.lyric) panel.replaceChildren(Object.assign(document.createElement("div"), { className: "lyric-line", textContent: ui.lyric })); // new node = the line animates in
-  else panel.replaceChildren(Object.assign(document.createElement("div"), { className: "lyric-note", textContent: "♪" }), Object.assign(document.createElement("div"), { className: "lyric-hint", textContent: ui.media.state === "Playing" ? "No synced lyrics for this song" : "Lyrics show here while music plays" }));
   $("btn-lyrics").classList.toggle("on", ui.showLyric);
   $("btn-lyrics").setAttribute("aria-pressed", String(ui.showLyric));
+  const panel = $("player-lyric");
+  const { state, lines } = ui.lyricLines;
+  panel.classList.toggle("ready", state === "ready");
+  panel.classList.toggle("empty", state !== "ready");
+  if (state !== "ready") {
+    lyricsBuilt = null;
+    const hint = state === "loading" ? "Looking for lyrics…" : ui.media.state === "Idle" ? "Lyrics show here while music plays" : "No synced lyrics for this song";
+    panel.replaceChildren(Object.assign(document.createElement("div"), { className: "lyric-note", textContent: "♪" }), Object.assign(document.createElement("div"), { className: "lyric-hint", textContent: hint }));
+    return;
+  }
+  if (lyricsBuilt !== lines) {
+    lyricsBuilt = lines;
+    panel.replaceChildren(...lines.map((l) => Object.assign(document.createElement("div"), { className: "lyr", textContent: l.text || "♪" }))); // song text: textContent
+    panel.scrollTop = 0;
+  }
+  if (!ui.showLyric || panel.clientHeight === 0) return; // hidden now: renderView calls this again when the tab shows
+  panel.querySelectorAll<HTMLElement>(".lyr").forEach((el, i) => {
+    const d = i - ui.lyricAt;
+    el.classList.toggle("cur", d === 0);
+    el.classList.toggle("near", Math.abs(d) === 1);
+  });
+  const cur = panel.children[Math.max(ui.lyricAt, 0)] as HTMLElement | undefined;
+  if (cur) panel.scrollTo({ top: cur.offsetTop - (panel.clientHeight - cur.offsetHeight) / 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
 function onLyric(text: string): void {
   ui.lyric = text;
   compact.refresh("music");
+  renderLyric();
+}
+
+function onLyricLines(d: LyricData): void {
+  ui.lyricLines = d;
+  ui.lyricAt = -1;
+  compact.refresh("music");
+  renderLyric();
+}
+
+function onLyricAt(i: number): void {
+  ui.lyricAt = i;
   renderLyric();
 }
 
@@ -955,6 +993,8 @@ async function boot(): Promise<void> {
     listen<Perf>("perf", (e) => onPerf(e.payload)),
     listen<Media>("media", (e) => onMedia(e.payload)),
     listen<string>("lyric", (e) => onLyric(e.payload)),
+    listen<LyricData>("lyric-lines", (e) => onLyricLines(e.payload)),
+    listen<number>("lyric-at", (e) => onLyricAt(e.payload)),
     listen<Progress>("media-progress", (e) => onProgress(e.payload)),
     listen<{ art: string }>("media-art", (e) => onArt(e.payload)),
     listen<Weather>("weather", (e) => onWeather(e.payload)),
@@ -985,6 +1025,8 @@ async function boot(): Promise<void> {
   if (snap.weather) onWeather(snap.weather as Weather);
   if (snap.calendar) ui.calendar = snap.calendar as CalPayload;
   if (snap.media) onMedia(snap.media as Media);
+  if (snap["lyric-lines"]) onLyricLines(snap["lyric-lines"] as LyricData);
+  if (typeof snap["lyric-at"] === "number") onLyricAt(snap["lyric-at"] as number);
   if (snap.lyric) onLyric(snap.lyric as string);
   if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
   if (snap["media-art"]) onArt(snap["media-art"] as { art: string });

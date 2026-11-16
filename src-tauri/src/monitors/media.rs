@@ -14,8 +14,8 @@ mod os;
 mod os;
 pub use os::{control, open_player, seek, spawn};
 
-/// Lyrics are shown slightly early so the line appears as it is sung.
-pub(super) const LYRIC_LEAD_SECS: f64 = 1.0;
+/// Lyrics are shown slightly early so the line appears as it is sung (the card animates in over ~0.35 s).
+pub(super) const LYRIC_LEAD_SECS: f64 = 0.5;
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
 pub(super) struct Media {
@@ -88,25 +88,101 @@ pub(super) fn dominant_color(bytes: &[u8]) -> Option<String> {
     Some(format!("#{:02x}{:02x}{:02x}", sum[0] / n, sum[1] / n, sum[2] / n))
 }
 
-pub(super) fn fetch_lyrics(artist: &str, title: &str) -> Lyrics {
-    let res: std::result::Result<Value, ureq::Error> = http()
-        .get("https://lrclib.net/api/get")
-        .query("artist_name", artist)
-        .query("track_name", title)
-        .call()
-        .and_then(|mut r| r.body_mut().read_json());
-    match res {
-        Ok(data) => {
-            if let Some(lrc) = data["syncedLyrics"].as_str() {
-                parse_lrc(lrc)
-            } else if let Some(first) = data["plainLyrics"].as_str().and_then(|p| p.lines().next()) {
-                vec![(0.0, first.to_string())]
-            } else {
-                Vec::new()
-            }
+/// One lrclib search result.
+struct Cand {
+    title: String,
+    duration: f64,
+    synced: Option<String>,
+}
+
+/// lrclib often has several edits of a song (293 s and 299 s of the same title); lyrics timed for another edit
+/// drift away from the music, so a version more than this far off the playing track's length is not used.
+const MAX_LENGTH_DIFF: f64 = 10.0;
+
+/// The candidate with synced lyrics whose length is closest to the playing track's (`duration` 0 = unknown: the
+/// first one). None when nothing fits.
+fn pick_best(c: &[Cand], duration: f64) -> Option<usize> {
+    c.iter()
+        .enumerate()
+        .filter(|(_, c)| c.synced.is_some())
+        .map(|(i, c)| (i, if duration > 0.0 { (c.duration - duration).abs() } else { 0.0 }))
+        .filter(|&(_, d)| duration <= 0.0 || d <= MAX_LENGTH_DIFF)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+}
+
+/// "Song (feat. X) [Remastered]" -> "Song": drops every (...) and [...] group.
+fn clean_title(t: &str) -> String {
+    let (mut out, mut depth) = (String::new(), 0u32);
+    for ch in t.chars() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            c if depth == 0 => out.push(c),
+            _ => {}
         }
-        Err(_) => Vec::new(), // 404 = no lyrics for this track; nothing to show
     }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// "A, B" / "A & B" / "A feat. B" -> "A".
+fn first_artist(a: &str) -> String {
+    let lower = a.to_lowercase();
+    let cut = [",", "&", ";", " feat", " ft.", " ft ", " x ", " with "].iter().filter_map(|s| lower.find(s)).min().unwrap_or(a.len());
+    a[..cut].trim().to_string()
+}
+
+/// What to ask lrclib, most specific first: the names as the player gives them, then without features and
+/// decorations, and for YouTube ("Artist - Song (Official Video)" by a channel) the artist and song from the title.
+fn lyric_queries(artist: &str, title: &str) -> Vec<(String, String)> {
+    fn push(out: &mut Vec<(String, String)>, a: String, t: String) {
+        if !a.is_empty() && !t.is_empty() && !out.iter().any(|(x, y)| *x == a && *y == t) {
+            out.push((a, t));
+        }
+    }
+    let mut out = Vec::new();
+    push(&mut out, artist.to_string(), title.to_string());
+    match title.split_once(" - ") {
+        Some((l, r)) => push(&mut out, first_artist(l.trim()), clean_title(r)),
+        None => push(&mut out, first_artist(artist), clean_title(title)),
+    }
+    out
+}
+
+fn same_title(a: &str, b: &str) -> bool {
+    clean_title(a).to_lowercase() == clean_title(b).to_lowercase()
+}
+
+fn search(params: &[(&str, &str)], title: &str, duration: f64) -> Option<Lyrics> {
+    let mut req = http().get("https://lrclib.net/api/search");
+    for (k, v) in params {
+        req = req.query(k, v);
+    }
+    let res: Value = req.call().ok()?.body_mut().read_json().ok()?;
+    let mut cands: Vec<Cand> = res
+        .as_array()?
+        .iter()
+        .map(|r| Cand {
+            title: r["trackName"].as_str().unwrap_or("").into(),
+            duration: r["duration"].as_f64().unwrap_or(0.0),
+            synced: r["syncedLyrics"].as_str().map(String::from),
+        })
+        .collect();
+    cands.retain(|c| same_title(&c.title, title)); // a search can return other songs: never show those lyrics
+    let lyrics = parse_lrc(cands[pick_best(&cands, duration)?].synced.as_deref()?);
+    (!lyrics.is_empty()).then_some(lyrics)
+}
+
+/// Synced lyrics for the playing track (`duration` seconds, 0 = unknown); empty when lrclib has none that fit.
+pub(super) fn fetch_lyrics(artist: &str, title: &str, duration: f64) -> Lyrics {
+    for (a, t) in lyric_queries(artist, title) {
+        if let Some(l) = search(&[("track_name", &t), ("artist_name", &a)], &t, duration) {
+            return l;
+        }
+    }
+    // last resort: free text, for names the field search misses
+    let t = clean_title(title);
+    search(&[("q", &format!("{} {t}", first_artist(artist)))], &t, duration).unwrap_or_default()
 }
 
 /// Parse LRC text: "[mm:ss.xx]line", including several timestamps on one line.
@@ -132,8 +208,14 @@ fn parse_lrc(text: &str) -> Lyrics {
     out
 }
 
+/// Index of the line being sung at `pos`; None before the first line.
+pub(super) fn current_index(lyrics: &Lyrics, pos: f64) -> Option<usize> {
+    lyrics.iter().rposition(|(t, _)| *t <= pos)
+}
+
+#[cfg(test)]
 pub(super) fn current_line(lyrics: &Lyrics, pos: f64) -> &str {
-    lyrics.iter().take_while(|(t, _)| *t <= pos).last().map(|(_, l)| l.as_str()).unwrap_or("")
+    current_index(lyrics, pos).map_or("", |i| lyrics[i].1.as_str())
 }
 
 #[cfg(test)]
@@ -149,6 +231,43 @@ mod tests {
         assert_eq!(current_line(&l, 13.0), "Second");
         assert_eq!(current_line(&l, 21.0), "Chorus");
         assert_eq!(current_line(&l, 62.0), "Last");
+    }
+
+    fn cand(_artist: &str, title: &str, duration: f64, synced: bool) -> Cand {
+        Cand { title: title.into(), duration, synced: synced.then(|| "[00:01.00]x".to_string()) }
+    }
+
+    #[test]
+    fn picks_the_version_whose_length_matches_the_track() {
+        let c = [cand("A", "T", 293.0, true), cand("A", "T", 299.0, true), cand("A", "T", 254.0, false)];
+        assert_eq!(pick_best(&c, 298.0), Some(1));
+        assert_eq!(pick_best(&c, 293.4), Some(0));
+        assert_eq!(pick_best(&c, 0.0), Some(0)); // length unknown: the first with synced lyrics
+        assert_eq!(pick_best(&c, 200.0), None); // a different edit: wrong timing is worse than none
+        assert_eq!(pick_best(&[cand("A", "T", 254.0, false)], 254.0), None); // no synced lyrics
+    }
+
+    #[test]
+    fn lookup_names_drop_features_and_youtube_decoration() {
+        let q = lyric_queries("Bassbaba Sumon, Anila", "Gaibona (feat. Fuad)");
+        assert_eq!(q[0], ("Bassbaba Sumon, Anila".to_string(), "Gaibona (feat. Fuad)".to_string()));
+        assert!(q.contains(&("Bassbaba Sumon".to_string(), "Gaibona".to_string())));
+        // YouTube: the channel is the artist and the title carries "Artist - Song (Official Video)"
+        let q = lyric_queries("G Series Music", "Bassbaba Sumon - Gaibona (Official Video)");
+        assert!(q.contains(&("Bassbaba Sumon".to_string(), "Gaibona".to_string())));
+        // nothing to clean: one query
+        assert_eq!(lyric_queries("Queen", "Bohemian Rhapsody").len(), 1);
+    }
+
+    #[test]
+    fn current_index_is_minus_one_before_the_first_line() {
+        let l = parse_lrc("[00:05.00]a
+[00:10.00]b
+[00:10.00]c");
+        assert_eq!(current_index(&l, 1.0), None);
+        assert_eq!(current_index(&l, 5.0), Some(0));
+        assert_eq!(current_index(&l, 10.5), Some(2)); // same stamp twice: the later line
+        assert_eq!(current_line(&l, 1.0), "");
     }
 
     #[test]

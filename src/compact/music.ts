@@ -5,7 +5,7 @@ import { icon } from "../icons-line";
 
 type Media = { state: string; title: string; artist: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
-export type MusicState = { media: Media; progress: Progress; lyric: string; art: string | null; showLyrics: boolean; onFlip(): void };
+export type MusicState = { media: Media; progress: Progress; lyric: string; next: string; art: string | null; showLyrics: boolean; onFlip(): void };
 
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
 const node = (tag: string, cls: string, text = "") => Object.assign(document.createElement(tag), { className: cls, textContent: text });
@@ -46,6 +46,7 @@ export function renderMusic(el: HTMLElement, s: MusicState): void {
     q(".cm-elapsed").textContent = mmss(s.progress.position);
     q(".cm-left").textContent = `-${mmss(dur - s.progress.position)}`;
   } else {
+    q(".cm-next").textContent = s.next;
     const line = q<HTMLElement>(".cm-line");
     if (line.textContent !== (s.lyric || "♪")) {
       line.textContent = s.lyric || "♪";
@@ -81,7 +82,7 @@ function build(el: HTMLElement, view: "player" | "lyrics", s: MusicState): void 
     head.append(art, meta);
     left.append(head, bar, ctrl);
     const lyrics = node("div", "cm-lyrics");
-    lyrics.append(node("div", "cm-line"));
+    lyrics.append(node("div", "cm-line"), node("div", "cm-next"));
     wrap.append(left, lyrics);
   }
   el.replaceChildren(wrap);

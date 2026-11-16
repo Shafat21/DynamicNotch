@@ -1,6 +1,6 @@
 //! Windows media sessions (GSMTC): polls every 100 ms and publishes `media` / `media-art` / `media-progress` / `lyric`.
 
-use super::{art_data_uri, current_line, dominant_color, fetch_lyrics, key, should_retry_art, Lyrics, Media, LYRIC_LEAD_SECS};
+use super::{art_data_uri, current_index, dominant_color, fetch_lyrics, key, should_retry_art, Lyrics, Media, LYRIC_LEAD_SECS};
 use crate::publish;
 use serde_json::json;
 use std::path::Path;
@@ -29,7 +29,7 @@ fn run(app: &AppHandle) -> Result<()> {
     let mgr = Manager::RequestAsync()?.get()?;
     let mut last = Media::idle();
     let mut lyrics: Lyrics = Vec::new();
-    let mut line = String::new();
+    let mut at: Option<usize> = None; // the line being sung
     let (tx, rx) = mpsc::channel::<(String, Lyrics)>();
     let (mut art_since, mut have_art) = (Instant::now(), false); // art retry window, reset per track
     publish(app, "media", &last);
@@ -60,12 +60,15 @@ fn run(app: &AppHandle) -> Result<()> {
 
                 if track_changed {
                     lyrics.clear();
-                    line.clear();
+                    at = None;
                     publish(app, "lyric", "");
-                    if !last.artist.is_empty() && !last.title.is_empty() {
-                        let (tx, artist, title) = (tx.clone(), last.artist.clone(), last.title.clone());
+                    publish(app, "lyric-at", -1);
+                    let looking = !last.artist.is_empty() && !last.title.is_empty();
+                    publish(app, "lyric-lines", json!({ "state": if looking { "loading" } else { "none" }, "lines": [] }));
+                    if looking {
+                        let (tx, artist, title, length) = (tx.clone(), last.artist.clone(), last.title.clone(), last.duration);
                         thread::spawn(move || {
-                            let _ = tx.send((key(&artist, &title), fetch_lyrics(&artist, &title)));
+                            let _ = tx.send((key(&artist, &title), fetch_lyrics(&artist, &title, length)));
                         });
                     }
                 }
@@ -95,15 +98,20 @@ fn run(app: &AppHandle) -> Result<()> {
         while let Ok((k, l)) = rx.try_recv() {
             if k == key(&last.artist, &last.title) {
                 lyrics = l;
+                at = None;
+                let lines: Vec<_> = lyrics.iter().map(|(t, text)| json!({ "t": t, "text": text })).collect();
+                publish(app, "lyric-lines", json!({ "state": if lines.is_empty() { "none" } else { "ready" }, "lines": lines }));
             }
         }
 
-        if last.state == "Playing" && !lyrics.is_empty() {
-            if let Some(pos) = session.as_ref().and_then(|s| position_secs(s, true)) {
-                let now = current_line(&lyrics, pos + LYRIC_LEAD_SECS);
-                if now != line {
-                    line = now.to_string();
-                    publish(app, "lyric", &line);
+        // also while paused: a seek moves the line, and the position is exact then
+        if last.state != "Idle" && !lyrics.is_empty() {
+            if let Some(pos) = session.as_ref().and_then(|s| position_secs(s, last.state == "Playing")) {
+                let now = current_index(&lyrics, pos + LYRIC_LEAD_SECS);
+                if now != at {
+                    at = now;
+                    publish(app, "lyric-at", now.map_or(-1, |i| i as i64));
+                    publish(app, "lyric", now.map_or("", |i| lyrics[i].1.as_str()));
                 }
             }
         }
@@ -156,14 +164,24 @@ fn thumbnail(s: &Session) -> Option<Vec<u8>> {
     read().ok()
 }
 
-/// Play/pause, next, previous on the current media session.
+/// A system media key, as a keyboard's own next / previous button sends it.
+fn media_key(vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP};
+    let key = |flags: KEYBD_EVENT_FLAGS| INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, dwFlags: flags, ..Default::default() } } };
+    unsafe { SendInput(&[key(KEYBD_EVENT_FLAGS(0)), key(KEYEVENTF_KEYUP)], std::mem::size_of::<INPUT>() as i32) };
+}
+
+/// Play/pause, next, previous on the current media session. Browsers (YouTube in Chrome) often answer a skip
+/// request with "no" when the page has no next / previous handler of its own; then the media key goes to
+/// whatever owns media keys, which is the same browser tab.
 pub fn control(action: &str) -> std::result::Result<(), String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_MEDIA_NEXT_TRACK, VK_MEDIA_PREV_TRACK};
     let run = || -> Result<()> {
         let s = Manager::RequestAsync()?.get()?.GetCurrentSession()?;
         match action {
             "toggle" => s.TryTogglePlayPauseAsync()?.get()?,
-            "next" => s.TrySkipNextAsync()?.get()?,
-            "prev" => s.TrySkipPreviousAsync()?.get()?,
+            "next" => s.TrySkipNextAsync()?.get()? || (media_key(VK_MEDIA_NEXT_TRACK), true).1,
+            "prev" => s.TrySkipPreviousAsync()?.get()? || (media_key(VK_MEDIA_PREV_TRACK), true).1,
             _ => false,
         };
         Ok(())
