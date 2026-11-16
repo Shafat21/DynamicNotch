@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+  <head>
+<script src="tauri-mock.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dynamic Notch Island</title>
+    <script type="module" crossorigin src="./assets/main-Ddzs6Zgf.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/main-tmLoye6U.css">
+  </head>
+  <body>
+    <!-- #shell animates size/position; #island clips its layers to the pill shape. -->
+    <div id="shell">
+      <div class="charge"><div class="beam l"></div><div class="beam r"></div></div>
+      <div class="ear l"></div>
+      <div class="ear r"></div>
+      <div id="island">
+        <div class="fx"></div>
+        <div class="shine"></div>
+
+        <div id="content"><div id="view">
+          <!-- Header: idle clock / playing title, notifications -->
+          <div class="header" id="header">
+            <span class="icon" id="status-pal"><span class="usage-dot" id="usage-dot" title="Claude Code usage" hidden></span></span>
+            <span class="icon" id="status-pop" hidden></span>
+            <span class="spinner" id="status-spin" hidden title="A coding agent is working"></span>
+            <span class="icon" id="status-icon" hidden></span>
+            <span class="title" id="status-text"></span>
+            <span class="rec-badge" id="rec-badge" role="status" hidden></span>
+          </div>
+
+          <!-- Reminder banner (state "reminder", reminders.ts): stays until Snooze / Done -->
+          <div class="reminder" id="reminder" role="alert" hidden></div>
+          <!-- Live toast (toast.ts): Bluetooth connected, charging -->
+          <div class="toast" id="toast" role="status" hidden></div>
+
+          <!-- Dictation pill (state "dictation", dictation.ts): listening → transcribing → pasted / error -->
+          <div class="dictation" id="dictation" role="status" aria-live="polite" hidden></div>
+
+          <!-- Open island: tab bar + one page per tab (spec §22.1) -->
+          <!-- Compact notch (appearance view "compact", src/compact/): one card at a time -->
+          <div id="compact" hidden></div>
+          <div id="open" hidden>
+            <div class="topbar">
+              <nav class="tabbar" id="tabbar" aria-label="Tabs"><div class="tab-row" id="tabs"></div></nav>
+              <div class="more-menu" id="more-menu" hidden></div>
+              <span class="spacer"></span>
+              <span class="top-clock" id="top-clock"></span>
+              <div class="quick">
+                <button class="qb" id="btn-call" title="Record a call"></button>
+                <button class="qb" id="btn-pal-status" title="Pal"></button>
+                <button class="qb" id="btn-pin" title="Keep open" aria-pressed="false"><span data-icon="pin"></span></button>
+                <button class="qb" data-settings title="Settings"><span class="qb-ic" data-badge="settings" data-icon="cog"></span></button>
+                <button class="qb" id="btn-collapse" title="Collapse"><span data-icon="chevronUp"></span></button>
+              </div>
+            </div>
+
+            <!-- Claude Code prompt (state "prompt", assistant.ts): above the tab content -->
+            <div class="prompt" id="prompt" hidden></div>
+
+            <div class="pages" id="pages">
+              <!-- Home: cards are ordered/hidden from the saved layout (ui/home.ts) -->
+              <section class="page" id="tab-home" hidden>
+                <div class="home-grid" id="home-grid">
+                  <button class="card" id="card-clock" data-goto="weather">
+                    <div class="big" id="clock-time"></div>
+                    <div class="muted" id="clock-date"></div>
+                    <div class="clock-weather">
+                      <span class="wicon" id="clock-wicon" data-badge="weather" data-icon="partly"></span>
+                      <span class="col"><span class="ell" id="clock-wtext">--°</span><span class="muted small ell" id="clock-city"></span></span>
+                    </div>
+                  </button>
+                  <div class="card" id="card-pal" data-goto="pal" role="button" tabindex="0">
+                    <!-- assistant.ts renders the Claude Code session into #pal-card -->
+                    <div id="pal-card"><span class="pal-face" id="pal-card-face"></span></div>
+                  </div>
+                  <div class="card" id="card-music" data-goto="music" role="button" tabindex="0">
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="music" data-icon="music"></span><span class="lbl">Now playing</span></div>
+                    <div class="now">
+                      <span class="now-art"><img id="tile-media-art" alt="" hidden /></span>
+                      <span class="col"><b class="ell" id="tile-media-title">Nothing playing</b><span class="muted ell" id="tile-media-artist"></span></span>
+                    </div>
+                    <div class="ctrl">
+                      <button class="media-btn" data-media="prev" data-icon="prev" title="Previous"></button>
+                      <button class="media-btn" data-media="toggle" data-icon="play" title="Play/Pause"></button>
+                      <button class="media-btn" data-media="next" data-icon="next" title="Next"></button>
+                    </div>
+                  </div>
+                  <!-- Calendar card (spec §15.3); click → Calendar tab -->
+                  <div class="card" id="card-calendar" data-goto="calendar" role="button" tabindex="0" title="Today's agenda">
+                    <div class="card-head">
+                      <span class="card-ic badge-only" data-badge="calendar" data-icon="calendar"></span>
+                      <span class="lbl cal-date" id="cal-date"></span>
+                      <span class="spacer"></span>
+                      <button class="bar-btn cal-add" id="btn-cal-link" data-icon="plus" data-size="14" title="Calendar link"></button>
+                    </div>
+                    <div class="cal-count ell" id="cal-count"></div>
+                    <div id="cal-body"></div>
+                  </div>
+                  <button class="card" id="card-system" data-goto="system">
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="system" data-icon="cpu"></span><span class="lbl">System</span></div>
+                    <div class="mini"><span>CPU</span><b id="card-cpu">--%</b></div><div class="bar"><div id="card-cpu-bar"></div></div>
+                    <div class="mini"><span>RAM</span><b id="card-ram">--%</b></div><div class="bar"><div id="card-ram-bar"></div></div>
+                  </button>
+                  <button class="card" id="card-tasks" data-goto="tasks">
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="tasks" data-icon="tasks"></span><span class="lbl">Tasks</span></div>
+                    <div id="card-task-list"></div>
+                  </button>
+                  <!-- Sound & brightness card (sound.ts); the background opens the Sound tab -->
+                  <div class="card snd-card" id="card-sound" data-goto="sound" role="button" tabindex="0" title="Sound &amp; brightness">
+                    <div class="snd-row">
+                      <button class="snd-ic snd-mute" id="snd-mute" title="Mute"></button>
+                      <input type="range" class="slider" id="snd-vol" min="0" max="100" step="1" aria-label="Volume" />
+                      <span class="snd-val" id="snd-vol-val">--</span>
+                    </div>
+                    <div class="snd-row" id="snd-bright-row" hidden>
+                      <span class="snd-ic" data-icon="sunny" data-size="16"></span>
+                      <input type="range" class="slider" id="snd-bright" min="0" max="100" step="1" aria-label="Brightness" />
+                      <span class="snd-val" id="snd-bright-val"></span>
+                    </div>
+                    <div class="snd-foot">
+                      <select id="snd-device" aria-label="Output device"></select>
+                      <button class="btn snd-lock compact" data-action="lock" title="Lock this PC" aria-label="Lock this PC"><span data-icon="lock" data-size="14"></span></button>
+                    </div>
+                  </div>
+                  <!-- Bluetooth card (bluetooth.ts); the background opens the Devices tab -->
+                  <div class="card bt-card" id="card-devices" data-goto="devices" role="button" tabindex="0" title="Bluetooth">
+                    <div class="card-head">
+                      <span class="card-ic badge-only" data-badge="devices" data-icon="bluetooth"></span>
+                      <span class="lbl">Bluetooth</span>
+                      <span class="spacer"></span>
+                      <button class="bar-btn" id="bt-card-refresh" data-icon="restart" data-size="14" title="Refresh" aria-label="Refresh Bluetooth devices"></button>
+                      <button class="bar-btn" data-action="bluetooth" data-icon="cog" data-size="14" title="Bluetooth settings" aria-label="Open Bluetooth settings"></button>
+                    </div>
+                    <div class="bt-radio"><span class="small">Bluetooth</span><button class="bt-switch" id="bt-card-radio" role="switch" aria-checked="false" aria-label="Bluetooth" disabled></button></div>
+                    <div class="bt-list" id="bt-card-list"></div>
+                    <div class="small bt-err" id="bt-card-err" hidden></div>
+                  </div>
+                  <!-- Dictation card (dictation.ts): last transcripts, memory only -->
+                  <div class="card" id="card-dictation">
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="dictation" data-icon="mic"></span><span class="lbl">Dictation</span></div>
+                    <div class="dict-list" id="dict-list"></div>
+                  </div>
+                </div>
+                <div class="home-strip" id="home-strip">
+                  <div class="strip-launcher" id="card-launcher" role="group" aria-label="Launcher">
+                    <span class="card-ic badge-only" data-badge="launcher" data-icon="launcher"></span>
+                    <div class="launcher" id="launcher"></div>
+                    <span class="dock-sep" aria-hidden="true"></span>
+                    <button class="app" id="launcher-more" data-goto="launcher" hidden></button>
+                    <button class="app add" data-add-app data-icon="plus" title="Add app" aria-label="Add app"></button>
+                  </div>
+                  <div class="strip-notes" id="card-notes" title="Notes: press Enter to add">
+                    <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
+                    <input id="notes-quick" placeholder="Jot something down…" maxlength="20000" autocomplete="off" spellcheck="false" />
+                    <button class="bar-btn" id="notes-quick-mic" data-icon="mic" data-size="14" title="Voice note: click to start / stop, or hold" aria-label="Voice note"></button>
+                  </div>
+                  <button class="strip-rem" id="card-reminders" data-goto="reminders" title="Reminders">
+                    <span class="card-ic" data-badge="reminders" data-icon="bell" data-size="14"></span>
+                    <span class="ell" id="rem-next"></span>
+                  </button>
+                  <button class="focus-chip" id="card-focus" title="Click to start/pause, scroll to change"></button>
+                </div>
+              </section>
+
+              <!-- Music: Task 18 player re-laid out, synced lyric on the right -->
+              <section class="page" id="tab-music" hidden>
+                <div class="music lyrics" id="music">
+                  <div class="music-main">
+                    <div class="player-art"><img id="player-art" alt="" hidden /></div>
+                    <div class="player-info">
+                      <div class="player-title ell" id="player-title"></div>
+                      <div class="player-artist ell" id="player-artist"></div>
+                      <div class="player-state"><span id="player-state"></span><span class="eq" id="player-eq"><i></i><i></i><i></i><i></i></span></div>
+                      <div class="player-progress" id="player-progress">
+                        <div class="player-track" id="player-track"><div class="player-line"><div id="player-fill"></div></div></div>
+                        <div class="player-times"><span id="player-elapsed">0:00</span><span class="spacer"></span><span id="player-remaining">-0:00</span></div>
+                      </div>
+                      <div class="player-controls">
+                        <button class="media-btn" id="btn-lyrics" data-icon="lyrics" title="Lyrics" aria-pressed="true"></button>
+                        <span class="spacer"></span>
+                        <button class="media-btn big" data-media="prev" data-icon="prev" data-size="22" title="Previous"></button>
+                        <button class="media-btn big" data-media="toggle" data-icon="play" data-size="28" title="Play/Pause"></button>
+                        <button class="media-btn big" data-media="next" data-icon="next" data-size="22" title="Next"></button>
+                        <span class="spacer"></span>
+                        <button class="media-btn" id="btn-open-player" data-icon="dots" title="Open player"></button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lyrics-panel" id="player-lyric"></div>
+                </div>
+              </section>
+
+              <!-- Calendar: today's agenda + link editor -->
+              <section class="page" id="tab-calendar" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Today</span>
+                  <button class="link-btn" data-goto="tasks">Tasks</button>
+                  <button class="link-btn agenda-month" data-goto="month">Month</button>
+                  <button class="action-btn" id="btn-agenda-link" data-icon="pencil" data-size="16" title="Calendar link"></button>
+                </div>
+                <div id="agenda-list"></div>
+                <form class="location-form" id="cal-form" hidden>
+                  <input id="cal-input" placeholder="Paste your calendar's secret iCal link" maxlength="2100" autocomplete="off" spellcheck="false" />
+                  <button type="submit" class="btn primary">Save</button>
+                  <button type="button" class="btn" id="cal-remove">Remove</button>
+                  <button type="button" class="btn" id="cal-cancel">Cancel</button>
+                </form>
+              </section>
+
+              <!-- Pal: Claude Code sessions (assistant.ts); prompts show in #prompt above -->
+              <section class="page" id="tab-pal" hidden>
+                <div class="pal-tab">
+                  <div class="pal-side">
+                    <span id="pal-tab-face"></span>
+                    <div class="pal-state" id="pal-state"></div>
+                  </div>
+                  <div class="sess-list" id="pal-sessions"></div>
+                </div>
+              </section>
+
+              <!-- Timer: the focus timer, big -->
+              <section class="page" id="tab-timer" hidden>
+                <button class="timer-big" id="timer-big" title="Click to start/pause, scroll to change"></button>
+                <div class="muted center">Click to start or pause · scroll to change by 5 min</div>
+              </section>
+
+              <!-- Launcher: full grid -->
+              <section class="page" id="tab-launcher" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Launcher</span>
+                  <span class="muted small">Right-click twice to remove</span>
+                </div>
+                <!-- #launcher-add stays last: renderApps re-appends it after the apps -->
+                <div class="launcher launcher-grid" id="launcher-grid"><button class="app app-add" id="launcher-add" data-add-app title="Add an app"><span class="app-ic" data-icon="plus" data-size="18"></span><span class="app-name">Add app</span></button></div>
+              </section>
+
+              <!-- Weather -->
+              <section class="page" id="tab-weather" hidden>
+                <div class="weather-top">
+                  <span class="weather-badge" id="weather-icon" aria-hidden="true"></span>
+                  <div class="weather-temp" id="weather-temp">--°</div>
+                  <div class="weather-head">
+                    <div class="weather-city ell" id="weather-city">—</div>
+                    <div class="weather-cond ell" id="weather-cond">Loading...</div>
+                  </div>
+                  <span class="spacer"></span>
+                  <!-- feels like · humidity · wind · chance of rain (any Open-Meteo leaves out are hidden) -->
+                  <div class="weather-stats" id="weather-stats"></div>
+                  <button class="action-btn" id="btn-edit-location" data-icon="pencil" data-size="15" title="Change location"></button>
+                  <button class="action-btn" data-action="weather" data-icon="open" data-size="15" title="Open Weather app"></button>
+                </div>
+                <div class="hourly" id="hourly"></div>
+                <form class="location-form" id="location-form" hidden>
+                  <input id="location-input" placeholder="City name" maxlength="100" autocomplete="off" />
+                  <button type="submit" class="btn primary">Save</button>
+                  <button type="button" class="btn" id="location-cancel">Cancel</button>
+                </form>
+              </section>
+
+              <!-- System status -->
+              <section class="page" id="tab-system" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">System Status</span>
+                  <button class="action-btn" data-action="taskmgr" data-icon="open" data-size="16" title="Task Manager"></button>
+                </div>
+                <div class="stat-grid">
+                  <div class="stat"><div class="stat-label"><i data-icon="cpu" data-size="14"></i>CPU</div><div class="stat-val" id="cpu-val">0%</div><div class="bar"><div id="cpu-bar"></div></div></div>
+                  <div class="stat"><div class="stat-label"><i data-icon="memory" data-size="14"></i>RAM</div><div class="stat-val" id="ram-val">0%</div><div class="bar"><div id="ram-bar"></div></div></div>
+                  <div class="stat"><div class="stat-label"><i data-icon="disk" data-size="14"></i>STORAGE</div><div class="stat-val" id="disk-val">0%</div><div class="bar"><div id="disk-bar"></div></div></div>
+                  <div class="stat"><div class="stat-label"><i data-icon="web" data-size="14"></i>NETWORK</div><div class="net down" id="net-down">↓ 0 KB/s</div><div class="net up" id="net-up">↑ 0 KB/s</div></div>
+                </div>
+              </section>
+
+              <!-- Tasks: view mode + edit mode -->
+              <section class="page" id="tab-tasks" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Next Up</span>
+                  <span class="muted small" id="task-count">0 tasks</span>
+                  <button class="link-btn" data-goto="month">Month</button>
+                </div>
+                <!-- quick add: category chip cycles on click (panels.ts), Enter adds -->
+                <form id="task-form" class="task-add">
+                  <button type="button" class="task-cat-btn" id="task-cat"><i></i><span></span></button>
+                  <input id="task-name" placeholder="Add a task…" maxlength="100" autocomplete="off" aria-label="Task name" />
+                  <input id="task-time" placeholder="Time" maxlength="30" autocomplete="off" aria-label="Time, e.g. 3:00 PM" title="Time, e.g. 3:00 PM" />
+                  <button type="submit" class="task-add-btn" title="Add task" data-icon="plus" data-size="16"></button>
+                </form>
+                <div id="task-list" class="task-list"></div>
+              </section>
+
+              <!-- Notes: list + editor (notes.ts) -->
+              <section class="page" id="tab-notes" hidden>
+                <div class="notes">
+                  <div class="notes-side">
+                    <div class="notes-bar">
+                      <input id="notes-search" type="search" placeholder="Search notes" maxlength="100" autocomplete="off" spellcheck="false" />
+                      <button class="action-btn" id="notes-new" data-icon="plus" data-size="16" title="New note"></button>
+                      <button class="action-btn" id="notes-call" title="Record a call"></button>
+                    </div>
+                    <div class="call-strip" id="call-strip" role="status" hidden></div>
+                    <div class="notes-list" id="notes-list"></div>
+                  </div>
+                  <div class="notes-edit">
+                    <textarea id="note-body" placeholder="Write a note…" maxlength="200000" spellcheck="false"></textarea>
+                    <div class="notes-actions">
+                      <button class="action-btn" id="note-pin" data-icon="pin" data-size="16" title="Pin"></button>
+                      <button class="action-btn" id="note-del" data-icon="trash" data-size="16" title="Delete"></button>
+                      <button class="action-btn" id="note-mic" data-icon="mic" data-size="16" title="Voice note: click to start / stop, or hold" aria-label="Voice note"></button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Reminders: upcoming + done today, or the new-reminder form (reminders.ts) -->
+              <section class="page" id="tab-reminders" hidden>
+                <div id="rem-view">
+                  <div class="panel-head">
+                    <span class="panel-title">Reminders</span>
+                    <span class="muted" id="rem-count"></span>
+                    <button class="action-btn" id="rem-new" data-icon="plus" data-size="16" title="New reminder"></button>
+                  </div>
+                  <div class="rem-cols">
+                    <div class="rem-list" id="rem-upcoming"></div>
+                    <div class="rem-list"><span class="lbl">Done today</span><div class="rem-list" id="rem-done"></div></div>
+                  </div>
+                </div>
+                <form class="rem-form" id="rem-form" hidden>
+                  <div class="rem-form-head">
+                    <span class="rem-ic" data-icon="bell" data-size="14"></span>
+                    <b>New reminder</b>
+                    <span class="muted small ell">The island tells you when it's time.</span>
+                  </div>
+                  <input id="rem-text" placeholder="Remind me to…" maxlength="200" autocomplete="off" spellcheck="false" />
+                  <div class="rem-chips"><span class="lbl">When</span><div class="opts" id="rem-when"></div></div>
+                  <div class="rem-chips"><span class="lbl">Repeat</span><div class="opts" id="rem-repeat"></div></div>
+                  <div class="rem-foot">
+                    <input type="datetime-local" id="rem-pick" aria-label="Reminder time" hidden />
+                    <span class="muted ell" id="rem-summary"></span>
+                    <span class="spacer"></span>
+                    <button type="button" class="btn" id="rem-cancel">Cancel</button>
+                    <button type="submit" class="btn primary">Set reminder</button>
+                  </div>
+                </form>
+              </section>
+
+              <!-- Clipboard history (clipboard.ts) -->
+              <section class="page" id="tab-clipboard" hidden>
+                <div class="clip">
+                  <div class="notes-bar">
+                    <input id="clip-search" type="search" placeholder="Search clipboard" maxlength="100" autocomplete="off" spellcheck="false" />
+                    <span class="muted" id="clip-state" hidden>Paused</span>
+                    <button class="action-btn" id="clip-pause" title="Pause recording"></button>
+                    <button class="btn" id="clip-clear" type="button">Clear</button>
+                  </div>
+                  <div class="clip-list" id="clip-list"></div>
+                </div>
+              </section>
+
+              <!-- Shelf (shelf.ts) -->
+              <section class="page" id="tab-shelf" hidden>
+                <div class="shelf">
+                  <div class="notes-bar">
+                    <span class="muted ell" id="shelf-hint"></span>
+                    <span class="spacer"></span>
+                    <button class="btn" id="shelf-clear" type="button">Clear</button>
+                  </div>
+                  <div class="shelf-grid" id="shelf-grid"></div>
+                  <div class="muted shelf-empty" id="shelf-empty" hidden>Drop files or folders on the island to keep them here</div>
+                  <div class="shelf-menu" id="shelf-menu" role="menu" hidden></div>
+                </div>
+              </section>
+
+              <!-- Sound & brightness (sound.ts) -->
+              <section class="page" id="tab-sound" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Sound &amp; brightness</span>
+                  <button class="btn snd-lock" data-action="lock" title="Lock this PC"><span data-icon="lock" data-size="14"></span>Lock</button>
+                </div>
+                <div class="snd-tab">
+                  <div class="snd-col">
+                    <span class="lbl">Output</span>
+                    <div class="snd-row">
+                      <button class="snd-ic snd-mute" id="snd-tab-mute" title="Mute"></button>
+                      <input type="range" class="slider" id="snd-tab-vol" min="0" max="100" step="1" aria-label="Volume" />
+                      <span class="snd-val" id="snd-tab-vol-val">--</span>
+                    </div>
+                    <div id="snd-tab-device"></div>
+                    <div class="snd-err" id="snd-err" hidden>
+                      <span class="muted small">Couldn't switch the output here.</span>
+                      <button class="link-btn" data-action="sound-settings">Open sound settings</button>
+                    </div>
+                  </div>
+                  <div class="snd-col">
+                    <span class="lbl">Brightness</span>
+                    <div class="snd-list" id="snd-displays"></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Bluetooth (bluetooth.ts) -->
+              <section class="page" id="tab-devices" hidden>
+                <div class="panel-head">
+                  <span class="panel-title">Bluetooth</span>
+                  <button class="bar-btn" id="bt-tab-refresh" data-icon="restart" data-size="14" title="Refresh" aria-label="Refresh Bluetooth devices"></button>
+                  <button class="bar-btn" data-action="bluetooth" data-icon="cog" data-size="14" title="Bluetooth settings" aria-label="Open Bluetooth settings"></button>
+                  <button class="bt-switch" id="bt-tab-radio" role="switch" aria-checked="false" aria-label="Bluetooth" disabled></button>
+                </div>
+                <div class="bt-list" id="bt-tab-list"></div>
+                <div class="small bt-err" id="bt-tab-err" hidden></div>
+              </section>
+
+              <!-- Month progress -->
+              <section class="page" id="tab-month" hidden>
+                <div class="panel-head">
+                  <span class="panel-title" id="month-title">Month Progress</span>
+                  <span class="month-pct" id="month-pct">0%</span>
+                  <button class="action-btn" data-action="datetime" data-icon="open" data-size="16" title="Date &amp; time settings"></button>
+                </div>
+                <div class="muted small" id="month-left"></div>
+                <div class="dots" id="month-dots"></div>
+              </section>
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </body>
+</html>
