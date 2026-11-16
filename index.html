@@ -236,12 +236,15 @@
               <!-- Weather -->
               <section class="page" id="tab-weather" hidden>
                 <div class="weather-top">
-                  <div class="weather-head">
-                    <div class="weather-city" id="weather-city">—</div>
-                    <div class="weather-cond" id="weather-cond">Loading...</div>
-                  </div>
+                  <span class="weather-badge" id="weather-icon" aria-hidden="true"></span>
                   <div class="weather-temp" id="weather-temp">--°</div>
+                  <div class="weather-head">
+                    <div class="weather-city ell" id="weather-city">—</div>
+                    <div class="weather-cond ell" id="weather-cond">Loading...</div>
+                  </div>
                   <span class="spacer"></span>
+                  <!-- feels like · humidity · wind · chance of rain (any Open-Meteo leaves out are hidden) -->
+                  <div class="weather-stats" id="weather-stats"></div>
                   <button class="action-btn" id="btn-edit-location" data-icon="pencil" data-size="15" title="Change location"></button>
                   <button class="action-btn" data-action="weather" data-icon="open" data-size="15" title="Open Weather app"></button>
                 </div>

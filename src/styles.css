@@ -820,15 +820,32 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .net.up { color: var(--success); }
 
 /* weather */
-.weather-top { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+.weather-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.weather-badge { --sky: #f5c451; display: grid; place-items: center; width: 46px; height: 46px; flex: none; border-radius: 14px;
+  color: var(--sky); background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--sky) 34%, transparent), color-mix(in srgb, var(--sky) 10%, transparent) 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky) 28%, transparent); }
+.weather-badge[data-sky="partly"] { --sky: #f2b84b; }
+.weather-badge[data-sky="cloudy"], .weather-badge[data-sky="fog"] { --sky: #a9b4c6; }
+.weather-badge[data-sky="rainy"], .weather-badge[data-sky="pouring"] { --sky: #5aa9ff; }
+.weather-badge[data-sky="snowy"] { --sky: #bfe3ff; }
+.weather-badge[data-sky="lightning"] { --sky: #b48cff; }
+.weather-head { min-width: 0; }
 .weather-city { font-size: var(--t15); font-weight: 600; }
-.weather-cond { font-size: var(--t12); color: var(--muted); }
-.weather-temp { font-size: var(--t38); font-weight: 600; line-height: 1; }
-.hourly { display: flex; justify-content: space-between; gap: 5px; }
-.slot { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.weather-cond { font-size: var(--t12); color: var(--muted); white-space: pre; }
+.weather-temp { font-size: var(--t38); font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.weather-stats { display: flex; gap: 6px; flex: none; }
+.wstat { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 13px;
+  background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: var(--t11); }
+.wstat b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+#tab-weather:not([hidden]) { display: flex; flex-direction: column; }
+.hourly { flex: 1; min-height: 0; display: flex; gap: 4px; padding: 6px; border-radius: var(--radius-lg); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); }
+.slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; flex: 1; min-width: 0; padding: 5px 0 3px; border-radius: calc(var(--radius-lg) - 3px); }
 .slot span { display: grid; }
 .slot .t { font-size: var(--t11); color: var(--muted); }
-.slot .v { font-size: var(--t12); font-weight: 600; }
+.slot .v { font-size: var(--t12); font-weight: 600; font-variant-numeric: tabular-nums; }
+.slot .r { min-height: 13px; font-size: 10px; font-weight: 600; line-height: 13px; color: #5aa9ff; }
+.slot.now { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent); }
+.slot.now .t { color: var(--accent); font-weight: 600; }
 .location-form { display: flex; gap: 8px; margin-top: 12px; }
 .location-form input { flex: 1; }
 

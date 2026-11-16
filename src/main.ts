@@ -40,7 +40,7 @@ import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
 type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
-type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
+type Weather = { city: string; temp: string; desc: string; icon: string; feels?: string | null; high?: string | null; low?: string | null; humidity?: number | null; wind?: number | null; rain?: number | null; hourly: { time: string; temp: string; icon: string; rain?: number | null }[] };
 type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
 type Display = { uiScale: number; edge?: Edge; anchor?: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
 type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation" | "toast";
@@ -477,23 +477,39 @@ function onLyric(text: string): void {
 function onWeather(w: Weather): void {
   $("weather-temp").textContent = w.temp;
   $("weather-city").textContent = w.city;
-  $("weather-cond").textContent = w.desc;
+  $("weather-cond").textContent = w.high && w.low ? `${w.desc} · H ${w.high}  L ${w.low}` : w.desc;
+  $("weather-icon").innerHTML = icon(w.icon, 26); // static SVG
+  $("weather-icon").dataset.sky = w.icon; // tints the badge (styles.css)
+  const stat = (ic: string, value: string, label: string) => {
+    const s = Object.assign(document.createElement("span"), { className: "wstat", title: label });
+    s.setAttribute("aria-label", `${label}: ${value}`);
+    s.innerHTML = icon(ic, 14); // static SVG; the value below is text
+    s.append(Object.assign(document.createElement("b"), { textContent: value }));
+    return s;
+  };
+  $("weather-stats").replaceChildren(
+    ...[
+      w.feels ? stat("feels", w.feels, "Feels like") : null,
+      w.humidity != null ? stat("humidity", `${w.humidity}%`, "Humidity") : null,
+      w.wind != null ? stat("wind", `${w.wind} km/h`, "Wind") : null,
+      w.rain != null ? stat("umbrella", `${w.rain}%`, "Chance of rain") : null,
+    ].filter((s): s is HTMLSpanElement => s !== null),
+  );
   $("clock-wtext").textContent = `${w.temp} ${w.desc}`;
   $("clock-city").textContent = w.city;
   $("clock-wicon").innerHTML = icon(w.icon, 18);
+  // "Now" first, then the next hours; a blue rain chance under the hours that may rain
+  const now: Weather["hourly"][number] = { time: "Now", temp: w.temp, icon: w.icon, rain: null };
   $("hourly").replaceChildren(
-    ...w.hourly.map((h) => {
+    ...[now, ...w.hourly].map((h, n) => {
       const slot = document.createElement("div");
-      slot.className = "slot";
-      const t = document.createElement("span");
-      t.className = "t";
-      t.textContent = h.time;
-      const i = document.createElement("span");
-      i.innerHTML = icon(h.icon, 18);
-      const v = document.createElement("span");
-      v.className = "v";
-      v.textContent = h.temp;
-      slot.append(t, i, v);
+      slot.className = n === 0 ? "slot now" : "slot";
+      const t = Object.assign(document.createElement("span"), { className: "t", textContent: h.time });
+      const i = Object.assign(document.createElement("span"), { className: "i" });
+      i.innerHTML = icon(h.icon, 18); // static SVG
+      const v = Object.assign(document.createElement("span"), { className: "v", textContent: h.temp });
+      const r = Object.assign(document.createElement("span"), { className: "r", textContent: h.rain != null && h.rain >= 20 ? `${h.rain}%` : "" });
+      slot.append(t, i, v, r);
       return slot;
     }),
   );
