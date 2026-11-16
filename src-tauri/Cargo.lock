@@ -1223,6 +1223,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sherpa-onnx",
+ "sherpa-onnx-sys",
  "sysinfo",
  "tauri",
  "tauri-build",

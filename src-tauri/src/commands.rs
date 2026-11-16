@@ -308,12 +308,36 @@ pub async fn set_location(app: AppHandle, city: String) -> Res<String> {
 pub async fn set_calendar_url(app: AppHandle, url: String) -> Res<Value> {
     let url = calendar::normalize_url(&url)?;
     let started = calendar::begin(); // supersedes older saves and the monitor's in-flight fetch
+    let desktop = calendar::desktop_on(&app);
     let Some(url) = url else {
-        return calendar::commit(&app, started, false, Some(Vec::new()), None, Some(""));
+        // link removed: only the desktop calendar (if on) is left
+        let (events, note) = if desktop { blocking(|| calendar::load(None, true)).await.unwrap_or_default() } else { Default::default() };
+        return calendar::commit(&app, started, desktop, Some(events), note, Some(""));
     };
+    if desktop {
+        // a link that doesn't load must not be saved just because the desktop calendar does
+        let probe = url.clone();
+        blocking(move || calendar::load(Some(&probe), false)).await?;
+    }
     let fetch_url = url.clone();
-    let (events, note) = tauri::async_runtime::spawn_blocking(move || calendar::load(&fetch_url)).await.map_err(err)??;
+    let (events, note) = blocking(move || calendar::load(Some(&fetch_url), desktop)).await?;
     calendar::commit(&app, started, true, Some(events), note, Some(&url))
+}
+
+/// Turn the desktop calendar (the OS calendar app's accounts) on or off; returns the new `calendar` payload.
+/// Turning it on that fails (no access) is not saved.
+#[tauri::command]
+pub async fn set_calendar_desktop(app: AppHandle, on: bool) -> Res<Value> {
+    let started = calendar::begin();
+    let url = calendar::stored_url(&app);
+    let (events, note) = if on || url.is_some() {
+        let u = url.clone();
+        blocking(move || calendar::load(u.as_deref(), on)).await?
+    } else {
+        Default::default()
+    };
+    app.state::<AppState>().db.lock().unwrap().set(calendar::DESKTOP_KEY, if on { "1" } else { "" }).map_err(err)?;
+    calendar::commit(&app, started, on || url.is_some(), Some(events), note, None)
 }
 
 /// Open the join link of event `id` from the last published `calendar` payload (no URL from the webview).

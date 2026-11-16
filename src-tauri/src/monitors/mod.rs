@@ -2,6 +2,7 @@
 //! Each `spawn` starts one OS thread; threads live until the app exits.
 
 pub mod calendar;
+pub mod calendar_desktop;
 pub mod media;
 pub mod notify;
 pub mod perf;

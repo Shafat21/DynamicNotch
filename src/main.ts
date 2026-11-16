@@ -361,7 +361,10 @@ function renderProgress(): void {
 
 function renderLyric(): void {
   $("music").classList.toggle("lyrics", ui.showLyric);
-  $("player-lyric").textContent = ui.lyric || "♪";
+  const panel = $("player-lyric");
+  panel.classList.toggle("empty", !ui.lyric);
+  if (ui.lyric) panel.replaceChildren(Object.assign(document.createElement("div"), { className: "lyric-line", textContent: ui.lyric })); // new node = the line animates in
+  else panel.replaceChildren(Object.assign(document.createElement("div"), { className: "lyric-note", textContent: "♪" }), Object.assign(document.createElement("div"), { className: "lyric-hint", textContent: ui.media.state === "Playing" ? "No synced lyrics for this song" : "Lyrics show here while music plays" }));
   $("btn-lyrics").classList.toggle("on", ui.showLyric);
   $("btn-lyrics").setAttribute("aria-pressed", String(ui.showLyric));
 }

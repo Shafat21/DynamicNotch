@@ -16,6 +16,8 @@ use tauri::{AppHandle, Manager};
 
 /// Settings key of the ICS link ("" = not configured).
 pub const KEY: &str = "calendar_url";
+/// Settings key: "1" = also read the calendars of the OS calendar app.
+pub const DESKTOP_KEY: &str = "calendar_desktop";
 const INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// Last good events of the stored link (yesterday..tomorrow) + a generation bumped by every save/remove.
 /// One lock, so "still current? → store → publish" is atomic between `set_calendar_url` and the monitor.
@@ -61,19 +63,25 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
-fn stored_url(app: &AppHandle) -> Option<String> {
+pub fn stored_url(app: &AppHandle) -> Option<String> {
     app.state::<AppState>().db.lock().unwrap().get(KEY).ok().flatten().filter(|u| !u.is_empty())
+}
+
+pub fn desktop_on(app: &AppHandle) -> bool {
+    app.state::<AppState>().db.lock().unwrap().get(DESKTOP_KEY).ok().flatten().as_deref() == Some("1")
 }
 
 /// A result is dropped if a save/remove started a newer generation while it was loading.
 fn refresh(app: &AppHandle) {
     let started = CACHE.lock().unwrap().generation;
-    let _ = match stored_url(app) {
-        None => commit(app, started, false, Some(Vec::new()), None, None),
-        Some(url) => match load(&url) {
+    let (url, desktop) = (stored_url(app), desktop_on(app));
+    let _ = if url.is_none() && !desktop {
+        commit(app, started, false, Some(Vec::new()), None, None)
+    } else {
+        match load(url.as_deref(), desktop) {
             Ok((events, note)) => commit(app, started, true, Some(events), note, None),
             Err(e) => commit(app, started, true, None, Some(e), None), // keep the last good events
-        },
+        }
     };
 }
 
@@ -109,7 +117,8 @@ pub fn commit(app: &AppHandle, started: u64, configured: bool, events: Option<Ve
     if let Some(events) = events {
         c.events = events;
     }
-    let p = payload(configured, error, failed, &c.events);
+    let mut p = payload(configured, error, failed, &c.events);
+    p["desktop"] = desktop_on(app).into(); // the Settings toggle's state
     publish(app, "calendar", p.clone());
     Ok(p)
 }
@@ -130,13 +139,35 @@ fn payload(configured: bool, error: Option<String>, failed: bool, events: &[Even
 }
 
 /// Fetch and parse the yesterday..tomorrow window (spec §15.5). Second value: a note about unknown time zones.
-pub fn load(url: &str) -> Result<(Vec<Event>, Option<String>), String> {
-    let ics = fetch(url)?;
+/// The iCal link (if any) and the desktop calendar (if on), merged and sorted. One source failing is a note;
+/// all failing is an error.
+pub fn load(url: Option<&str>, desktop: bool) -> Result<(Vec<Event>, Option<String>), String> {
     let start = midnight(&Local, Local::now().date_naive() - Days::new(1)).ok_or("invalid local time")?;
-    let (events, unknown) = parse(&ics, start, 3)?;
-    let note = (!unknown.is_empty())
-        .then(|| format!("Unknown time zone ({}), shown as local time", unknown.into_iter().collect::<Vec<_>>().join(", ")));
-    Ok((events, note))
+    let mut events = Vec::new();
+    let (mut notes, mut errors) = (Vec::new(), Vec::new());
+    if let Some(url) = url {
+        match fetch(url).and_then(|ics| parse(&ics, start.clone(), 3)) {
+            Ok((e, unknown)) => {
+                events.extend(e);
+                if !unknown.is_empty() {
+                    notes.push(format!("Unknown time zone ({}), shown as local time", unknown.into_iter().collect::<Vec<_>>().join(", ")));
+                }
+            }
+            Err(e) => errors.push(e),
+        }
+    }
+    if desktop {
+        match super::calendar_desktop::events(start.timestamp_millis(), 3) {
+            Ok(e) => events.extend(e),
+            Err(e) => errors.push(e),
+        }
+    }
+    if !errors.is_empty() && errors.len() == usize::from(url.is_some()) + usize::from(desktop) {
+        return Err(errors.join("; "));
+    }
+    notes.extend(errors);
+    events.sort_by_key(|e| (e.start, e.all_day));
+    Ok((events, (!notes.is_empty()).then(|| notes.join("; "))))
 }
 
 /// Errors never include the link.

@@ -124,6 +124,15 @@ pub fn transcribe(dir: &Path, language: &str, samples: &[f32]) -> Result<String,
         let stream = rec.create_stream();
         stream.accept_waveform(RATE as i32, &padded(chunk));
         rec.decode(&stream);
+        if std::env::var("DN_DUMP").is_ok() {
+            unsafe {
+                let p = *(&stream as *const sherpa_onnx::OfflineStream as *const *const sherpa_onnx_sys::OfflineStream);
+                let c = sherpa_onnx_sys::SherpaOnnxGetOfflineStreamResultAsJson(p);
+                let b = std::ffi::CStr::from_ptr(c).to_bytes();
+                std::fs::write("C:/Users/Lenovo/.cache/dn-t39/dump.json", b).unwrap();
+                sherpa_onnx_sys::SherpaOnnxDestroyOfflineStreamResultJson(c);
+            }
+        }
         if let Some(t) = stream.get_result().map(|r| r.text.trim().to_string()).filter(|t| !t.is_empty()) {
             if !text.is_empty() {
                 text.push(' ');

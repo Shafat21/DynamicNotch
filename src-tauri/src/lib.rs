@@ -167,6 +167,7 @@ pub fn run() {
             commands::drag_out,
             commands::set_location,
             commands::set_calendar_url,
+            commands::set_calendar_desktop,
             commands::open_join,
             commands::media_control,
             commands::media_seek,
