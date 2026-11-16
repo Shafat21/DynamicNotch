@@ -37,6 +37,15 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
   <img src="docs/screenshots/home.png" alt="Dashboard Home: clock and weather, coding agent session with plan usage, now playing, calendar">
 </p>
 
+<p align="center">
+  <a href="#install"><b>Install</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#coding-agents">Coding agents</a> ·
+  <a href="#dictation">Dictation</a> ·
+  <a href="#build-from-source">Build</a> ·
+  <a href="#data--privacy">Privacy</a>
+</p>
+
 > Architecture, internals and roadmap are in [plan.md](plan.md).
 
 ## Screenshots
@@ -71,7 +80,7 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 **Dashboard (hover the island)** - a tab bar over these pages (tabs you can reorder or hide in Settings, extra ones go under **More**):
 - **Home:** configurable cards (clock, Pal, music, calendar, launcher, focus, notes, reminders, and optional system, tasks, sound, devices, dictation).
 - **Music player:** album art, title/artist, seek by click or drag, play/pause/next/prev, synced lyrics.
-- **Calendar:** today's agenda from your iCal link, with Join buttons for online meetings.
+- **Calendar:** today's agenda from the **Windows Calendar app** (Outlook, Google, iCloud and Exchange accounts added there) and/or a private **iCal link**, merged in one list, with Join buttons for online meetings; events that already ended are dimmed.
 - **Pal**, **Timer** (focus timer, 5 minute steps), **Weather**, **System stats** (CPU, RAM, storage, network), **Tasks**, **Month progress**.
 - **Launcher dock:** pin apps and start them with one click; extra apps collapse into a +N overflow.
 - **Notes** (pinnable) and **Reminders** with snooze / done and a chime.
@@ -102,7 +111,7 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
   pill or notch shape, density, tab labels, corner radius, text size, card opacity and island sizes.
 - **Tabs** and **Home:** reorder, show or hide tabs and Home cards.
 - **Agents:** connect or disconnect each coding agent.
-- **Integrations:** calendar link, weather city, reminder sound, clipboard history, shelf, launcher apps, sound and Bluetooth shortcuts.
+- **Integrations:** desktop calendar and iCal link, weather city, reminder sound, clipboard history, shelf, launcher apps, sound and Bluetooth shortcuts.
 - **Dictation:** engine, model, hotkey, words and history.
 
 **Fits your desktop**
@@ -128,8 +137,8 @@ been compiled or run on real hardware. Dictation on Linux copies the text and yo
 
 ## Install
 
-**Windows:** download the `.exe` installer from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest)
-and run it.
+**Windows:** download `Dynamic Notch Island_<version>_x64-setup.exe` from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest)
+and run it. The installer isn't code-signed yet, so Windows SmartScreen may warn on first run: choose **More info → Run anyway**.
 
 **Linux:** download the package for your distro from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest):
 
@@ -158,7 +167,8 @@ Linux builds are experimental, see [Platform support](#platform-support).
 | Wheel or ‹ › on the Pal card | Switch between agent sessions |
 | ＋ in the launcher | Add an app |
 | Right-click an app twice | Remove it from the launcher |
-| ＋ on the calendar | Paste your iCal link |
+| ＋ on the calendar | Paste your iCal link (or turn on the desktop calendar in Settings → Integrations) |
+| Click the circle on a task | Cross it off (click again within a second to undo) |
 
 ## Coding agents
 
@@ -197,6 +207,8 @@ A confirm dialog shows the file and the events first; the file is backed up as `
 - **Privacy:** dictation and voice-note audio stays in memory and is never written to disk; temporary call audio (Notetaker)
   is written to the app data folder and deleted after processing. The API key is stored in Windows Credential Manager
   (Secret Service on Linux), not in the database. With cloud dictation the audio is sent to the provider you chose.
+- **Memory:** the offline model needs about 1 GB of RAM, so it loads when you start dictating (while you speak) and is freed after
+  5 idle minutes. Nothing is loaded at startup. The first dictation after a long pause may take a second or two longer.
 - **Build:** the offline engine links sherpa-onnx (with onnxruntime) statically; its prebuilt libraries are downloaded during the first `cargo build`.
 - **Voice notes:** the mic button in the Notes editor and on the Home notes input (click to start/stop, or hold) inserts the text at the caret.
 - **Notetaker:** "Record a call" (Notes tab or the island's top bar) records your microphone and the computer's sound (up to 3 h)
@@ -232,13 +244,18 @@ Dual-booting to test on Linux? See [plan.md](plan.md).
 
 ## Releasing
 
-Push a tag `vX.Y.Z` and GitHub Actions builds Windows and Linux packages into a **draft release**.
-Review it and publish.
+Every commit carries its own version, `0.1.<commit number>`: a pre-commit hook (`.githooks/pre-commit`, installed by `npm install`)
+writes it into `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml` and `Cargo.lock`.
+
+To release, tag a commit and push the tag; GitHub Actions runs the tests and builds Windows and Linux packages into a **draft release**:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.1.55              # the version of that commit (see package.json)
+git push origin v0.1.55
 ```
+
+Then open the draft on the Releases page, edit it with the pencil icon (don't start a new release), and publish.
+Repository setting needed once: **Settings → Actions → General → Workflow permissions → Read and write**.
 
 ## Data & privacy
 
@@ -253,6 +270,7 @@ git push origin v0.2.0
   Audio is never sent.
 - Call recordings: temporary WAV files in `%APPDATA%\com.dynamicnotch.app\notetaker\` (Linux:
   `~/.local/share/com.dynamicnotch.app/notetaker/`), deleted after processing, on cancel, on exit and at the next start.
+- The desktop calendar is read locally through Windows' appointment store (read-only); nothing from it is sent anywhere.
 - Connecting a coding agent edits only that agent's config file (backed up first), and only after you confirm.
 - No accounts, no telemetry.
 
