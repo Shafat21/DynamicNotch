@@ -214,7 +214,7 @@ A confirm dialog shows the file and the events first; the file is backed up as `
 
 ```bash
 sudo apt install libwebkit2gtk-4.1-dev libgtk-layer-shell-dev build-essential curl wget file \
-  libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  libssl-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev
 ```
 
 Then:
