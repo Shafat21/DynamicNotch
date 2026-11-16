@@ -185,4 +185,18 @@ mod tests {
         assert_eq!(clean("uh hello there friend", "verbatim", None, &[]), "uh hello there friend");
         assert_eq!(clean("hi you", "polished", None, &[]), "hi you");
     }
+
+    /// Real Claude Code (installed + logged in): `cargo test --lib real_claude_cleanup -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_claude_cleanup() {
+        let raw = "um so we meet at 3 no sorry at 4 on uh thursday";
+        println!("exe={:?}", exe());
+        println!("{:?}", ask(&system("natural", None, &[]), &format!("<dictation>
+{raw}
+</dictation>")));
+        let out = clean(raw, "natural", None, &[]);
+        println!("CLEANED: {out}");
+        assert!(out.contains('4') || out.contains("four"));
+    }
 }

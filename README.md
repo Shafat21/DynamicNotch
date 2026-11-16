@@ -54,8 +54,9 @@ when Claude Code needs you, Pal tells you and you can answer right from the isla
 - **Usage limits ring:** your 5-hour and weekly plan usage with reset times, read from Claude Code's official `statusLine` `rate_limits`.
 
 **Voice dictation**
-- Hold **Ctrl+Win**, speak, release: the text is typed into the focused app.
-- Cloud transcription via OpenAI or Groq (API key kept in the OS credential store). Local Whisper is an optional build feature, see [Dictation](#dictation).
+- Hold **Ctrl+Win**, speak, release: the text is pasted into the focused app. Double-tap for hands-free, Esc cancels.
+- Offline transcription with NVIDIA Parakeet (sherpa-onnx, 25 languages), or cloud via OpenAI or Groq. Dictionary, replacements,
+  snippets and optional Claude clean-up; local history with words/min and streak. See [Dictation](#dictation).
 
 **Settings window**
 - Themes: Graphite, Midnight, Aurora, Ember, Lime, Rose, Pure black; line or colour-badge icons; density, sizes, tabs and Home layout.
@@ -127,11 +128,14 @@ Right-click the island and choose **Connect Claude Code**:
 
 ## Dictation
 
-- **Setup:** Settings → Features → Dictation, choose OpenAI or Groq and add your API key. Then hold **Ctrl+Win** (changeable) and speak.
+- **Setup:** Settings → Features → Dictation → Offline model → **Download** (about 670 MB, once; SHA-256 verified). Or choose
+  OpenAI/Groq and add your API key. Then hold **Ctrl+Win** (changeable) and speak; two quick taps keep listening until the next press.
+- **Text:** dictionary (always-spell words), replacements, snippets (say a trigger phrase, paste a text) and an optional
+  clean-up (Natural / Polished) by your own Claude Code login (`claude -p`; only the text is sent). Off by default.
+- **History & stats:** Settings → Dictation (search, copy, delete; words dictated, words/min, days in a row, top apps), stored in the local database.
 - **Privacy:** audio stays in memory and is never written to disk. The API key is stored in Windows Credential Manager
   (Secret Service on Linux), not in the database. With cloud dictation the audio is sent to the provider you chose.
-- **Local Whisper (optional):** not in the default build. Build with `cd src-tauri && cargo build --features local-whisper`
-  (needs [CMake](https://cmake.org) and LLVM/libclang). Models (tiny/base/small) are downloaded from Hugging Face on demand and SHA-256 verified.
+- **Build:** the offline engine links sherpa-onnx (with onnxruntime) statically; its prebuilt libraries are downloaded during the first `cargo build`.
 
 ## Build from source
 
@@ -175,7 +179,7 @@ git push origin v0.2.0
   - Linux: `~/.local/share/com.dynamicnotch.app/dynamic_notch.db`
 - Network calls: **Open-Meteo** (weather and city search), **LRCLIB** (lyrics; sends artist and title only),
   **your calendar link**, **your chosen dictation provider** (OpenAI or Groq, only when cloud dictation is used) and
-  **Hugging Face** (only when you download a local Whisper model). The calendar link stays on your machine.
+  **Hugging Face** (only when you download the offline dictation model). The calendar link stays on your machine.
 - No accounts, no telemetry.
 
 ## Star History
@@ -191,6 +195,9 @@ git push origin v0.2.0
 ## Credits
 
 Weather by [Open-Meteo](https://open-meteo.com), lyrics by [LRCLIB](https://lrclib.net).
+Offline speech recognition by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) with NVIDIA's
+[Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0).
+Portions of the dictation code adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
 
 ## License
 

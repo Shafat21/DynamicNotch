@@ -168,3 +168,44 @@ pub fn paste(text: &str) -> Result<bool, String> {
     });
     Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+    /// Real paste into a real text box: a window of ours with an EDIT control is brought to the front,
+    /// `paste` runs from another thread, and the box's text is read back. Touches the clipboard and the
+    /// keyboard, so it is ignored by default: `cargo test --lib paste_into_an_edit_box -- --ignored`
+    #[test]
+    #[ignore]
+    fn paste_into_an_edit_box() {
+        use windows::core::w;
+        use windows::Win32::UI::WindowsAndMessaging::*;
+        let before = super::read();
+        unsafe {
+            let hwnd = CreateWindowExW(Default::default(), w!("EDIT"), w!(""), WS_OVERLAPPEDWINDOW | WS_VISIBLE, 200, 200, 400, 120, None, None, None, None).unwrap();
+            let _ = SetForegroundWindow(hwnd);
+            let _ = windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(hwnd));
+            let front = super::GetForegroundWindow() == hwnd;
+            let worker = std::thread::spawn(|| super::paste("Pasted by dictation ✓ 123"));
+            let until = std::time::Instant::now() + std::time::Duration::from_millis(1500);
+            let mut msg = MSG::default();
+            while std::time::Instant::now() < until {
+                while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                    let _ = TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            let pasted = worker.join().unwrap();
+            let mut buf = [0u16; 256];
+            let n = GetWindowTextW(hwnd, &mut buf);
+            let text = String::from_utf16_lossy(&buf[..n as usize]);
+            let _ = DestroyWindow(hwnd);
+            println!("foreground={front} paste={pasted:?} box={text:?} clipboard before={:?} after={:?}", before.as_deref().map(|s| s.chars().take(20).collect::<String>()), super::read().map(|s| s.chars().take(20).collect::<String>()));
+            assert_eq!(pasted, Ok(true));
+            assert_eq!(text, "Pasted by dictation ✓ 123");
+            if before.is_some() {
+                assert_eq!(super::read(), before, "the previous clipboard text is put back");
+            }
+        }
+    }
+}

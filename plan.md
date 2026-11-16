@@ -73,7 +73,7 @@ DynamicNotch/
 │  │                          pages/ general, appearance, features, home, tabs, layout-list, about
 │  └─ styles.css
 ├─ src-tauri/
-│  ├─ Cargo.toml           <- feature `local-whisper` (optional, needs CMake + LLVM/libclang)
+│  ├─ Cargo.toml           <- sherpa-onnx (static, prebuilt libs fetched at build time)
 │  ├─ tauri.conf.json, capabilities/, icons/
 │  └─ src/
 │     ├─ main.rs           <- entry; `--statusline` runs statusline.rs
@@ -97,7 +97,7 @@ DynamicNotch/
 │     │                       install.rs (settings.json hooks + statusLine, .dynamicnotch.bak),
 │     │                       sessions.rs, prompt.rs, usage.rs
 │     ├─ dictation/        <- mod.rs, settings.rs (hotkey parse), audio.rs (cpal), hotkey_*/paste_* (windows, linux),
-│     │                       cloud.rs (OpenAI/Groq + keyring), local.rs (whisper-rs, feature-gated),
+│     │                       cloud.rs (OpenAI/Groq + keyring), local.rs (sherpa-onnx Parakeet), text.rs, cleanup.rs,
 │     │                       models.rs (Hugging Face download + SHA-256), commands.rs
 │     └─ monitors/         <- mod.rs (spawn_all, HTTP client), perf.rs, weather.rs, calendar.rs (iCal),
 │                             media.rs, notify.rs, system.rs (media/notify/system have _windows/_linux)
@@ -201,11 +201,11 @@ everything else keeps working.
 - [x] Dashboard with tabs/More, Home cards, music + lyrics, calendar, timer, launcher, notes, reminders, clipboard, sound/brightness, Bluetooth, shelf
 - [x] Pal and 8 moods; Settings window; 7 themes; display choice + responsive scaling; hide in fullscreen
 - [x] Claude Code bridge: sessions, prompts/questions (15 s timeout), hooks + chained statusLine install/restore, usage limits
-- [x] Dictation: hotkey, mic capture, cloud OpenAI/Groq (keyring), paste; local Whisper behind `local-whisper`
+- [x] Dictation: hotkey, mic capture, cloud OpenAI/Groq (keyring), paste; offline Parakeet (sherpa-onnx), text pipeline, hands-free, history + stats (Task 37)
 
 **Not verified on hardware yet**
 - [ ] Notification listener permission on an unpackaged build
-- [ ] Local Whisper build (`--features local-whisper`) and model download end to end
+- [x] Offline Parakeet build and model download end to end (Task 37; real WAV transcribed)
 - [ ] Multi-monitor / mixed-DPI behaviour, fullscreen detection edge cases
 - [ ] Release installer size
 

@@ -155,7 +155,7 @@ mod tests {
         let ch = u16::from_le_bytes([bytes[22], bytes[23]]);
         let rate = u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
         let data = bytes.windows(4).position(|w| w == b"data").unwrap() + 8;
-        let pcm: Vec<f32> = bytes[data..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
+        let pcm: Vec<f32> = bytes[data..].as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b) as f32 / 32768.0).collect();
         let samples = super::super::audio::resample_to_16k(&pcm, rate, ch);
         let t0 = std::time::Instant::now();
         let text = transcribe(&dir, &samples).unwrap();

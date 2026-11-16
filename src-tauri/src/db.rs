@@ -184,7 +184,7 @@ impl Db {
         if version < 7 {
             self.conn.execute_batch(
                 "BEGIN;
-                 CREATE TABLE dictations (
+                 CREATE TABLE IF NOT EXISTS dictations (
                      id INTEGER PRIMARY KEY AUTOINCREMENT,
                      text TEXT NOT NULL,
                      app TEXT,
@@ -224,7 +224,7 @@ impl Db {
     }
 
     /// (words, ms, at, app) of every dictation, for the stats.
-    pub fn dictation_rows(&self) -> Result<Vec<(i64, i64, i64, Option<String>)>> {
+    pub fn dictation_rows(&self) -> Result<Vec<crate::dictation::text::Row>> {
         let mut stmt = self.conn.prepare("SELECT words, ms, at, app FROM dictations")?;
         let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
         rows.collect()
@@ -696,7 +696,7 @@ mod tests {
         assert_eq!(db.dictations("WORLD", 50).unwrap().len(), 1);
         assert_eq!(db.dictations("notepad", 50).unwrap()[0].id, a);
         assert_eq!(db.dictations("0%", 50).unwrap().len(), 1); // % is literal
-        assert_eq!(db.dictations("e_t", 50).unwrap().len(), 0); // _ is literal
+        assert_eq!(db.dictations("o_w", 50).unwrap().len(), 0); // _ is literal
         assert_eq!(db.dictations("", 1).unwrap().len(), 1);
         db.delete_dictation(a).unwrap();
         assert_eq!(db.dictation_rows().unwrap(), vec![(2, 900, 2_000, None)]);

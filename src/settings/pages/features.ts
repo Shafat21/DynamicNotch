@@ -6,13 +6,43 @@ import { button, h, page, report, row, section, segmented, select, toggle } from
 
 type Bridge = { online: boolean; agents?: { id: string; label: string; connected: boolean }[]; error?: string };
 type Calendar = { configured: boolean; error: string | null };
-type Dictation = { engine: string; model: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string };
-type Models = Record<string, { installed: boolean; size: number }> & { localAvailable?: boolean };
+type Dictation = { engine: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string; cleanup: string };
+type Models = { installed: boolean; size: number; claude: boolean };
+type Words = { words: string[]; replacements: { from: string; to: string }[]; snippets: { trigger: string; text: string }[] };
 
 const LANGS: [string, string][] = [
   ["auto", "Auto-detect"], ["en", "English"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["pt", "Portuguese"], ["nl", "Dutch"],
   ["pl", "Polish"], ["ru", "Russian"], ["uk", "Ukrainian"], ["tr", "Turkish"], ["ar", "Arabic"], ["hi", "Hindi"], ["bn", "Bengali"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"],
 ];
+
+/** Pairs editor (replacements, snippets): a row per pair, saved whenever a complete pair changes. */
+function pairs<K extends string>(keys: [K, K], labels: [string, string], items: Record<K, string>[], multiline: boolean, onSave: (v: Record<K, string>[]) => void): HTMLElement {
+  const list = h("ul", { className: "pairs" });
+  const collect = () =>
+    onSave(
+      [...list.children]
+        .map((li) => {
+          const [a, b] = li.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
+          return { [keys[0]]: a.value.trim(), [keys[1]]: b.value.trim() } as Record<K, string>;
+        })
+        .filter((p) => p[keys[0]] && p[keys[1]]),
+    );
+  const add = (item?: Record<K, string>) => {
+    const a = h("input", { type: "text", value: item?.[keys[0]] ?? "", placeholder: labels[0], ariaLabel: labels[0], maxLength: 100, spellcheck: false });
+    const b = multiline
+      ? h("textarea", { value: item?.[keys[1]] ?? "", placeholder: labels[1], ariaLabel: labels[1], maxLength: 5000, rows: 2 })
+      : h("input", { type: "text", value: item?.[keys[1]] ?? "", placeholder: labels[1], ariaLabel: labels[1], maxLength: 100, spellcheck: false });
+    a.onchange = b.onchange = collect;
+    const li = h("li", {}, a, b);
+    const rm = button("Remove", () => (li.remove(), collect()), "btn small");
+    rm.ariaLabel = `Remove ${labels[0].toLowerCase()}`;
+    li.append(rm);
+    list.append(li);
+    return a;
+  };
+  items.forEach((i) => add(i));
+  return h("div", { className: "pairs-box" }, list, button("Add", () => add().focus(), "btn small"));
+}
 
 /** Settings → Features → Dictation (spec §23.7). Every change saves at once; the API key is write-only. */
 function dictationSection(): { el: HTMLElement; dispose: () => void } {
@@ -29,12 +59,30 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
   };
   const saveOrReport = (patch: Partial<Dictation>) => save(patch).then((err) => err && report(err));
   const dlState = h("span", { className: "row-desc" });
+  const mb = (n: number) => `${Math.round(n / 1e6)} MB`;
 
-  const build = (s: Dictation, models: Models, mics: string[]) => {
+  const build = (s: Dictation, models: Models, mics: string[], words: Words) => {
     cur = s;
-    const localOk = models.localAvailable === true;
-    const engine = segmented("Engine", [["local", "Local"], ["cloud", "Cloud"]], s.engine, (v) => saveOrReport({ engine: v }));
-    engine.querySelector("button")!.disabled = !localOk;
+    const engine = segmented("Engine", [["auto", "Auto"], ["local", "Offline"], ["cloud", "Cloud"]], s.engine, (v) => saveOrReport({ engine: v }));
+
+    // offline model: downloaded on click, progress from `model-progress`
+    const dl = button(models.installed ? "Installed" : "Download", () => {
+      dl.disabled = true;
+      dlState.textContent = "Starting download…";
+      invoke("download_model").then(
+        () => {
+          dlState.textContent = `Installed · ${mb(models.size)}`;
+          dl.textContent = "Installed";
+          report("Offline model installed");
+        },
+        (e) => {
+          dlState.textContent = String(e);
+          dl.disabled = false;
+        },
+      );
+    });
+    dl.disabled = models.installed;
+    dlState.textContent = models.installed ? `Installed · ${mb(models.size)}` : `Not downloaded · ${mb(models.size)}`;
 
     // cloud: provider, model, write-only key
     const keyState = h("span", { className: "row-desc" });
@@ -72,41 +120,55 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
       if (!err) hotkey.value = cur.hotkey;
     };
 
-    // local models: listed; downloadable only when this build has local Whisper
-    const mb = (n: number) => `${Math.round(n / 1e6)} MB`;
-    const names = Object.keys(models).filter((k) => k !== "localAvailable");
-    const modelSel = select("Local model", names.map((n): [string, string] => [n, `${n} (${mb(models[n].size)})${models[n].installed ? " · downloaded" : ""}`]), s.model, (v) => saveOrReport({ model: v }));
-    const dl = button("Download", () => {
-      dl.disabled = true;
-      invoke("download_model", { name: modelSel.value })
-        .then(() => (dlState.textContent = "Downloaded"), (e) => (dlState.textContent = String(e)))
-        .finally(() => (dl.disabled = false));
-    });
-    dlState.textContent = localOk ? "" : "Not available in this build";
-    modelSel.disabled = dl.disabled = !localOk;
+    // dictionary, replacements, snippets: saved together
+    let w = words;
+    const saveWords = (patch: Partial<Words>) =>
+      invoke<Words>("set_dictation_words", { words: { ...w, ...patch } }).then(
+        (n) => (w = n),
+        (e) => report(String(e)),
+      );
+    const dict = h("textarea", { value: words.words.join("\n"), ariaLabel: "Dictionary words", placeholder: "One per line, e.g. Supabase", rows: 4, spellcheck: false });
+    dict.onchange = () => saveWords({ words: dict.value.split("\n").map((x) => x.trim()).filter(Boolean) });
+    const block = (label: string, desc: string, control: Node) =>
+      h("div", { className: "row col" }, h("div", { className: "row-text" }, h("div", { className: "row-label" }, label), h("div", { className: "row-desc" }, desc)), control);
 
     const langs = LANGS.some(([c]) => c === s.language) ? LANGS : [...LANGS, [s.language, s.language] as [string, string]];
     el.replaceChildren(
       el.firstElementChild!,
-      row("Engine", localOk ? "Local runs Whisper on this PC. Cloud sends audio to the provider below." : "Local: Not available in this build. Cloud sends audio to the provider below.", engine),
-      row("Local model", "Whisper model from Hugging Face, checked with SHA-256 after download.", h("div", { className: "stack" }, h("div", { className: "inline-form" }, modelSel, dl), dlState)),
-      row("Cloud provider", "OpenAI-compatible transcription endpoint.", provider),
+      row("Engine", "Auto uses the offline model once it's downloaded, else Cloud when an API key is saved.", engine),
+      row("Offline model", "NVIDIA Parakeet (25 languages) runs on this PC. Downloaded from Hugging Face and checked with SHA-256.", h("div", { className: "stack" }, dl, dlState)),
+      row("Cloud provider", "OpenAI-compatible transcription endpoint. Audio is sent to the provider.", provider),
       row("Cloud model", "Transcription model name at the provider.", model),
       row("API key", "Kept in the system credential store and never shown again.", h("div", { className: "stack" }, keyForm, keyState)),
-      row("Hotkey", "Hold to record, release to transcribe. Modifier-only combos need two modifiers, like Ctrl+Win.", h("div", { className: "stack" }, hotkey, hotErr)),
+      row("Hotkey", "Hold to record, release to paste. Double-tap for hands-free, press again to finish. Esc cancels.", h("div", { className: "stack" }, hotkey, hotErr)),
       row("Microphone", "Input device used while recording.", select("Microphone", [["", "System default"], ...mics.map((m): [string, string] => [m, m])], s.mic, (v) => saveOrReport({ mic: v }))),
-      row("Language", "Auto-detect, or a fixed spoken language.", select("Language", langs, s.language, (v) => saveOrReport({ language: v }))),
+      row("Language", "For Cloud. The offline model detects the language itself.", select("Language", langs, s.language, (v) => saveOrReport({ language: v }))),
       row("Output", "Paste the text at the cursor, or only copy it to the clipboard.", segmented("Output", [["paste", "Paste at cursor"], ["copy", "Copy only"]], s.output, (v) => saveOrReport({ output: v }))),
-      h("p", { className: "row-desc" }, "Audio stays in memory and is never saved. With Cloud, each recording is sent to the chosen provider."),
+      row(
+        "Clean-up",
+        models.claude
+          ? "Natural removes filler words and fixes punctuation; Polished writes email-ready sentences. Uses your Claude Code login; only the text is sent."
+          : "Needs Claude Code (claude) installed and logged in. Until then the text is pasted as said.",
+        segmented("Clean-up style", [["verbatim", "As said"], ["natural", "Natural"], ["polished", "Polished"]], s.cleanup, (v) => saveOrReport({ cleanup: v })),
+      ),
+      block("Dictionary", "Words always spelled exactly like this.", dict),
+      block("Replacements", "What was heard → what gets written.", pairs(["from", "to"], ["Heard", "Written"], words.replacements, false, (v) => saveWords({ replacements: v }))),
+      block("Snippets", "Say the trigger phrase to paste the whole text.", pairs(["trigger", "text"], ["Trigger phrase", "Text to paste"], words.snippets, true, (v) => saveWords({ snippets: v }))),
+      h("p", { className: "row-desc" }, "Audio stays in memory and is never saved. History and stats stay on this PC (Settings → Dictation)."),
     );
   };
 
-  Promise.all([invoke<Dictation>("dictation_settings"), invoke<Models>("model_status"), invoke<string[]>("list_mics").catch(() => [] as string[])]).then(
-    ([s, m, mics]) => build(s, m, mics),
+  Promise.all([
+    invoke<Dictation>("dictation_settings"),
+    invoke<Models>("model_status"),
+    invoke<string[]>("list_mics").catch(() => [] as string[]),
+    invoke<Words>("dictation_words"),
+  ]).then(
+    ([s, m, mics, w]) => build(s, m, mics, w),
     (e) => (loading.textContent = `Couldn't load dictation settings: ${e}`),
   );
   const unlisten = listen<{ name: string; received: number; total: number }>("model-progress", (e) => {
-    dlState.textContent = `Downloading ${e.payload.name}… ${Math.floor((e.payload.received * 100) / Math.max(1, e.payload.total))}%`;
+    dlState.textContent = `Downloading… ${Math.floor((e.payload.received * 100) / Math.max(1, e.payload.total))}% of ${mb(e.payload.total)}`;
   });
   return { el, dispose: () => void unlisten.then((f) => f()) };
 }

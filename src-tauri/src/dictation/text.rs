@@ -230,8 +230,11 @@ pub struct Stats {
     pub top_apps: Vec<(String, u64)>,
 }
 
+/// (words, ms, time or day, app) of one dictation.
+pub type Row = (i64, i64, i64, Option<String>);
+
 /// `rows` = (words, ms, local day number, app) for every dictation.
-pub fn stats(rows: &[(i64, i64, i64, Option<String>)], today: i64) -> Stats {
+pub fn stats(rows: &[Row], today: i64) -> Stats {
     let words: u64 = rows.iter().map(|r| r.0.max(0) as u64).sum();
     let ms: i64 = rows.iter().map(|r| r.1.max(0)).sum();
     let days: HashSet<i64> = rows.iter().filter(|r| r.0 > 0).map(|r| r.2).collect();

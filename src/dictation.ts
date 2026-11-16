@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { icon } from "./icons-line";
 import { createPal } from "./pal";
 
-export type DictEvent = { state: "recording" | "transcribing" | "done" | "error" | "idle"; level?: number; ms?: number; escCancels?: boolean; text?: string; pasted?: boolean; error?: string };
+export type DictEvent = { state: "recording" | "transcribing" | "done" | "error" | "idle"; level?: number; ms?: number; locked?: boolean; escCancels?: boolean; text?: string; pasted?: boolean; error?: string };
 
 const BARS = 18;
 const KEEP = 10;
@@ -26,7 +26,7 @@ export function initDictation(): void {
   const face = span("icon");
   face.append(pal.el);
   $("dictation").append(face, wave, span("dict-text"), span("dict-time"), span("dict-hint"));
-  // only reaches the webview when the island has focus; holding the hotkey, any other key (Esc too) cancels in the hook
+  // only reaches the webview when the island has focus; on Windows the keyboard hook catches Esc anyway
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !dictating()) return;
     e.preventDefault();
@@ -52,7 +52,7 @@ export function onDictation(e: DictEvent): number {
     pal.setMood("listening");
     text.textContent = "";
     time.textContent = mmss(e.ms ?? 0);
-    hint.textContent = e.escCancels ? "Esc to cancel" : "";
+    hint.textContent = e.locked ? (e.escCancels ? "Hands-free · Esc to cancel" : "Hands-free") : e.escCancels ? "Esc to cancel" : "";
     return 0;
   }
   time.textContent = hint.textContent = "";
@@ -86,7 +86,7 @@ export function onDictation(e: DictEvent): number {
 function renderCard(): void {
   const list = $("dict-list");
   if (!recent.length) {
-    list.replaceChildren(Object.assign(span("muted small"), { textContent: "Hold the dictation hotkey and speak. Recent text shows here." }));
+    list.replaceChildren(Object.assign(span("muted small"), { textContent: "Hold the dictation hotkey and speak (double-tap for hands-free). Recent text shows here." }));
     return;
   }
   list.replaceChildren(

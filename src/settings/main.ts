@@ -10,6 +10,7 @@ import { renderAppearance } from "./pages/appearance";
 import { renderTabs } from "./pages/tabs";
 import { renderHome } from "./pages/home";
 import { renderFeatures } from "./pages/features";
+import { renderDictation } from "./pages/dictation";
 import { renderAbout } from "./pages/about";
 
 /** A page draws into `root`; it may return a cleanup (e.g. event listeners) run when leaving it. */
@@ -21,6 +22,7 @@ const PAGES: [id: string, label: string, render: Render][] = [
   ["tabs", "Tabs", renderTabs],
   ["home", "Home", renderHome],
   ["features", "Features", renderFeatures],
+  ["dictation", "Dictation", renderDictation],
   ["about", "About", renderAbout],
 ];
 
