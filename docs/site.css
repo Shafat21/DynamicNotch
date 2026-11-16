@@ -117,6 +117,39 @@ section.wrap { padding-block: 90px 10px; }
 .tile { padding: 26px 20px 28px; border-radius: 22px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
 .tile h3 { margin-bottom: 10px; }
 
+.sec-lede { max-width: 34em; margin: -6px 0 44px; color: var(--mist); }
+figure { margin: 0; }
+
+/* ----- performance: a Task Manager row, stats, ticks ----- */
+.tm figcaption, .ctx-card figcaption { margin-top: 12px; color: var(--mist); font-size: 14px; }
+.tm-win { border-radius: 14px; overflow: hidden; background: #202020; box-shadow: 0 0 0 1px var(--line), 0 30px 90px -30px rgba(45, 91, 255, 0.45); font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+.tm-win > b { display: block; padding: 14px 16px; font-weight: 600; }
+.tm-win table { width: 100%; border-collapse: collapse; }
+.tm-win th, .tm-win td { padding: 10px 16px; text-align: right; border-top: 1px solid rgba(255, 255, 255, 0.07); white-space: nowrap; }
+.tm-win th { font-size: 12px; font-weight: 400; color: #c9c9c9; }
+.tm-win th:first-child, .tm-win td:first-child { text-align: left; }
+.tm-win td + td { background: rgba(45, 91, 255, 0.16); }
+.tm-win td img { display: inline-block; vertical-align: -4px; margin-right: 10px; border-radius: 4px; }
+.stats { list-style: none; margin: 0 0 30px; padding: 0; display: flex; flex-wrap: wrap; gap: 14px 44px; }
+.stats b { display: block; font-size: clamp(34px, 4vw, 46px); line-height: 1.1; font-weight: 800; background: var(--glow); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stats span { color: var(--mist); font-size: 14px; }
+
+/* ----- right-click menu: a Windows 11 dark context menu ----- */
+.ctx-card { padding: 44px 36px 22px; border-radius: 22px; background: linear-gradient(150deg, rgba(25, 184, 255, 0.4), rgba(45, 91, 255, 0.35) 55%, rgba(123, 75, 255, 0.45)); box-shadow: 0 0 0 1px var(--line); }
+.ctx { list-style: none; margin: 0 auto; padding: 4px; max-width: 260px; border-radius: 8px; background: #2c2c2c; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.45); font: 14px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+.ctx li { padding: 10px 14px 10px 36px; border-radius: 4px; }
+.ctx .sub { display: flex; justify-content: space-between; }
+.ctx .sub::after { content: "›"; color: #c9c9c9; }
+.ctx .on { background: rgba(255, 255, 255, 0.08); }
+.ctx .sep { padding: 0; height: 1px; margin: 4px 0; background: rgba(255, 255, 255, 0.09); }
+.ctx-card figcaption { display: flex; align-items: center; justify-content: center; gap: 8px; color: rgba(236, 239, 247, 0.8); }
+.menu-items { margin: 0; }
+.menu-items div { padding: 18px 0; border-bottom: 1px solid var(--line); }
+.menu-items div:first-child { padding-top: 0; }
+.menu-items div:last-child { border-bottom: 0; }
+.menu-items dt { font-weight: 700; font-size: 18px; }
+.menu-items dd { margin: 4px 0 0; color: var(--mist); font-size: 16px; }
+
 .swatches { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
 .swatches li { position: relative; padding: 8px 14px 8px 34px; border-radius: 999px; font-size: 14px; background: var(--b); box-shadow: inset 0 0 0 1px var(--line); }
 .swatches li::before { content: ""; position: absolute; left: 12px; top: 50%; translate: 0 -50%; width: 12px; height: 12px; border-radius: 50%; background: var(--a); }

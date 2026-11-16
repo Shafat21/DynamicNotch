@@ -133,12 +133,43 @@
     </div>
   </section>
 
+  <!-- ===== Performance (numbers measured in Task Manager, v0.1.55, i7-14700HX) ===== -->
+  <section id="performance" class="wrap reveal">
+    <h2 class="sec-title left">Light enough to leave running.</h2>
+    <p class="sec-lede">A small Rust app that draws with the WebView2 already in Windows. It hides when you go fullscreen and frees what it isn't using.</p>
+    <div class="split">
+      <figure class="tm">
+        <div class="tm-win">
+          <b>Processes</b>
+          <table>
+            <thead><tr><th>Name</th><th>CPU</th><th>Memory</th></tr></thead>
+            <tbody><tr><td><img src="assets/icon.png" alt="" width="18" height="18">Dynamic Notch Island</td><td>0.8%</td><td>129.2 MB</td></tr></tbody>
+          </table>
+        </div>
+        <figcaption>Windows Task Manager with the island idle, on a 28-thread laptop. Memory includes its WebView2 processes.</figcaption>
+      </figure>
+      <div>
+        <ul class="stats">
+          <li><b>~9 MB</b><span>download</span></li>
+          <li><b>~130 MB</b><span>memory</span></li>
+          <li><b>&lt;1%</b><span>CPU when idle</span></li>
+        </ul>
+        <ul class="ticks">
+          <li><b>Small download.</b> It uses the WebView2 that comes with Windows instead of shipping its own browser.</li>
+          <li><b>Rust underneath.</b> Media, clipboard, calendar and the coding agent bridge run in native code.</li>
+          <li><b>Steps aside in fullscreen.</b> Games and videos get the whole screen; the island comes back when you leave.</li>
+          <li><b>Loads heavy parts on demand.</b> The offline dictation model loads when you start talking and is freed after 5 idle minutes.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== Light and private ===== -->
   <section id="light" class="wrap reveal">
     <h2 class="sec-title">Quiet, private, yours.</h2>
     <div class="trio">
       <div class="tile"><h3>No accounts, no telemetry</h3><p>Settings, notes and history live in a local database. The app only talks to services you set up: weather, lyrics, your calendar link, your dictation provider.</p></div>
-      <div class="tile"><h3>Built to stay out of the way</h3><p>Written in Rust with Tauri. It hides while a fullscreen game or video is in front, and clicks outside the pill go straight through to your desktop.</p></div>
+      <div class="tile"><h3>Clicks go straight through</h3><p>Only the pill takes the mouse. Click anywhere around it and you reach the window or desktop underneath.</p></div>
       <div class="tile"><h3>Open source</h3><p>Apache-2.0, on GitHub. Read the code, file an issue, send a pull request.</p></div>
     </div>
   </section>
@@ -157,6 +188,32 @@
     </div>
     <div class="split-shots">
       <div class="frame"><img src="screenshots/settings-appearance.png" alt="Settings: themes, accent colour and style" loading="lazy"></div>
+    </div>
+  </section>
+
+  <!-- ===== Right-click menu (mirrors src-tauri/src/menu.rs) ===== -->
+  <section id="menu" class="wrap reveal">
+    <h2 class="sec-title left">One right-click away.</h2>
+    <p class="sec-lede">Right-click the island for the quick switches. Everything else lives in Settings.</p>
+    <div class="split">
+      <figure class="ctx-card">
+        <ul class="ctx" aria-hidden="true">
+          <li>Settings…</li>
+          <li class="sep"></li>
+          <li class="sub">Animation Style</li>
+          <li class="sep"></li>
+          <li class="sub on">Coding Agents</li>
+          <li class="sep"></li>
+          <li>Quit</li>
+        </ul>
+        <figcaption><img src="assets/icon.png" alt="" width="16" height="16">Right-click the island</figcaption>
+      </figure>
+      <dl class="menu-items">
+        <div><dt>Settings…</dt><dd>Themes and layout, tabs, dictation, start at login, which display, and hiding in fullscreen.</dd></div>
+        <div><dt>Animation Style</dt><dd>The effect behind the island while music plays: Glow Sweep, Fluid Blobs or Neon Border.</dd></div>
+        <div><dt>Coding Agents</dt><dd>Tick Claude Code, Codex, Gemini CLI, Cursor or Copilot CLI to connect it. Untick to disconnect.</dd></div>
+        <div><dt>Quit</dt><dd>Closes the island completely.</dd></div>
+      </dl>
     </div>
   </section>
 

@@ -123,6 +123,19 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 - **Caps Lock / Num Lock** indicators, **charging** animation and **notifications** in the island (Windows).
 - **Click-through:** the desktop under the island stays usable; only the pill takes the mouse (Windows).
 
+## Performance
+
+Measured in Windows Task Manager with the island idle (v0.1.55, Intel Core i7-14700HX, 28 threads):
+
+| Download | Memory | CPU when idle |
+|---|---|---|
+| ~9 MB installer | ~130 MB, including its WebView2 processes | under 1% |
+
+- **Small download:** it uses the WebView2 that comes with Windows instead of shipping its own browser.
+- **Rust underneath:** media, clipboard, calendar and the coding agent bridge run in native code.
+- **Steps aside in fullscreen:** games and videos get the whole screen; the island comes back when you leave.
+- **Loads heavy parts on demand:** the offline dictation model loads when you start talking and is freed after 5 idle minutes.
+
 ## Platform support
 
 | Platform | Status |
@@ -177,13 +190,24 @@ Linux builds are experimental, see [Platform support](#platform-support).
 |---|---|
 | Hover the island | Opens the dashboard |
 | Click a tab | Opens its page (music, calendar, timer, ...) |
-| Right-click | Menu: Settings…, Animation Style, Coding Agents (tick an agent to connect it), Quit (display, island size, autostart and fullscreen options live in Settings) |
+| Right-click | Opens the menu, see [Right-click menu](#right-click-menu) |
 | Allow / Deny on a prompt | Answers the agent; Enter = Allow / Send, Esc = Dismiss (the agent then asks in its terminal) |
 | Wheel or ‹ › on the Pal card | Switch between agent sessions |
 | ＋ in the launcher | Add an app |
 | Right-click an app twice | Remove it from the launcher |
 | ＋ on the calendar | Paste your iCal link (or turn on the desktop calendar in Settings → Integrations) |
 | Click the circle on a task | Cross it off (click again within a second to undo) |
+
+## Right-click menu
+
+Right-click the island for the quick switches. Everything else lives in Settings.
+
+| Item | What it does |
+|---|---|
+| **Settings…** | Themes and layout, tabs, dictation, start at login, which display, and hiding in fullscreen |
+| **Animation Style** | The effect behind the island while music plays: Glow Sweep, Fluid Blobs or Neon Border |
+| **Coding Agents** | Tick Claude Code, Codex, Gemini CLI, Cursor or Copilot CLI to connect it; untick to disconnect |
+| **Quit** | Closes the island completely |
 
 ## Coding agents
 
