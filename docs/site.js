@@ -302,16 +302,12 @@ if (MOTION) {
   });
   setInterval(() => ticks.forEach((tick, root) => root.classList.contains("vis") && tick()), 1000);
 
-  // preview: the pill opens into the dashboard, holds, closes; hovering holds it open
-  const shot = document.querySelector(".shot-main");
-  if (shot) {
-    let hover = false, open = true;
-    shot.addEventListener("pointerenter", () => { hover = true; shot.classList.remove("closed"); });
-    shot.addEventListener("pointerleave", () => { hover = false; });
-    setInterval(() => { if (hover) return; open = !open; shot.classList.toggle("closed", !open); }, 3600);
-  }
 }
 document.querySelectorAll(".tm-win tbody tr").forEach((tr, i) => tr.style.setProperty("--r", i));
+
+// live island demo: scale its fixed 1000px page to the column
+const demo = document.querySelector(".demo");
+if (demo) new ResizeObserver(([e]) => demo.style.setProperty("--k", Math.min(1, e.contentRect.width / 1000))).observe(demo);
 
 // sticky bar: solid, blurred background once the page has scrolled
 const navBar = document.querySelector(".bar");
