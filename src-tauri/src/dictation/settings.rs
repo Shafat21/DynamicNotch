@@ -79,7 +79,8 @@ pub fn parse_hotkey(s: &str) -> Result<Hotkey, String> {
     Ok(Hotkey { mods, key })
 }
 
-pub const ENGINES: [&str; 2] = ["local", "cloud"];
+/// "auto": offline once the model is installed, else cloud when a key is saved.
+pub const ENGINES: [&str; 3] = ["auto", "local", "cloud"];
 pub const PROVIDERS: [&str; 2] = ["openai", "groq"];
 pub const OUTPUTS: [&str; 2] = ["paste", "copy"];
 
@@ -95,7 +96,6 @@ pub fn default_cloud_model(provider: &str) -> &'static str {
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub engine: String,
-    pub model: String,
     pub language: String,
     pub hotkey: String,
     /// "" = system default microphone.
@@ -103,13 +103,14 @@ pub struct Settings {
     pub cloud_provider: String,
     pub cloud_model: String,
     pub output: String,
+    /// Claude clean-up: "verbatim" (off, as said), "natural" or "polished".
+    pub cleanup: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            engine: if super::local::AVAILABLE { "local" } else { "cloud" }.into(), // no Whisper in this build: Cloud
-            model: "base".into(),
+            engine: "auto".into(),
             language: "auto".into(),
             // Linux has no modifier-only hook (spec §23.7: best effort)
             hotkey: if cfg!(windows) { "Ctrl+Win" } else { "Ctrl+Shift+Space" }.into(),
@@ -117,6 +118,7 @@ impl Default for Settings {
             cloud_provider: "openai".into(),
             cloud_model: default_cloud_model("openai").into(),
             output: "paste".into(),
+            cleanup: "verbatim".into(),
         }
     }
 }
@@ -124,26 +126,26 @@ impl Default for Settings {
 /// (patch / JSON key, DB key)
 const KEYS: [(&str, &str); 8] = [
     ("engine", "dictation_engine"),
-    ("model", "dictation_model"),
     ("language", "dictation_language"),
     ("hotkey", "dictation_hotkey"),
     ("mic", "dictation_mic"),
     ("cloudProvider", "dictation_cloud_provider"),
     ("cloudModel", "dictation_cloud_model"),
     ("output", "dictation_output"),
+    ("cleanup", "dictation_cleanup"),
 ];
 
 impl Settings {
     fn field(&mut self, key: &str) -> &mut String {
         match key {
             "engine" => &mut self.engine,
-            "model" => &mut self.model,
             "language" => &mut self.language,
             "hotkey" => &mut self.hotkey,
             "mic" => &mut self.mic,
             "cloudProvider" => &mut self.cloud_provider,
             "cloudModel" => &mut self.cloud_model,
-            _ => &mut self.output,
+            "output" => &mut self.output,
+            _ => &mut self.cleanup,
         }
     }
 
@@ -185,9 +187,6 @@ pub fn apply_patch(cur: &Settings, patch: &Value, mics: impl FnOnce() -> Vec<Str
         *s.field(k) = v;
     }
     one_of(&s.engine, &ENGINES, "engine")?;
-    if super::models::info(&s.model).is_none() {
-        return Err(format!("Unknown model \"{}\"", s.model));
-    }
     let l = &s.language;
     if l != "auto" && !(l.len() == 2 && l.bytes().all(|b| b.is_ascii_lowercase())) {
         return Err(format!("Unknown language \"{l}\""));
@@ -202,6 +201,7 @@ pub fn apply_patch(cur: &Settings, patch: &Value, mics: impl FnOnce() -> Vec<Str
         return Err("Cloud model must be 1–64 characters".into());
     }
     one_of(&s.output, &OUTPUTS, "output")?;
+    one_of(&s.cleanup, &super::cleanup::STYLES, "clean-up style")?;
     if obj.contains_key("mic") && !s.mic.is_empty() && !mics().contains(&s.mic) {
         return Err(format!("Microphone \"{}\" not found", s.mic));
     }
@@ -235,11 +235,13 @@ mod tests {
         let cur = Settings::default();
         let none = || -> Vec<String> { panic!("mic list not needed") };
         assert_eq!(apply_patch(&cur, &json!({}), none).unwrap(), cur);
-        let s = apply_patch(&cur, &json!({"engine": "cloud", "model": "small", "language": "de", "hotkey": "ctrl+alt"}), none).unwrap();
-        assert_eq!((s.engine.as_str(), s.model.as_str(), s.language.as_str(), s.hotkey.as_str()), ("cloud", "small", "de", "Ctrl+Alt"));
+        let s = apply_patch(&cur, &json!({"engine": "cloud", "cleanup": "polished", "language": "de", "hotkey": "ctrl+alt"}), none).unwrap();
+        assert_eq!((s.engine.as_str(), s.cleanup.as_str(), s.language.as_str(), s.hotkey.as_str()), ("cloud", "polished", "de", "Ctrl+Alt"));
+        assert_eq!((cur.engine.as_str(), cur.cleanup.as_str()), ("auto", "verbatim"));
         for bad in [
             json!({"engine": "gpu"}),
-            json!({"model": "large"}),
+            json!({"model": "base"}),
+            json!({"cleanup": "fancy"}),
             json!({"language": "english"}),
             json!({"language": "EN"}),
             json!({"hotkey": "Q"}),

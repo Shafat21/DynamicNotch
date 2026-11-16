@@ -99,7 +99,7 @@ pub fn git_bash() -> Option<PathBuf> {
 }
 
 /// (port, token, chain) from the app DB, opened read-only (never created or written).
-fn read_db(path: &Path) -> Option<(u16, Option<String>, Option<String>)> {
+pub(crate) fn read_db(path: &Path) -> Option<(u16, Option<String>, Option<String>)> {
     use rusqlite::{Connection, OpenFlags, OptionalExtension};
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX).ok()?;
     let _ = conn.busy_timeout(Duration::from_millis(100));

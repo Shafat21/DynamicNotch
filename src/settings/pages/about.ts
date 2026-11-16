@@ -11,7 +11,7 @@ export function renderAbout(root: HTMLElement): void {
   p.append(
     section(
       "Dynamic Notch Island",
-      h("p", { className: "page-hint" }, "A Dynamic Island for Windows: music, calendar, weather, a quick launcher and a Claude Code companion, at the top of your screen."),
+      h("p", { className: "page-hint" }, "A Dynamic Island for Windows: music, calendar, weather, a quick launcher and a companion for coding agents, at the top of your screen."),
       version,
     ),
     section(

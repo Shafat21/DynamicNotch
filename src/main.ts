@@ -56,7 +56,7 @@ const ui = {
   seekPreview: null as number | null, // seconds while dragging the progress bar
   showLyric: true, // Music tab's lyrics panel (in memory)
   lyric: "",
-  event: { title: "", text: "", mood: null as PalMood | null }, // mood: a Claude Code pop shows Pal
+  event: { title: "", text: "", mood: null as PalMood | null }, // mood: a coding agent pop shows Pal
   settings: { animationStyle: "Fluid Blobs" } as Settings,
   look: DEFAULT_LOOK as Look,
   tasks: [] as Task[],
@@ -68,7 +68,7 @@ const pillTop = () => (look().shape === "notch" ? 0 : 10);
 const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
 
 let measureCtx: CanvasRenderingContext2D | null = null;
-const popPal = createPal(22, "calm"); // Claude Code pops: fixed mood per pop
+const popPal = createPal(22, "calm"); // coding agent pops: fixed mood per pop
 const spinning = () => ui.state === "idle" && anyWorking();
 
 /** Idle pill: clock width, or wide enough for the playing song title (never lyrics); + the working spinner. */
@@ -473,7 +473,7 @@ function setPinned(on: boolean): void {
   $("btn-pin").setAttribute("aria-pressed", String(on));
 }
 
-// ---------- Claude Code prompts ----------
+// ---------- coding agent prompts ----------
 function onPrompt(p: Prompt): void {
   if (ui.hidden) return; // the bridge lets the terminal ask while a fullscreen app is in front
   const onScreen = addPrompt(p);
@@ -512,7 +512,7 @@ function onDictationEvent(e: DictEvent): void {
 }
 
 // ---------- reminders ----------
-/** Banner stays until Snooze / Done; below a Claude Code prompt, and held back while hidden. */
+/** Banner stays until Snooze / Done; below an agent prompt, and held back while hidden. */
 function onReminderDue(d: Due): void {
   if (!addDue(d) || ui.hidden || ui.state === "prompt") return; // shown when the prompt closes / fullscreen ends
   clearTimeout(revertTimer);
@@ -748,7 +748,7 @@ function wireInput(): void {
 // ---------- boot ----------
 async function boot(): Promise<void> {
   hydrateIcons();
-  // Pals follow the shared mood (assistant.ts feeds it from Claude Code sessions)
+  // Pals follow the shared mood (assistant.ts feeds it from coding agent sessions)
   $("status-pal").append(createPal(22).el);
   $("status-pop").append(popPal.el);
   $("pal-card-face").append(createPal(34).el);

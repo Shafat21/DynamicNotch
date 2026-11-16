@@ -1,5 +1,6 @@
 //! Windows: modifier-only hotkeys (default Ctrl+Win) through a WH_KEYBOARD_LL hook on its own thread.
 //! Combos with a regular key go through tauri-plugin-global-shortcut (see `dictation::bind`).
+//! The hook also reports Esc (any time), which cancels a recording.
 
 use super::settings::Mods;
 use super::Msg;
@@ -19,6 +20,7 @@ use windows::Win32::{
 const MODS: [u32; 8] = [0xA2, 0xA3, 0xA0, 0xA1, 0xA4, 0xA5, 0x5B, 0x5C];
 /// Unassigned virtual key: tapping it before Win goes up stops the Start menu from opening.
 const MASK_KEY: u16 = 0xE8;
+const VK_ESCAPE: u32 = 0x1B;
 
 /// The modifier-only combo to watch; None while the hotkey has a regular key.
 static WANT: Mutex<Option<Mods>> = Mutex::new(None);
@@ -47,8 +49,10 @@ impl Hook {
             None if down && self.active => {
                 self.active = false;
                 self.spoiled = true;
-                return (Some(Msg::Cancel), false);
+                return (Some(Msg::Escape), false);
             }
+            // Esc on its own: cancels a hands-free recording or one between the two taps
+            None if down && vk == VK_ESCAPE => return (Some(Msg::Escape), false),
             None => {}
         }
         let m = self.mods();
@@ -160,7 +164,15 @@ mod tests {
         let want = Mods { ctrl: true, win: true, ..Default::default() };
         let mut h = Hook::default();
         let r = run(&mut h, want, &[(LCTRL, true), (LWIN, true), (D, true), (LWIN, true), (D, false), (LWIN, false), (LWIN, true)]);
-        assert_eq!(r, [(None, false), (Some(Msg::Press), true), (Some(Msg::Cancel), false), (None, false), (None, false), (None, false), (Some(Msg::Press), true)]);
+        assert_eq!(r, [(None, false), (Some(Msg::Press), true), (Some(Msg::Escape), false), (None, false), (None, false), (None, false), (Some(Msg::Press), true)]);
+    }
+
+    #[test]
+    fn esc_alone_is_reported_other_keys_alone_are_not() {
+        let mut h = Hook::default();
+        assert_eq!(h.on_key(VK_ESCAPE, true, None), (Some(Msg::Escape), false));
+        assert_eq!(h.on_key(VK_ESCAPE, false, None), (None, false));
+        assert_eq!(h.on_key(D, true, None), (None, false));
     }
 
     #[test]

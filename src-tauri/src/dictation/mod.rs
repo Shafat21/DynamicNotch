@@ -1,14 +1,20 @@
-//! Voice dictation (spec §23.7): hold the hotkey, speak, release → transcribe (local whisper.cpp or a
-//! cloud API) → paste at the cursor. Audio stays in memory. Events: `dictation`
-//! {state: "recording"|"transcribing"|"done"|"error"|"idle", level?, ms?, escCancels?, text?, pasted?, error?}.
+//! Voice dictation (spec §23.7): hold the hotkey, speak, release → transcribe (offline Parakeet via
+//! sherpa-onnx, or a cloud API) → dictionary / replacements / snippets / optional Claude clean-up → paste
+//! at the cursor → history. Two quick taps lock hands-free recording until the next press; Esc cancels.
+//! Audio stays in memory. Events: `dictation` {state: "recording"|"transcribing"|"done"|"error"|"idle",
+//! level?, ms?, locked?, escCancels?, text?, pasted?, error?}; `dictation-history` after each saved one.
 //! Works while a fullscreen app hides the island too; the UI decides what to show.
+//!
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
 
 pub mod audio;
+pub mod cleanup;
 pub mod cloud;
 pub mod commands;
 pub mod local;
 pub mod models;
 pub mod settings;
+pub mod text;
 
 #[cfg(windows)]
 #[path = "hotkey_windows.rs"]
@@ -32,7 +38,10 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+/// A shorter press is a tap (maybe the first of a double tap), not a hold.
 pub const MIN_HOLD_MS: u64 = 300;
+/// The second tap of a double tap comes within this after the first release.
+pub const DOUBLE_TAP_MS: u64 = 400;
 pub const MAX_MS: u64 = 120_000;
 const TICK: Duration = Duration::from_millis(66); // ~15 Hz level updates
 
@@ -40,15 +49,21 @@ const TICK: Duration = Duration::from_millis(66); // ~15 Hz level updates
 pub enum Msg {
     Press,
     Release,
+    /// Esc from the keyboard hook: drops a recording, never a running transcription.
+    Escape,
+    /// The island's cancel: drops a recording or forgets the running transcription.
     Cancel,
-    /// Transcription job finished.
+    /// Transcription job finished (final text, after the text pipeline).
     Done(u64, Result<String, String>),
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Phase {
     Idle,
-    Recording { start: u64 },
+    /// Recording; `locked` = hands-free (double tap), finished by the next press.
+    Recording { start: u64, locked: bool },
+    /// After a short first tap: still recording, waiting for the second tap until `until`.
+    TapWait { start: u64, until: u64 },
     Transcribing { job: u64 },
 }
 
@@ -56,11 +71,15 @@ pub enum Phase {
 pub enum Step {
     None,
     Start,
+    /// Hands-free from now on.
+    Lock,
+    /// The wait for a second tap ran out unnoticed: drop that recording and start a new one.
+    Restart,
     Discard,
     Transcribe(u64),
 }
 
-/// The press/hold/release logic, on a millisecond clock. Pure.
+/// The press / hold / double-tap logic (after Coucou's KeyLogic), on a millisecond clock. Pure.
 pub struct Machine {
     pub phase: Phase,
     jobs: u64,
@@ -74,11 +93,22 @@ impl Default for Machine {
 
 impl Machine {
     pub fn press(&mut self, now: u64) -> Step {
-        if self.phase != Phase::Idle {
-            return Step::None;
+        match self.phase {
+            Phase::Idle => {
+                self.phase = Phase::Recording { start: now, locked: false };
+                Step::Start
+            }
+            Phase::Recording { locked: true, .. } => self.finish(),
+            Phase::TapWait { start, until } if now <= until => {
+                self.phase = Phase::Recording { start, locked: true };
+                Step::Lock
+            }
+            Phase::TapWait { .. } => {
+                self.phase = Phase::Recording { start: now, locked: false };
+                Step::Restart
+            }
+            Phase::Recording { .. } | Phase::Transcribing { .. } => Step::None, // key repeat / busy
         }
-        self.phase = Phase::Recording { start: now };
-        Step::Start
     }
 
     fn finish(&mut self) -> Step {
@@ -89,23 +119,38 @@ impl Machine {
 
     pub fn release(&mut self, now: u64) -> Step {
         match self.phase {
-            Phase::Recording { start } if now.saturating_sub(start) < MIN_HOLD_MS => {
-                self.phase = Phase::Idle;
-                Step::Discard
+            Phase::Recording { start, locked: false } if now.saturating_sub(start) < MIN_HOLD_MS => {
+                self.phase = Phase::TapWait { start, until: now + DOUBLE_TAP_MS };
+                Step::None
             }
-            Phase::Recording { .. } => self.finish(),
+            Phase::Recording { locked: false, .. } => self.finish(),
             _ => Step::None,
         }
     }
 
     pub fn tick(&mut self, now: u64) -> Step {
         match self.phase {
-            Phase::Recording { start } if now.saturating_sub(start) >= MAX_MS => self.finish(),
+            Phase::TapWait { until, .. } if now > until => {
+                self.phase = Phase::Idle;
+                Step::Discard
+            }
+            Phase::Recording { start, .. } if now.saturating_sub(start) >= MAX_MS => self.finish(),
             _ => Step::None,
         }
     }
 
-    /// Esc: drop the recording, or forget the running transcription (its result is ignored).
+    /// Esc: drops a recording (held, hands-free or between taps); a running transcription goes on.
+    pub fn escape(&mut self) -> Step {
+        match self.phase {
+            Phase::Recording { .. } | Phase::TapWait { .. } => {
+                self.phase = Phase::Idle;
+                Step::Discard
+            }
+            _ => Step::None,
+        }
+    }
+
+    /// The island's cancel: drop the recording, or forget the running transcription (its result is ignored).
     pub fn cancel(&mut self) -> Step {
         let was = self.phase;
         self.phase = Phase::Idle;
@@ -161,26 +206,47 @@ fn load(app: &AppHandle) -> Settings {
     Settings::load(&app.state::<AppState>().db.lock().unwrap())
 }
 
-/// Fail fast on press (before recording) when the chosen engine can't run.
-fn preflight(app: &AppHandle, s: &Settings) -> Result<(), String> {
-    if s.engine == "cloud" {
-        cloud::get_key(&s.cloud_provider).map(|_| ())
-    } else if !local::AVAILABLE {
-        Err(local::UNAVAILABLE.into())
-    } else if !models::installed(app, &s.model) {
-        Err(format!("The {} model isn't downloaded yet — open Settings → Dictation", s.model))
-    } else {
-        Ok(())
+/// Dictionary, replacements and snippets (JSON in the `settings` table).
+pub fn load_words(app: &AppHandle) -> text::Words {
+    let v = app.state::<AppState>().db.lock().unwrap().get("dictation_words").ok().flatten();
+    v.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or_default()
+}
+
+pub const NEED_MODEL: &str = "Download the offline model — Settings → Features → Dictation";
+
+/// The engine that will run, checked on press (before recording) so it fails fast.
+/// "auto": offline once the model is installed, else cloud if a key is saved.
+fn preflight(app: &AppHandle, s: &Settings) -> Result<&'static str, String> {
+    let local = models::installed(app);
+    match s.engine.as_str() {
+        "cloud" => cloud::get_key(&s.cloud_provider).map(|_| "cloud"),
+        _ if local => Ok("local"),
+        "auto" if cloud::has_key(&s.cloud_provider) => Ok("cloud"),
+        _ => Err(NEED_MODEL.into()),
     }
 }
 
-fn transcribe(app: &AppHandle, s: &Settings, samples: &[f32]) -> Result<String, String> {
-    let lang = (s.language != "auto").then_some(s.language.as_str());
-    if s.engine == "cloud" {
+fn transcribe(app: &AppHandle, engine: &str, s: &Settings, samples: &[f32]) -> Result<String, String> {
+    if engine == "cloud" {
+        let lang = (s.language != "auto").then_some(s.language.as_str());
         cloud::transcribe(&s.cloud_provider, &s.cloud_model, &cloud::get_key(&s.cloud_provider)?, samples, lang)
     } else {
-        local::transcribe(&models::path(app, &s.model)?, samples, lang)
+        local::transcribe(&models::dir(app)?, samples)
     }
+}
+
+/// Raw transcript → the text to paste: snippets set aside, replacements, dictionary, tidy-up, optional
+/// Claude clean-up (used only if it keeps the snippet marks), snippets put back.
+pub fn process(raw: &str, w: &text::Words, style: &str, app_name: Option<&str>) -> String {
+    let p = text::prepare(raw, w);
+    let mut written = text::tidy(&p.text);
+    if style != "verbatim" {
+        let cleaned = cleanup::clean(&written, style, app_name, &w.words);
+        if text::keeps_marks(&cleaned, &p.snippets) {
+            written = cleaned;
+        }
+    }
+    text::finish(&written, &p.snippets)
 }
 
 fn deliver(s: &Settings, text: &str) -> Result<bool, String> {
@@ -191,24 +257,52 @@ fn deliver(s: &Settings, text: &str) -> Result<bool, String> {
     }
 }
 
+/// One recording in progress: the recorder, its settings, the resolved engine, the app in front.
+struct Rec {
+    r: audio::Recorder,
+    s: Settings,
+    engine: &'static str,
+    front: Option<String>,
+}
+
+/// What the Done handler needs from the running transcription.
+struct Job {
+    s: Settings,
+    front: Option<String>,
+    ms: u64,
+}
+
+fn record_history(app: &AppHandle, text: &str, front: Option<&str>, ms: u64) {
+    let words = text::word_count(text) as i64;
+    let at = chrono::Utc::now().timestamp_millis();
+    if let Err(e) = app.state::<AppState>().db.lock().unwrap().add_dictation(text, front, at, words, ms as i64) {
+        eprintln!("dictation: history not saved: {e}");
+    }
+    let _ = app.emit("dictation-history", ());
+}
+
 fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
     let t0 = Instant::now();
     let mut m = Machine::default();
-    let mut rec: Option<(audio::Recorder, Settings)> = None;
-    let mut cfg: Option<Settings> = None; // settings of the running transcription
+    let mut rec: Option<Rec> = None;
+    let mut job: Option<Job> = None;
     loop {
         let msg = rx.recv_timeout(TICK);
         let now = t0.elapsed().as_millis() as u64;
         let step = match msg {
             Ok(Msg::Press) => m.press(now),
             Ok(Msg::Release) => m.release(now),
+            Ok(Msg::Escape) => m.escape(),
             Ok(Msg::Cancel) => m.cancel(),
-            Ok(Msg::Done(job, r)) => {
-                if m.done(job) {
-                    let s = cfg.take().unwrap_or_default();
+            Ok(Msg::Done(id, r)) => {
+                if m.done(id) {
+                    let j = job.take().unwrap_or(Job { s: Settings::default(), front: None, ms: 0 });
                     let r = r.map(|t| t.trim().to_string()).and_then(|t| if t.is_empty() { Err("No speech detected".to_string()) } else { Ok(t) });
-                    match r.and_then(|t| deliver(&s, &t).map(|pasted| (t, pasted))) {
-                        Ok((text, pasted)) => emit(&app, json!({"state": "done", "text": text, "pasted": pasted})),
+                    match r.and_then(|t| deliver(&j.s, &t).map(|pasted| (t, pasted))) {
+                        Ok((text, pasted)) => {
+                            record_history(&app, &text, j.front.as_deref(), j.ms);
+                            emit(&app, json!({"state": "done", "text": text, "pasted": pasted}));
+                        }
                         Err(e) => emit(&app, json!({"state": "error", "error": e})),
                     }
                 }
@@ -218,10 +312,15 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
             Err(RecvTimeoutError::Disconnected) => return,
         };
         match step {
-            Step::Start => {
+            Step::Start | Step::Restart => {
+                rec = None;
                 let s = load(&app);
-                match preflight(&app, &s).and_then(|_| audio::Recorder::start(Some(s.mic.as_str()).filter(|n| !n.is_empty()))) {
-                    Ok(r) => rec = Some((r, s)),
+                let started = preflight(&app, &s).and_then(|engine| {
+                    let r = audio::Recorder::start(Some(s.mic.as_str()).filter(|n| !n.is_empty()))?;
+                    Ok(Rec { r, engine, front: paste_os::foreground_app(), s })
+                });
+                match started {
+                    Ok(r) => rec = Some(r),
                     Err(e) => {
                         m.cancel();
                         emit(&app, json!({"state": "error", "error": e}));
@@ -230,26 +329,35 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
             }
             Step::Discard => {
                 rec = None;
-                cfg = None;
+                job = None;
                 emit(&app, json!({"state": "idle"}));
             }
-            Step::Transcribe(job) => {
-                let Some((r, s)) = rec.take() else {
-                    m.done(job);
+            Step::Transcribe(id) => {
+                let Some(Rec { r, s, engine, front }) = rec.take() else {
+                    m.done(id);
                     continue;
                 };
                 emit(&app, json!({"state": "transcribing"}));
                 let samples = r.stop();
-                cfg = Some(s.clone());
+                job = Some(Job { s: s.clone(), front: front.clone(), ms: samples.len() as u64 / 16 });
                 let app = app.clone();
-                std::thread::spawn(move || send(Msg::Done(job, transcribe(&app, &s, &samples))));
+                std::thread::spawn(move || {
+                    let peak = samples.iter().fold(0f32, |p, v| p.max(v.abs()));
+                    // too short or silent: nothing to send to the model (Coucou's thresholds)
+                    let r = if samples.len() < 16_000 / 4 || peak < 0.004 {
+                        Err("No speech detected".to_string())
+                    } else {
+                        transcribe(&app, engine, &s, &samples).map(|raw| process(&raw, &load_words(&app), &s.cleanup, front.as_deref()))
+                    };
+                    send(Msg::Done(id, r));
+                });
             }
-            Step::None => {}
+            Step::Lock | Step::None => {}
         }
-        if let (Phase::Recording { start }, Some((r, s))) = (m.phase, &rec) {
-            // Esc (any other key) cancels only through the Windows modifier-only hook
-            let esc = cfg!(windows) && settings::parse_hotkey(&s.hotkey).is_ok_and(|h| h.key.is_none());
-            emit(&app, json!({"state": "recording", "level": r.level(), "ms": now - start, "escCancels": esc}));
+        if let (Phase::Recording { start, .. } | Phase::TapWait { start, .. }, Some(r)) = (m.phase, &rec) {
+            let locked = matches!(m.phase, Phase::Recording { locked: true, .. });
+            // Esc always reaches the Windows keyboard hook
+            emit(&app, json!({"state": "recording", "level": r.r.level(), "ms": now - start, "locked": locked, "escCancels": cfg!(windows)}));
         }
     }
 }
@@ -268,6 +376,9 @@ pub fn spawn(app: AppHandle) {
     if let Err(e) = bind(&app, &hk) {
         eprintln!("dictation: hotkey {}: {e}", hk.canonical());
     }
+    if let Ok(d) = models::dir(&app) {
+        local::preload(d);
+    }
     std::thread::spawn(move || run(app, rx));
 }
 
@@ -276,28 +387,76 @@ mod tests {
     use super::*;
 
     #[test]
-    fn short_hold_is_ignored() {
+    fn hold_then_release_transcribes() {
         let mut m = Machine::default();
         assert_eq!(m.press(1_000), Step::Start);
         assert_eq!(m.press(1_050), Step::None); // key repeat
-        assert_eq!(m.release(1_299), Step::Discard);
-        assert_eq!(m.phase, Phase::Idle);
-        assert_eq!(m.press(2_000), Step::Start);
-        assert_eq!(m.release(2_300), Step::Transcribe(1));
-        assert_eq!(m.release(2_400), Step::None);
-        assert_eq!(m.press(2_500), Step::None); // busy transcribing
+        assert_eq!(m.release(1_300), Step::Transcribe(1));
+        assert_eq!(m.release(1_400), Step::None);
+        assert_eq!(m.press(1_500), Step::None); // busy transcribing
         assert!(!m.done(7) && m.done(1));
         assert_eq!(m.phase, Phase::Idle);
     }
 
     #[test]
-    fn max_duration_stops_recording() {
+    fn a_lone_short_tap_is_dropped_after_the_double_tap_window() {
+        let mut m = Machine::default();
+        m.press(1_000);
+        assert_eq!(m.release(1_299), Step::None); // still recording, waiting for a second tap
+        assert_eq!(m.tick(1_699), Step::None);
+        assert_eq!(m.tick(1_700), Step::Discard);
+        assert_eq!(m.phase, Phase::Idle);
+        // a press after an unnoticed timeout starts afresh
+        m.press(2_000);
+        m.release(2_100);
+        assert_eq!(m.press(3_000), Step::Restart);
+        assert_eq!(m.phase, Phase::Recording { start: 3_000, locked: false });
+    }
+
+    #[test]
+    fn two_quick_taps_go_hands_free_and_the_next_press_finishes() {
+        let mut m = Machine::default();
+        assert_eq!(m.press(0), Step::Start);
+        assert_eq!(m.release(100), Step::None);
+        assert_eq!(m.press(300), Step::Lock);
+        assert_eq!(m.release(350), Step::None); // releasing doesn't stop hands-free
+        assert_eq!(m.tick(60_000), Step::None);
+        assert_eq!(m.phase, Phase::Recording { start: 0, locked: true });
+        assert_eq!(m.press(61_000), Step::Transcribe(1));
+        assert_eq!(m.release(61_100), Step::None);
+    }
+
+    #[test]
+    fn max_duration_stops_recording_even_hands_free() {
         let mut m = Machine::default();
         m.press(0);
         assert_eq!(m.tick(MAX_MS - 1), Step::None);
         assert_eq!(m.tick(MAX_MS), Step::Transcribe(1));
         assert_eq!(m.release(MAX_MS + 500), Step::None); // the late key-up is harmless
-        assert_eq!(m.tick(MAX_MS * 3), Step::None);
+        m.done(1);
+        m.press(0);
+        m.release(10);
+        m.press(20);
+        assert_eq!(m.tick(MAX_MS), Step::Transcribe(2));
+    }
+
+    #[test]
+    fn esc_drops_recordings_but_not_a_running_transcription() {
+        let mut m = Machine::default();
+        assert_eq!(m.escape(), Step::None);
+        m.press(0);
+        assert_eq!(m.escape(), Step::Discard);
+        m.press(1_000);
+        m.release(1_100);
+        assert_eq!(m.escape(), Step::Discard); // between taps
+        m.press(2_000);
+        m.release(2_050);
+        m.press(2_100); // hands-free
+        assert_eq!(m.escape(), Step::Discard);
+        m.press(3_000);
+        m.release(4_000);
+        assert_eq!(m.escape(), Step::None);
+        assert!(m.done(1));
     }
 
     #[test]
@@ -310,7 +469,17 @@ mod tests {
         m.press(10_000);
         assert_eq!(m.release(11_000), Step::Transcribe(1));
         assert_eq!(m.cancel(), Step::Discard);
-        assert!(!m.done(1)); // result arrives after Esc: nothing is pasted
+        assert!(!m.done(1)); // result arrives after cancel: nothing is pasted
         assert_eq!(m.press(12_000), Step::Start);
+    }
+
+    #[test]
+    fn process_runs_the_text_pipeline_without_claude_when_verbatim() {
+        let w = text::Words {
+            words: vec!["Supabase".into()],
+            replacements: vec![text::Replacement { from: "cloud code".into(), to: "Claude Code".into() }],
+            snippets: vec![text::Snippet { trigger: "my signature".into(), text: "Best,\n  Alex".into() }],
+        };
+        assert_eq!(process("we use supabase  and cloud code , my signature", &w, "verbatim", None), "We use Supabase and Claude Code, Best,\n  Alex");
     }
 }

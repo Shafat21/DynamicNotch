@@ -480,15 +480,10 @@ pub fn answer_prompt(state: State<AppState>, id: u64, answer: bridge::prompt::An
     state.prompts.answer(id, answer)
 }
 
-/// Native confirm, then merge our hooks into ~/.claude/settings.json (with backup).
+/// Connect (native confirm, then merge our hooks into the agent's config, with backup) or disconnect agent `id`.
 #[tauri::command]
-pub async fn connect_claude(app: AppHandle) -> Res<()> {
-    tauri::async_runtime::spawn_blocking(move || bridge::set_connected(&app, true)).await.map_err(err)?
-}
-
-#[tauri::command]
-pub async fn disconnect_claude(app: AppHandle) -> Res<()> {
-    tauri::async_runtime::spawn_blocking(move || bridge::set_connected(&app, false)).await.map_err(err)?
+pub async fn set_agent(app: AppHandle, id: String, on: bool) -> Res<()> {
+    tauri::async_runtime::spawn_blocking(move || bridge::set_agent(&app, &id, on)).await.map_err(err)?
 }
 
 #[cfg(test)]

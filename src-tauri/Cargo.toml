@@ -30,11 +30,9 @@ icalendar = { version = "0.17.17", default-features = false, features = ["parser
 cpal = "0.18"
 sha2 = "0.10"
 tauri-plugin-global-shortcut = "2"
-whisper-rs = { version = "0.16", optional = true }
-
-[features]
-# whisper.cpp needs CMake + a C++ toolchain; off by default so plain `cargo test` stays fast.
-local-whisper = ["dep:whisper-rs"]
+# offline speech to text: sherpa-onnx (Apache-2.0) + NVIDIA Parakeet, onnxruntime linked statically
+# (prebuilt libs are downloaded at build time); the model is downloaded on the user's click.
+sherpa-onnx = { version = "1.13.8", default-features = false, features = ["static"] }
 
 [target.'cfg(windows)'.dependencies]
 drag = "2.1" # native drag-out of shelf files

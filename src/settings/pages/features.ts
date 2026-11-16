@@ -4,7 +4,7 @@ import type { LauncherApp } from "../../panels";
 import { setGeneral, store } from "../store";
 import { button, h, page, report, row, section, segmented, select, toggle } from "../ui";
 
-type Bridge = { online: boolean; connected?: boolean; error?: string };
+type Bridge = { online: boolean; agents?: { id: string; label: string; connected: boolean }[]; error?: string };
 type Calendar = { configured: boolean; error: string | null };
 type Dictation = { engine: string; model: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string };
 type Models = Record<string, { installed: boolean; size: number }> & { localAvailable?: boolean };
@@ -112,22 +112,26 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
 }
 
 export function renderFeatures(root: HTMLElement): () => void {
-  // Claude Code
-  const claudeState = h("span", { className: "row-desc" });
-  const claudeBtn = button("Connect", () => {});
+  // Coding agents: one row per agent the bridge knows (Claude Code, Codex, …)
+  const agentsSection = section("Coding agents", h("p", { className: "row-desc" }, "Loading…"));
   const onBridge = (b: Bridge) => {
-    claudeState.textContent = !b.online ? `Bridge offline${b.error ? `: ${b.error}` : ""}` : b.connected ? "Connected" : "Not connected";
-    claudeBtn.textContent = b.connected ? "Disconnect" : "Connect";
-    claudeBtn.onclick = async () => {
-      claudeBtn.disabled = true;
-      try {
-        await invoke(b.connected ? "disconnect_claude" : "connect_claude");
-      } catch (e) {
-        report(String(e));
-      } finally {
-        claudeBtn.disabled = false;
-      }
-    };
+    const offline = b.online ? null : h("p", { className: "row-desc" }, `Bridge offline${b.error ? `: ${b.error}` : ""}`);
+    const rows = (b.agents ?? []).map((a) => {
+      const btn = button(a.connected ? "Disconnect" : "Connect", async () => {
+        btn.disabled = true;
+        try {
+          await invoke("set_agent", { id: a.id, on: !a.connected });
+        } catch (e) {
+          report(String(e));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      btn.ariaLabel = `${a.connected ? "Disconnect" : "Connect"} ${a.label}`;
+      const state = h("span", { className: "row-desc" }, a.connected ? "Connected" : "Not connected");
+      return row(a.label, "Show sessions and answer prompts from the island.", h("div", { className: "stack" }, btn, state));
+    });
+    agentsSection.replaceChildren(agentsSection.firstElementChild!, ...(offline ? [offline] : []), ...rows);
   };
 
   // Calendar (the stored link never comes back to the webview)
@@ -186,7 +190,7 @@ export function renderFeatures(root: HTMLElement): () => void {
   const dictation = dictationSection();
   const p = page("Features");
   p.append(
-    section("Claude Code", row("Claude Code", "Show sessions and answer prompts from the island.", h("div", { className: "stack" }, claudeBtn, claudeState))),
+    agentsSection,
     section("Calendar", row("Calendar link", "Paste a private iCal (.ics) link from Google or Outlook.", h("div", { className: "stack" }, calForm, calState))),
     section(
       "Reminders",

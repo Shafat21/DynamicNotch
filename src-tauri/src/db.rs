@@ -181,7 +181,53 @@ impl Db {
                  COMMIT;",
             )?;
         }
+        if version < 7 {
+            self.conn.execute_batch(
+                "BEGIN;
+                 CREATE TABLE dictations (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     text TEXT NOT NULL,
+                     app TEXT,
+                     at INTEGER NOT NULL,
+                     words INTEGER NOT NULL,
+                     ms INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 7;
+                 COMMIT;",
+            )?;
+        }
         Ok(())
+    }
+
+    /// `at` = ms since 1970; `ms` = how long the user spoke.
+    pub fn add_dictation(&self, text: &str, app: Option<&str>, at: i64, words: i64, ms: i64) -> Result<i64> {
+        self.conn.execute("INSERT INTO dictations (text, app, at, words, ms) VALUES (?1, ?2, ?3, ?4, ?5)", params![text, app, at, words, ms])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Newest first, at most `limit`. `query` is a literal, case-insensitive substring of the text or app.
+    pub fn dictations(&self, query: &str, limit: i64) -> Result<Vec<crate::dictation::text::Entry>> {
+        let like = format!("%{}%", query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        let mut stmt = self.conn.prepare(
+            "SELECT id, text, app, at, words, ms FROM dictations WHERE text LIKE ?1 ESCAPE '\\' OR app LIKE ?1 ESCAPE '\\'
+             ORDER BY at DESC, id DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![like, limit], |r| {
+            Ok(crate::dictation::text::Entry { id: r.get(0)?, text: r.get(1)?, app: r.get(2)?, at: r.get(3)?, words: r.get(4)?, ms: r.get(5)? })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_dictation(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM dictations WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// (words, ms, at, app) of every dictation, for the stats.
+    pub fn dictation_rows(&self) -> Result<Vec<(i64, i64, i64, Option<String>)>> {
+        let mut stmt = self.conn.prepare("SELECT words, ms, at, app FROM dictations")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        rows.collect()
     }
 
     fn app_row(r: &rusqlite::Row) -> Result<App> {
@@ -637,5 +683,23 @@ mod tests {
         assert!(db.add_note("x").is_ok());
         db.migrate().unwrap();
         assert_eq!(db.notes("").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn v6_upgrades_to_v7_adding_dictations_with_search_and_delete() {
+        let conn = Db::open_in_memory().unwrap().conn;
+        conn.execute_batch("DROP TABLE dictations; PRAGMA user_version = 6;").unwrap();
+        let db = Db::init(conn).unwrap();
+        let a = db.add_dictation("hello world", Some("Notepad"), 1_000, 2, 1_500).unwrap();
+        db.add_dictation("100% sure_thing", None, 2_000, 2, 900).unwrap();
+        assert_eq!(db.dictations("", 50).unwrap().iter().map(|e| e.at).collect::<Vec<_>>(), [2_000, 1_000]);
+        assert_eq!(db.dictations("WORLD", 50).unwrap().len(), 1);
+        assert_eq!(db.dictations("notepad", 50).unwrap()[0].id, a);
+        assert_eq!(db.dictations("0%", 50).unwrap().len(), 1); // % is literal
+        assert_eq!(db.dictations("e_t", 50).unwrap().len(), 0); // _ is literal
+        assert_eq!(db.dictations("", 1).unwrap().len(), 1);
+        db.delete_dictation(a).unwrap();
+        assert_eq!(db.dictation_rows().unwrap(), vec![(2, 900, 2_000, None)]);
+        db.migrate().unwrap();
     }
 }

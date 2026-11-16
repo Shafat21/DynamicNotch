@@ -9,6 +9,7 @@ mod db;
 mod dictation;
 mod display;
 mod fullscreen;
+pub mod hook;
 mod launcher;
 mod menu;
 mod monitors;
@@ -34,7 +35,7 @@ pub struct AppState {
     pub last: Mutex<HashMap<&'static str, Value>>,
     /// Interactive area of the island, in logical px relative to the window.
     pub hit: Mutex<window::Rect>,
-    /// Claude Code sessions seen by the hook bridge (memory only).
+    /// Coding agent sessions seen by the hook bridge (memory only).
     pub sessions: Mutex<bridge::sessions::Sessions>,
     /// Permission / question prompts waiting for an answer in the island.
     pub prompts: bridge::Prompts,
@@ -183,8 +184,7 @@ pub fn run() {
             commands::set_hit_rect,
             commands::show_context_menu,
             commands::answer_prompt,
-            commands::connect_claude,
-            commands::disconnect_claude,
+            commands::set_agent,
             dictation::commands::dictation_settings,
             dictation::commands::set_dictation_settings,
             dictation::commands::download_model,
@@ -194,6 +194,12 @@ pub fn run() {
             dictation::commands::has_cloud_key,
             dictation::commands::list_mics,
             dictation::commands::dictation_cancel,
+            dictation::commands::dictation_words,
+            dictation::commands::set_dictation_words,
+            dictation::commands::dictation_history,
+            dictation::commands::delete_dictation,
+            dictation::commands::dictation_stats,
+            dictation::commands::dictation_copy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running DynamicNotch");

@@ -7,5 +7,10 @@ fn main() {
         let _ = std::panic::catch_unwind(dynamic_notch_lib::statusline::forward);
         std::process::exit(0);
     }
+    // Hook relay for Codex, Gemini CLI, Cursor, Copilot CLI: same rules.
+    if std::env::args().any(|a| a == dynamic_notch_lib::hook::FLAG) {
+        let _ = std::panic::catch_unwind(dynamic_notch_lib::hook::forward);
+        std::process::exit(0);
+    }
     dynamic_notch_lib::run()
 }

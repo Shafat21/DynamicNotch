@@ -19,6 +19,8 @@ pub enum Status {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
+    /// `bridge::agents` id ("claude", "codex", …).
+    pub agent: String,
     pub project: String,
     pub cwd: String,
     pub status: Status,
@@ -55,6 +57,7 @@ impl Sessions {
         let cwd = text(ev, "cwd").unwrap_or("");
         let s = self.map.entry(id.to_string()).or_insert_with(|| Session {
             id: id.to_string(),
+            agent: super::agents::agent_of(ev).to_string(),
             project: project_of(cwd),
             cwd: cwd.to_string(),
             status: Status::Idle,
@@ -118,6 +121,7 @@ mod tests {
         let mut s = Sessions::default();
         assert!(s.apply(&ev("SessionStart", json!({})), 1).is_none());
         assert_eq!(s.list()[0].project, "webshop");
+        assert_eq!(s.list()[0].agent, "claude");
         assert_eq!(s.list()[0].status, Status::Idle);
         s.apply(&ev("UserPromptSubmit", json!({})), 2);
         assert_eq!(s.list()[0].status, Status::Working);
@@ -137,8 +141,9 @@ mod tests {
     #[test]
     fn unknown_session_event_creates_it_and_prune_drops_stale() {
         let mut s = Sessions::default();
-        s.apply(&ev("UserPromptSubmit", json!({})), 0); // no SessionStart seen (island started later)
+        s.apply(&ev("UserPromptSubmit", json!({"agent": "codex"})), 0); // no SessionStart seen (island started later)
         assert_eq!(s.list().len(), 1);
+        assert_eq!(s.list()[0].agent, "codex");
         s.prune(6 * 3600 - 1);
         assert_eq!(s.list().len(), 1);
         s.prune(6 * 3600 + 1);

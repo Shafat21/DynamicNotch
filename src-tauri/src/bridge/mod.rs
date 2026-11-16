@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod install;
 pub mod prompt;
 pub mod server;
@@ -25,6 +26,7 @@ pub const ANSWER_QUESTIONS: bool = true;
 pub struct PromptInfo {
     pub id: u64,
     pub session_id: String,
+    pub agent: String,
     pub project: String,
     pub kind: &'static str,
     pub tool_name: String,
@@ -116,15 +118,25 @@ fn last_bridge(app: &AppHandle) -> Value {
     app.state::<AppState>().last.lock().unwrap().get("bridge").cloned().unwrap_or_else(|| json!({"online": false}))
 }
 
-/// Re-publishes sticky `bridge {online, connected, error?}` with `connected` re-read from settings.json.
+/// Re-publishes sticky `bridge {online, connected, agents: [{id, label, connected}], error?}`, every agent's
+/// state re-read from its config file; `connected` = any agent connected.
 pub fn publish_status(app: &AppHandle) {
     let mut v = last_bridge(app);
-    v["connected"] = json!(is_connected_now(app));
+    let list = agents::status(app.path().home_dir().ok().as_deref(), is_connected_now(app));
+    v["connected"] = json!(list.as_array().into_iter().flatten().any(|a| a["connected"] == true));
+    v["agents"] = list;
     crate::publish(app, "bridge", v);
 }
 
-pub fn is_connected_shown(app: &AppHandle) -> bool {
-    last_bridge(app)["connected"] == true
+/// `(id, label, connected)` for every agent, as last published.
+pub fn agents_shown(app: &AppHandle) -> Vec<(String, String, bool)> {
+    let v = last_bridge(app);
+    let s = |a: &Value, k: &str| a[k].as_str().unwrap_or("").to_string();
+    v["agents"].as_array().into_iter().flatten().map(|a| (s(a, "id"), s(a, "label"), a["connected"] == true)).collect()
+}
+
+fn is_connected_shown(app: &AppHandle, id: &str) -> bool {
+    agents_shown(app).iter().any(|(i, _, on)| i == id && *on)
 }
 
 /// Applies `f` to the account-wide usage and re-publishes sticky `usage` if it changed (lock held: keeps order).
@@ -175,13 +187,15 @@ fn on_hook(app: &AppHandle, ev: Value) -> Value {
     if !is_interactive(&ev) {
         return json!({});
     }
+    let agent = agents::agent_of(&ev).to_string();
+    let claude = agent == agents::CLAUDE;
     match ev["hook_event_name"].as_str() {
         // statusLine forwarder (`--statusline`): account-wide usage only, never a session
         Some("StatusLine") => {
             update_usage(app, |u| u.apply_statusline(&ev, now() as i64));
             return json!({});
         }
-        Some("StopFailure") => update_usage(app, |u| u.apply_stop_failure(&ev)),
+        Some("StopFailure") if claude => update_usage(app, |u| u.apply_stop_failure(&ev)), // Claude plan limits
         _ => {}
     }
     let state = app.state::<AppState>();
@@ -191,9 +205,10 @@ fn on_hook(app: &AppHandle, ev: Value) -> Value {
         let _ = app.emit("notify", json!({"app": p.project, "title": "", "text": p.text}));
     }
     let tool = ev["tool_name"].as_str().unwrap_or("");
+    // a card only for agents whose relay passes the decision on; AskUserQuestion is Claude Code's alone
     let kind = match ev["hook_event_name"].as_str() {
-        Some("PermissionRequest") if ANSWERING => "permission",
-        Some("PreToolUse") if ANSWERING && ANSWER_QUESTIONS && tool == "AskUserQuestion" => "question",
+        Some("PermissionRequest") if ANSWERING && agents::takes_decisions(&agent) => "permission",
+        Some("PreToolUse") if ANSWERING && ANSWER_QUESTIONS && claude && tool == "AskUserQuestion" => "question",
         _ => return json!({}),
     };
     if crate::fullscreen::is_hidden(app) {
@@ -206,6 +221,7 @@ fn on_hook(app: &AppHandle, ev: Value) -> Value {
     let (id, rx) = state.prompts.open(PromptInfo {
         id: 0,
         session_id,
+        agent,
         project: project.unwrap_or_default(),
         kind,
         tool_name: tool.to_string(),
@@ -266,9 +282,58 @@ pub fn set_connected(app: &AppHandle, on: bool) -> Result<(), String> {
         let _ = app.state::<AppState>().db.lock().unwrap().set(STATUSLINE_CHAIN, ""); // "" = no chain
     }
     publish_status(app);
-    if on && !is_connected_shown(app) {
+    if on && !is_connected_shown(app, agents::CLAUDE) {
         return Err(format!("{} has an unexpected \"hooks\" layout; no hooks were added.", path.display()));
     }
+    Ok(())
+}
+
+/// Connect (after a native confirm) or disconnect agent `id`. Blocks: not on the main thread.
+pub fn set_agent(app: &AppHandle, id: &str, on: bool) -> Result<(), String> {
+    if id == agents::CLAUDE {
+        return set_connected(app, on);
+    }
+    let agent = agents::find(id).ok_or_else(|| format!("unknown agent: {id}"))?;
+    let path = agent.path(&app.path().home_dir().map_err(|e| e.to_string())?);
+    if on {
+        let trust = if id == "codex" { "\n\nCodex asks you to review and trust new hooks once (/hooks)." } else { "" };
+        let ok = app
+            .dialog()
+            .message(format!(
+                "Add Dynamic Notch Island hooks to\n{}\n\nEvents: {}{trust}\n\nThe current file is backed up to {}.dynamicnotch.bak.",
+                path.display(),
+                agent.event_names(),
+                path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+            ))
+            .title(format!("Connect {}", agent.label))
+            .buttons(MessageDialogButtons::OkCancel)
+            .blocking_show();
+        if !ok {
+            return Ok(());
+        }
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let mut failed = None;
+        install::write_settings(&path, |s| failed = agent.install(s, &exe.to_string_lossy(), cfg!(windows)).err())?;
+        if let Some(e) = failed {
+            publish_status(app);
+            return Err(format!("{}: {e}; no hooks were added.", path.display()));
+        }
+    } else if path.exists() {
+        let mut failed = None;
+        let mut empty = false;
+        install::write_settings(&path, |s| {
+            failed = agent.uninstall(s).err();
+            empty = failed.is_none() && agent.file_is_empty(s);
+        })?;
+        if empty {
+            let _ = std::fs::remove_file(&path); // our own file, nothing of anyone else's left
+        }
+        if let Some(e) = failed {
+            publish_status(app);
+            return Err(format!("{}: {e}; left unchanged.", path.display()));
+        }
+    }
+    publish_status(app);
     Ok(())
 }
 
@@ -360,7 +425,7 @@ mod tests {
     use std::time::Duration;
 
     fn info(kind: &'static str) -> PromptInfo {
-        PromptInfo { id: 0, session_id: "s1".into(), project: "p".into(), kind, tool_name: "Bash".into(),
+        PromptInfo { id: 0, session_id: "s1".into(), agent: "claude".into(), project: "p".into(), kind, tool_name: "Bash".into(),
             summary: "ls".into(), questions: json!([{"question":"Q?","options":[{"label":"A"}]}]), queue: 0 }
     }
 

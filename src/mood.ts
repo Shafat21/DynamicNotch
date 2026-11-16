@@ -1,4 +1,4 @@
-// Which face Pal shows. Pure: Task 9 feeds MoodInput from Claude Code sessions (spec §17.2).
+// Which face Pal shows. Pure: Task 9 feeds MoodInput from coding agent sessions (spec §17.2).
 export type PalMood = "calm" | "happy" | "listening" | "thinking" | "needs-you" | "done" | "napping" | "broke";
 
 export type MoodInput = {

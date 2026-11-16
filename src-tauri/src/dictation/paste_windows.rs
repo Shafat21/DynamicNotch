@@ -2,16 +2,21 @@
 //! clipboard text back after ~800 ms if the clipboard still holds ours.
 //! An elevated foreground window (while we are not) blocks injected keys (UIPI) without an error:
 //! then we only copy and leave our text on the clipboard.
+//! Before Ctrl+V we wait (up to 1 s) for the dictation keys to come up, so the paste is a plain Ctrl+V
+//! and not Ctrl+Win+V; keys still held after that get key-ups.
+//!
+//! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use windows::{
+    core::PWSTR,
     Win32::{
         Foundation::{CloseHandle, HANDLE, HGLOBAL},
         Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
         System::{
             DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard},
             Memory::{GlobalLock, GlobalSize, GlobalUnlock},
-            Threading::{GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION},
+            Threading::{GetCurrentProcess, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION},
         },
         UI::{
             Input::KeyboardAndMouse::GetAsyncKeyState,
@@ -25,6 +30,52 @@ const VK_CONTROL: u16 = 0x11;
 const VK_V: u16 = 0x56;
 /// LShift, RShift, LAlt, RAlt, LWin, RWin: released before Ctrl+V so it doesn't arrive as Ctrl+Shift+V etc.
 const HELD: [u16; 6] = [0xA0, 0xA1, 0xA4, 0xA5, 0x5B, 0x5C];
+/// LCtrl, RCtrl: waited for too (part of the default Ctrl+Win), but not force-released.
+const CTRLS: [u16; 2] = [0xA2, 0xA3];
+
+fn down(vk: u16) -> bool {
+    unsafe { GetAsyncKeyState(vk as i32) as u16 & 0x8000 != 0 }
+}
+
+/// Wait up to a second for the modifiers to come up (hands-free ends with a key press, so the
+/// dictation keys can still be held when the text is ready).
+fn wait_keys_released() {
+    let until = Instant::now() + Duration::from_secs(1);
+    while HELD.iter().chain(&CTRLS).any(|&vk| down(vk)) && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(15));
+    }
+}
+
+/// Parts of the desktop itself, never a place to dictate into.
+fn is_shell(stem: &str) -> bool {
+    matches!(stem, "explorer" | "applicationframehost" | "textinputhost" | "shellexperiencehost" | "searchhost" | "startmenuexperiencehost" | "lockapp")
+}
+
+/// The program in front, e.g. "Notepad"; None for us, the desktop or when it can't be read.
+pub fn foreground_app() -> Option<String> {
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid));
+        if pid == 0 || pid == std::process::id() {
+            return None;
+        }
+        let p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(p, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len).is_ok();
+        let _ = CloseHandle(p);
+        if !ok {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        let stem = std::path::Path::new(&path).file_stem()?.to_string_lossy().into_owned();
+        if is_shell(&stem.to_lowercase()) {
+            return None;
+        }
+        let mut c = stem.chars();
+        c.next().map(|f| f.to_uppercase().chain(c).collect())
+    }
+}
 /// Unassigned key tapped before releasing Alt/Win, so the lone key-up doesn't open a menu or Start.
 const MASK_KEY: u16 = 0xE8;
 
@@ -96,9 +147,11 @@ pub fn paste(text: &str) -> Result<bool, String> {
         super::copy(text)?;
         return Ok(false);
     }
+    wait_keys_released();
     let prev = read();
     crate::clipboard::write(text)?;
-    let held: Vec<u16> = HELD.into_iter().filter(|&vk| unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000 != 0).collect();
+    std::thread::sleep(Duration::from_millis(40)); // let the clipboard change be announced before the app reads it
+    let held: Vec<u16> = HELD.into_iter().filter(|&vk| down(vk)).collect();
     let mut keys = Vec::new();
     if !held.is_empty() {
         keys.extend([(MASK_KEY, false), (MASK_KEY, true)]);

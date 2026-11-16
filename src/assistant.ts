@@ -1,16 +1,18 @@
-// Claude Code companion (spec §5.3, §17, §22.1): sessions on the Home Pal card and the Pal tab,
+// Coding agent companion (spec §5.3, §17, §22.1): sessions on the Home Pal card and the Pal tab,
 // blocking prompts (permission / AskUserQuestion) answered in the island, Pal's mood from all of it.
-// Session messages, tool summaries and questions come from Claude Code: textContent only.
+// Agents and their labels come from the bridge (`bridge.agents`); nothing here names one.
+// Session messages, tool summaries and questions come from the agents: textContent only.
 import { invoke } from "@tauri-apps/api/core";
 import type { PalMood } from "./mood";
 import { createPal, updateMood, type Pal } from "./pal";
 import { costText, level, limitText, live, pct, resetText, staleText, type Level, type Usage, type UsageWindow } from "./usage";
 
 export type Status = "idle" | "working" | "needs-you" | "done" | "error";
-export type Session = { id: string; project: string; cwd: string; status: Status; message: string; updatedAt: number }; // updatedAt: unix s
+export type Session = { id: string; agent: string; project: string; cwd: string; status: Status; message: string; updatedAt: number }; // updatedAt: unix s
 export type Question = { question: string; header?: string; multiSelect?: boolean; options: { label: string; description?: string }[] };
-export type Prompt = { id: number; sessionId: string; project: string; kind: "permission" | "question"; toolName?: string; summary?: string; questions?: Question[]; queue: number };
-export type Bridge = { online: boolean; connected: boolean; error?: string };
+export type Prompt = { id: number; sessionId: string; agent: string; project: string; kind: "permission" | "question"; toolName?: string; summary?: string; questions?: Question[]; queue: number };
+export type Agent = { id: string; label: string; connected: boolean };
+export type Bridge = { online: boolean; connected: boolean; agents?: Agent[]; error?: string };
 type Answer = { kind: "allow" | "deny" | "dismiss" } | { kind: "answers"; picks: Record<string, string[]>; other: Record<string, string> };
 
 const PROMPT_MS = 15_000; // Rust answers {} after this (bridge PROMPT_WAIT)
@@ -23,7 +25,7 @@ const st = {
   bridge: { online: true, connected: false } as Bridge,
   queue: [] as { p: Prompt; at: number }[], // FIFO; [0] is on screen
   cardId: null as string | null, // session picked on the card (wheel / ‹ ›); null = newest
-  note: "", // connect_claude error
+  note: "", // set_agent error
   usage: null as Usage | null, // sticky `usage`; null until a statusLine ever arrived (hide the widget)
 };
 let seen: Map<string, Status> | null = null; // statuses from the previous `sessions`; null before the first
@@ -131,8 +133,14 @@ export function popMood(app: string): PalMood | null {
   return s ? POP_MOOD[s.status] : null;
 }
 
+/** The agent's display name from the bridge; its id until the first `bridge` event. */
+function agentLabel(id: string): string {
+  return st.bridge.agents?.find((a) => a.id === id)?.label ?? id;
+}
+
+/** Connecting an agent edits its config file: done in Settings, one row per agent. */
 function connect(): void {
-  invoke("connect_claude").catch((err) => {
+  invoke("open_settings").catch((err) => {
     st.note = String(err);
     render();
   });
@@ -143,7 +151,7 @@ function bridgeText(): string | null {
   const b = st.bridge;
   if (!b.online) return `Bridge offline: ${b.error ?? "unknown error"}`;
   if (!b.connected) return st.note || "Not connected";
-  return st.sessions.length ? null : "No sessions yet: run claude in a terminal";
+  return st.sessions.length ? null : "No sessions yet: start a connected agent in a terminal";
 }
 
 function render(): void {
@@ -163,16 +171,17 @@ function renderCard(): void {
   if (text !== null) {
     const sub = el("span", "muted ell", st.bridge.online ? (st.bridge.connected ? "Connected" : st.note || "Not connected") : "Offline");
     sub.title = sub.textContent!;
-    col.append(el("b", "ell", "Claude Code"), sub);
-    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect", connect, "Connect Claude Code") : el("div", "pal-msg muted", text);
+    col.append(el("b", "ell", "Coding agents"), sub);
+    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect", connect, "Connect a coding agent in Settings") : el("div", "pal-msg muted", text);
     return card.replaceChildren(row, ...(st.bridge.connected ? usageCard() : []), foot);
   }
   const list = st.sessions;
   const i = Math.max(0, list.findIndex((s) => s.id === st.cardId));
   const s = list[i];
   const name = el("span", "pal-name");
-  name.append(dot(s.status), el("b", "ell", s.project || "Claude Code"));
-  col.append(name, el("span", "muted ell", list.length > 1 ? `${STATUS_TEXT[s.status]} · ${i + 1}/${list.length}` : STATUS_TEXT[s.status]));
+  name.append(dot(s.status), el("b", "ell", s.project || agentLabel(s.agent)));
+  const sub = [agentLabel(s.agent), STATUS_TEXT[s.status], ...(list.length > 1 ? [`${i + 1}/${list.length}`] : [])].join(" · ");
+  col.append(name, el("span", "muted ell", sub));
   const foot = el("div", "pal-foot");
   const msg = el("div", "pal-msg ell", s.message || "—");
   msg.title = s.message;
@@ -273,8 +282,8 @@ function renderTab(): void {
   const text = bridgeText();
   const state = $("pal-state");
   const n = st.sessions.length;
-  state.replaceChildren(el("b", "", "Claude Code"), el("span", "muted small", text ?? `${n} session${n === 1 ? "" : "s"}`));
-  if (st.bridge.online && !st.bridge.connected) state.append(button("btn primary", "Connect Claude Code", connect));
+  state.replaceChildren(el("b", "", "Coding agents"), el("span", "muted small", text ?? `${n} session${n === 1 ? "" : "s"}`));
+  if (st.bridge.online && !st.bridge.connected) state.append(button("btn primary", "Connect an agent", connect));
   $("pal-sessions").replaceChildren(
     ...usageBlock(),
     ...st.sessions.map((s) => {
@@ -282,7 +291,7 @@ function renderTab(): void {
       const head = el("div", "sess-head");
       const when = el("span", "muted small", ago(s.updatedAt));
       when.title = new Date(s.updatedAt * 1000).toLocaleString();
-      head.append(dot(s.status), el("b", "ell", s.project || "Claude Code"), el("span", "muted small sess-status", STATUS_TEXT[s.status]), el("span", "spacer"), when);
+      head.append(dot(s.status), el("b", "ell", s.project || agentLabel(s.agent)), el("span", "muted small", agentLabel(s.agent)), el("span", "muted small sess-status", STATUS_TEXT[s.status]), el("span", "spacer"), when);
       row.append(head);
       if (s.message) row.append(Object.assign(el("div", "sess-msg muted", s.message), { title: s.message }));
       row.title = s.cwd;
@@ -392,14 +401,14 @@ function renderPrompt(): void {
     // one row, so it fits the 150 px state below the tab bar: who + tool | summary | Deny Allow
     const who = el("span", "col prompt-who");
     const sub = el("span", "muted small prompt-sub");
-    sub.append(el("span", "ell", `wants ${p.toolName || "a tool"}`), el("span", "prompt-count"));
-    who.append(el("b", "ell", p.project || "Claude Code"), sub);
+    sub.append(el("span", "ell", `${agentLabel(p.agent)} wants ${p.toolName || "a tool"}`), el("span", "prompt-count"));
+    who.append(el("b", "ell", p.project || agentLabel(p.agent)), sub);
     const sum = el("code", "prompt-sum", p.summary || p.toolName || ""); // wraps to 3 lines, then scrolls
     sum.title = p.summary ?? "";
     head.append(face, who, sum, button("btn", "Deny", () => answer({ kind: "deny" })), button("btn primary", "Allow", () => answer({ kind: "allow" })));
     submit = () => answer({ kind: "allow" });
   } else {
-    head.append(face, el("b", "ell prompt-project", p.project || "Claude Code"));
+    head.append(face, el("b", "ell prompt-project", p.project || agentLabel(p.agent)));
     const qs = p.questions ?? [];
     const picked = qs.map(() => new Set<string>());
     const others: HTMLInputElement[] = [];
