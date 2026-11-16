@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# the git hook runs under sh: it must stay LF even with Windows CRLF conversion
+.githooks/* text eol=lf
