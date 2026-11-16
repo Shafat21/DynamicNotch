@@ -160,7 +160,10 @@ mod tests {
         let dir = db.add_shelf(d.to_str().unwrap()).unwrap();
         let it = db.shelf().unwrap();
         assert_eq!(it[0].id, dir); // newest first
-        assert!(it[0].is_dir && it[0].icon.is_some()); // folders get a shell icon too
+        assert!(it[0].is_dir);
+        if cfg!(windows) {
+            assert!(it[0].icon.is_some()); // folders get a shell icon too (Linux has no shell icons yet)
+        }
         std::fs::remove_file(&a).unwrap();
         let gone = db.shelf().unwrap().into_iter().find(|i| i.id == id).unwrap();
         assert!(!gone.exists && gone.icon.is_none()); // kept, flagged missing
