@@ -1,4 +1,14 @@
 /* Dynamic Notch Island site. Dark, a cyan-indigo-violet glow, no third-party fonts or trackers. */
+/* Bricolage Grotesque, self-hosted latin subset (SIL OFL 1.1, see fonts/OFL.txt). */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
+  font-display: swap;
+  src: url(fonts/bricolage-grotesque.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 :root {
   color-scheme: dark;
   --void: #03040a;
@@ -10,7 +20,7 @@
   --indigo: #2d5bff;
   --violet: #7b4bff;
   --glow: linear-gradient(90deg, var(--cyan), var(--indigo) 55%, var(--violet));
-  --font: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
+  --font: "Bricolage Grotesque", "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
   --spring: cubic-bezier(0.34, 1.32, 0.5, 1);
 }
 * { box-sizing: border-box; }
