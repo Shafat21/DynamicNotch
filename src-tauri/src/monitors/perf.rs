@@ -20,7 +20,8 @@ pub fn spawn(app: AppHandle) {
         let mut sys = System::new();
         let mut nets = Networks::new_with_refreshed_list();
         let mut disks = Disks::new_with_refreshed_list();
-        let drive = format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()));
+        // the system drive: C:\ on Windows, the root filesystem elsewhere
+        let drive = if cfg!(windows) { format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())) } else { "/".into() };
         sys.refresh_cpu_usage();
         let mut last = Instant::now();
         loop {

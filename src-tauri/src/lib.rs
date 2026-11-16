@@ -68,7 +68,24 @@ pub fn emit_settings(app: &AppHandle) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Linux defaults, set before GTK / WebKitGTK start (still single-threaded here). The user's own value wins.
+#[cfg(target_os = "linux")]
+fn linux_env() {
+    let default = |k: &str, v: &str| {
+        if std::env::var_os(k).is_none() {
+            std::env::set_var(k, v);
+        }
+    };
+    // WebKitGTK's DMA-BUF renderer can stall the whole desktop on some AMD / NVIDIA + Wayland setups
+    default("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    // Wayland lets no window place itself or stay on top (GNOME has no layer-shell): run on XWayland,
+    // falling back to Wayland where there is no X server
+    default("GDK_BACKEND", "x11,wayland");
+}
+
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    linux_env();
     tauri::Builder::default()
         // first, so a second launch exits before setup runs
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {

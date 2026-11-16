@@ -32,9 +32,19 @@ fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
 
 #[cfg(target_os = "linux")]
 fn command_for(id: &str) -> Option<(&'static str, &'static [&'static str])> {
-    // the rest is not implemented on Linux yet
+    // systemd + freedesktop tools present on Ubuntu / Fedora; the settings ones are GNOME's
     Some(match id {
+        "shutdown" => ("systemctl", &["poweroff"]),
+        "restart" => ("systemctl", &["reboot"]),
+        "sleep" => ("systemctl", &["suspend"]),
         "lock" => ("loginctl", &["lock-session"]),
+        "explorer" => ("xdg-open", &["."]), // run() starts it in the home folder
+        "settings" => ("gnome-control-center", &[]),
+        "taskmgr" => ("gnome-system-monitor", &[]),
+        "chrome" => ("xdg-open", &["https://www.google.com"]), // the default browser
+        "youtube" => ("xdg-open", &["https://www.youtube.com"]),
+        "cmd" => ("x-terminal-emulator", &[]),
+        "datetime" => ("gnome-control-center", &["datetime"]),
         "sound-settings" => ("gnome-control-center", &["sound"]),
         "bluetooth" => ("gnome-control-center", &["bluetooth"]),
         _ => return None,
@@ -52,6 +62,10 @@ pub fn run(id: &str) -> Result<(), String> {
     cmd.args(args);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    #[cfg(target_os = "linux")]
+    if let Some(home) = std::env::var_os("HOME") {
+        cmd.current_dir(home); // "explorer" opens "." = the home folder; harmless for the others
+    }
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
@@ -68,7 +82,9 @@ mod tests {
             assert!(command_for("lock").is_none()); // handled by LockWorkStation in run()
         }
         #[cfg(target_os = "linux")]
-        assert!(command_for("lock").is_some());
+        for id in ["lock", "shutdown", "restart", "sleep", "explorer", "settings", "taskmgr", "youtube", "cmd", "datetime"] {
+            assert!(command_for(id).is_some(), "{id}");
+        }
         assert!(command_for("sound-settings").is_some());
         assert!(command_for("bluetooth").is_some());
         assert!(command_for("calc & del *").is_none());

@@ -158,7 +158,24 @@ function updateFx(): void {
 function sendHitRect(w: number, h: number, k: number): void {
   const left = (window.innerWidth - w) / 2;
   const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : { x: left - 15 * k, y: 0, w: w + 30 * k, h: pillTop() + h + 30 * k };
+  hitRect = rect;
   invoke("set_hit_rect", { rect }).catch(console.error);
+}
+
+/** Last rect sent to Rust (CSS px, window-relative): what counts as "over the island". */
+let hitRect = { x: 0, y: 0, w: 0, h: 0 };
+const LINUX = navigator.userAgent.includes("Linux") && !navigator.userAgent.includes("Android");
+
+/** Linux: hover from the page itself. Windows polls the global cursor (window_windows.rs); Wayland has none, and
+ *  under XWayland it goes stale over native windows. Same rule as there: inside the hit rect = hovering. */
+function trackHoverInPage(): void {
+  const inside = (x: number, y: number) => x >= hitRect.x && x <= hitRect.x + hitRect.w && y >= hitRect.y && y <= hitRect.y + hitRect.h;
+  document.addEventListener("pointermove", (e) => {
+    const now = inside(e.clientX, e.clientY);
+    if (now !== backendHover) onHover(now);
+  });
+  // the input shape ends at the hit rect, so leaving it is leaving the page
+  document.documentElement.addEventListener("mouseleave", () => backendHover && onHover(false));
 }
 
 function setState(s: State): void {
@@ -766,6 +783,7 @@ function wireInput(): void {
 async function boot(): Promise<void> {
   hydrateIcons();
   initTooltips();
+  if (LINUX) trackHoverInPage();
   // Pals follow the shared mood (assistant.ts feeds it from coding agent sessions)
   $("status-pal").append(createPal(22).el);
   $("status-pop").append(popPal.el);

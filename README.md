@@ -130,10 +130,16 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 | Linux, KDE Plasma | 🧪 Untested |
 | macOS | ❌ Not supported |
 
-Linux today: the window is placed but click-through/hover detection, media (MPRIS), notifications,
-launcher, fullscreen detection, shelf drag-out and modifier-only dictation hotkeys are **not implemented**.
-Sound (`wpctl`/`pactl`), brightness, Bluetooth (`bluetoothctl`) and clipboard history have best-effort code that has not
-been compiled or run on real hardware. Dictation on Linux copies the text and you press Ctrl+V.
+Linux today (compiled and unit-tested in CI, **not yet tried on real hardware**):
+- Click-through (only the island takes the mouse) and hover come from a GTK input shape and the page itself.
+  The app runs on XWayland by default (`GDK_BACKEND=x11,wayland`) so it can sit at the top and stay on top,
+  and turns off WebKitGTK's DMA-BUF renderer (`WEBKIT_DISABLE_DMABUF_RENDERER=1`), which can freeze some desktops.
+  Set either variable yourself to override.
+- Launcher, links and Join buttons open through `xdg-open` / `gio launch`; the built-in actions use `systemctl`,
+  `loginctl` and GNOME's settings and system monitor.
+- Sound (`wpctl`/`pactl`), brightness, Bluetooth (`bluetoothctl`) and clipboard history have best-effort code.
+- **Not implemented:** media (MPRIS), notifications, fullscreen detection, shelf drag-out, app icons in the launcher and
+  modifier-only dictation hotkeys. Dictation copies the text and you press Ctrl+V.
 
 ## Install
 
