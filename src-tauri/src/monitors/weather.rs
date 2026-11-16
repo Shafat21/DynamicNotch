@@ -16,16 +16,30 @@ pub struct Hour {
     time: String,
     temp: String,
     icon: &'static str,
+    /// chance of rain, %
+    rain: Option<u8>,
 }
 
+/// Extras (feels, high/low, humidity, wind, rain) are `None` when Open-Meteo leaves them out.
 #[derive(Serialize, Debug)]
 pub struct Weather {
     city: String,
     temp: String,
     desc: &'static str,
     icon: &'static str,
+    feels: Option<String>,
+    high: Option<String>,
+    low: Option<String>,
+    /// relative humidity, %
+    humidity: Option<u8>,
+    /// km/h
+    wind: Option<u32>,
+    /// the highest chance of rain in the hours shown, %
+    rain: Option<u8>,
     hourly: Vec<Hour>,
 }
+
+const HOURS: usize = 8;
 
 pub fn refresh() {
     REFRESH.store(true, Ordering::Relaxed);
@@ -75,7 +89,10 @@ fn fetch(city: &str, lat: f64, lon: f64) -> Result<Weather, String> {
         .query("latitude", lat.to_string())
         .query("longitude", lon.to_string())
         .query("current_weather", "true")
-        .query("hourly", "temperature_2m,weathercode")
+        .query("current", "apparent_temperature,relative_humidity_2m")
+        .query("hourly", "temperature_2m,weathercode,precipitation_probability")
+        .query("daily", "temperature_2m_max,temperature_2m_min")
+        .query("forecast_days", "2")
         .query("timezone", "auto")
         .call()
         .map_err(|e| e.to_string())?
@@ -94,12 +111,15 @@ fn parse(city: &str, res: &Value) -> Result<Weather, String> {
     let hour_key = format!("{}:00", cur["time"].as_str().unwrap_or("").get(..13).unwrap_or(""));
     let start = times.iter().position(|t| t.as_str() == Some(hour_key.as_str())).unwrap_or(0);
 
-    let hourly = (start + 1..start + 6)
+    let deg = |v: &Value| v.as_f64().map(|t| format!("{}°", t.round() as i64));
+    let pct = |v: &Value| v.as_f64().map(|p| p.round().clamp(0.0, 100.0) as u8);
+    let hourly: Vec<Hour> = (start + 1..start + 1 + HOURS)
         .filter(|&i| i < times.len())
         .map(|i| Hour {
             time: hour_label(times[i].as_str().unwrap_or("")),
             temp: format!("{}°", res["hourly"]["temperature_2m"][i].as_f64().unwrap_or(0.0).round() as i64),
             icon: icon(res["hourly"]["weathercode"][i].as_i64().unwrap_or(-1)),
+            rain: pct(&res["hourly"]["precipitation_probability"][i]),
         })
         .collect();
 
@@ -108,6 +128,12 @@ fn parse(city: &str, res: &Value) -> Result<Weather, String> {
         temp: format!("{}°", cur["temperature"].as_f64().unwrap_or(0.0).round() as i64),
         desc: desc(code),
         icon: icon(code),
+        feels: deg(&res["current"]["apparent_temperature"]),
+        high: deg(&res["daily"]["temperature_2m_max"][0]),
+        low: deg(&res["daily"]["temperature_2m_min"][0]),
+        humidity: pct(&res["current"]["relative_humidity_2m"]),
+        wind: cur["windspeed"].as_f64().map(|w| w.round().max(0.0) as u32),
+        rain: hourly.iter().filter_map(|h| h.rain).max(),
         hourly,
     })
 }
@@ -166,7 +192,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn parses_current_and_next_five_hours() {
+    fn parses_current_and_next_hours() {
         let times: Vec<String> = (0..24).map(|h| format!("2026-11-15T{h:02}:00")).collect();
         let res = json!({
             "current_weather": { "time": "2026-11-15T13:45", "temperature": 21.6, "weathercode": 2 },
@@ -175,9 +201,39 @@ mod tests {
         let w = parse("Dhaka, Bangladesh", &res).unwrap();
         assert_eq!(w.temp, "22°");
         assert_eq!(w.desc, "Partly Cloudy");
-        assert_eq!(w.hourly.len(), 5);
+        assert_eq!(w.hourly.len(), 8);
         assert_eq!(w.hourly[0].time, "2PM");
         assert_eq!(w.hourly[0].icon, "pouring");
+    }
+
+    #[test]
+    fn parses_feels_high_low_humidity_wind_and_rain_chance() {
+        let times: Vec<String> = (0..24).map(|h| format!("2026-11-15T{h:02}:00")).collect();
+        let res = json!({
+            "current_weather": { "time": "2026-11-15T13:45", "temperature": 21.6, "weathercode": 2, "windspeed": 11.6 },
+            "current": { "apparent_temperature": 23.4, "relative_humidity_2m": 78 },
+            "daily": { "temperature_2m_max": [27.2, 28.0], "temperature_2m_min": [18.6, 19.0] },
+            "hourly": { "time": times, "temperature_2m": vec![10.4; 24], "weathercode": vec![61; 24],
+                        "precipitation_probability": (0..24).map(|h| h * 4).collect::<Vec<_>>() }
+        });
+        let w = parse("Dhaka, Bangladesh", &res).unwrap();
+        assert_eq!(w.feels.as_deref(), Some("23°"));
+        assert_eq!((w.high.as_deref(), w.low.as_deref()), (Some("27°"), Some("19°")));
+        assert_eq!(w.humidity, Some(78));
+        assert_eq!(w.wind, Some(12)); // km/h
+        assert_eq!(w.hourly.len(), 8); // the strip shows the next 8 hours
+        assert_eq!(w.hourly[0].rain, Some(56)); // 2 PM: 14 * 4 %
+        assert_eq!(w.rain, Some(84)); // the highest chance in the next 8 hours (9 PM)
+    }
+
+    #[test]
+    fn extras_missing_are_none_not_errors() {
+        let res = json!({
+            "current_weather": { "time": "2026-11-15T13:45", "temperature": 21.6, "weathercode": 0 },
+            "hourly": { "time": ["2026-11-15T14:00"], "temperature_2m": [20.0], "weathercode": [0] }
+        });
+        let w = parse("X", &res).unwrap();
+        assert_eq!((w.feels, w.high, w.humidity, w.wind, w.rain), (None, None, None, None, None));
     }
 
     #[test]
