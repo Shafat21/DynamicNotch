@@ -36,7 +36,8 @@
 <main id="top">
 
   <!-- the notch, hanging from the top edge of the page -->
-  <div class="notch" aria-hidden="true"><i class="eye"></i><i class="eye"></i></div>
+  <!-- site.js puts Pal in here and plays the island's moods; without JS it's a plain notch -->
+  <div class="notch" aria-hidden="true"><span class="n-pal"></span><span class="n-side"></span></div>
   <div class="ambient" aria-hidden="true"></div>
 
   <section class="wrap hero">
@@ -153,16 +154,22 @@
           <b>Processes</b>
           <table>
             <thead><tr><th>Name</th><th>CPU</th><th>Memory</th></tr></thead>
-            <tbody><tr><td><img src="assets/icon.png" alt="" width="18" height="18">Dynamic Notch Island</td><td>0.8%</td><td>129.2 MB</td></tr></tbody>
+            <tbody>
+              <tr class="tm-app"><td colspan="3"><img src="assets/icon.png" alt="" width="18" height="18">Dynamic Notch Island</td></tr>
+              <tr><td>Idle</td><td>0.1%</td><td>28 MB</td></tr>
+              <tr><td>Dashboard open</td><td>0.1%</td><td>28 MB</td></tr>
+              <tr><td>Dictating</td><td>0.1%</td><td>1,051 MB</td></tr>
+              <tr><td>Transcribing (2 s)</td><td>10%</td><td>1,177 MB</td></tr>
+            </tbody>
           </table>
         </div>
-        <figcaption>Windows Task Manager with the island idle, on a 28-thread laptop. Memory includes its WebView2 processes.</figcaption>
+        <figcaption>Task Manager's row for the app on a 28-thread laptop. WebView2 runs as separate entries, about 160 MB more; the big numbers include it. The dictation model is freed after 5 idle minutes.</figcaption>
       </figure>
       <div>
         <ul class="stats">
           <li><b>~9 MB</b><span>download</span></li>
-          <li><b>~130 MB</b><span>memory</span></li>
-          <li><b>&lt;1%</b><span>CPU when idle</span></li>
+          <li><b>~190 MB</b><span>memory at idle</span></li>
+          <li><b>&lt;2%</b><span>CPU at idle</span></li>
         </ul>
         <ul class="ticks">
           <li><b>Small download.</b> It uses the WebView2 that comes with Windows instead of shipping its own browser.</li>

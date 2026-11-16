@@ -139,11 +139,17 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 
 ## Performance
 
-Measured in Windows Task Manager with the island idle (v0.1.55, Intel Core i7-14700HX, 28 threads):
+Measured on v0.1.55, Intel Core i7-14700HX (28 threads). The installer is ~9 MB.
 
-| Download | Memory | CPU when idle |
+| State | CPU | Memory (Task Manager row) |
 |---|---|---|
-| ~9 MB installer | ~130 MB, including its WebView2 processes | under 1% |
+| Idle | 0.1% | 28 MB |
+| Dashboard open | 0.1% | 28 MB |
+| Dictating (Omnilingual model loaded) | 0.1% | 1,051 MB |
+| Transcribing (about 2 s) | 10% | 1,177 MB |
+
+Task Manager's row counts `dynamic-notch.exe` only. WebView2, which draws the interface, runs as separate
+entries and adds about 160 MB and ~1.5% CPU (~2.3% with the dashboard open), so the whole app idles at ~190 MB. The dictation model is freed after 5 idle minutes.
 
 - **Small download:** it uses the WebView2 that comes with Windows instead of shipping its own browser.
 - **Rust underneath:** media, clipboard, calendar and the coding agent bridge run in native code.

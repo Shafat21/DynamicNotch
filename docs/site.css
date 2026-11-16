@@ -50,12 +50,48 @@ code { padding: 1px 6px; border-radius: 6px; background: rgba(236, 239, 247, 0.0
 
 /* ----- the notch hanging from the page edge ----- */
 .notch {
-  position: absolute; z-index: 4; top: 0; left: 50%; translate: -50% 0; width: 168px; height: 36px;
+  position: absolute; z-index: 4; top: 0; left: 50%; translate: -50% 0; min-width: 168px; height: 38px; padding: 0 16px 0 12px;
   border-radius: 0 0 20px 20px; background: #000; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 40px rgba(45, 91, 255, 0.25);
-  display: flex; align-items: center; justify-content: center; gap: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow: hidden;
+  font: 600 13px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; white-space: nowrap;
+  transition: width 0.45s var(--spring), box-shadow 0.4s;
 }
-.eye { width: 7px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 1px rgba(120, 190, 255, 0.6), 0 0 14px 4px rgba(80, 140, 255, 0.28); animation: blink 4.2s infinite; }
-@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+.notch[data-mood="needs-you"] { box-shadow: 0 0 0 1px rgba(255, 190, 70, 0.35), 0 10px 40px rgba(255, 170, 60, 0.3); }
+.n-pal { flex: none; width: 26px; height: 26px; }
+.n-side { display: flex; align-items: center; gap: 8px; color: #eceff7; transition: opacity 0.2s; }
+.n-side.swap { opacity: 0; }
+.n-side small { font: inherit; color: #8c94a8; font-weight: 500; }
+@media (max-width: 560px) { .n-side small { display: none; } } /* keep the wide states clear of the brand */
+.n-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(236, 239, 247, 0.22); border-top-color: var(--cyan); animation: turn 0.9s linear infinite; }
+@keyframes turn { to { transform: rotate(360deg); } }
+.n-wave { display: flex; align-items: center; gap: 2px; height: 16px; }
+.n-wave i { width: 3px; height: 100%; border-radius: 2px; background: var(--cyan); animation: wave 0.9s ease-in-out infinite; animation-delay: calc(var(--i) * -0.13s); }
+@keyframes wave { 0%, 100% { transform: scaleY(0.2); } 50% { transform: scaleY(1); } }
+.n-dot { width: 7px; height: 7px; border-radius: 50%; background: #ffbe46; box-shadow: 0 0 8px #ffbe46; }
+.n-ok { color: #4ade9a; }
+
+/* Pal, copied from the app (src/styles.css): white face, idle motion per mood */
+.pal { display: block; overflow: visible; fill: #fff; }
+.pal-eyes, .pal-mouth { transform-box: fill-box; transform-origin: center; }
+.pal[data-mood="calm"] { animation: pal-float 4s ease-in-out infinite; }
+.pal[data-mood="happy"] .pal-eyes, .pal[data-mood="done"] .pal-eyes { animation: pal-hop 0.9s ease-in-out infinite; }
+.pal[data-mood="happy"] .pal-blush circle, .pal[data-mood="done"] .pal-blush circle { animation: pal-glow 1.6s ease-in-out infinite; }
+.pal[data-mood="listening"] { animation: pal-tilt 2.4s ease-in-out infinite; }
+.pal[data-mood="thinking"] .pal-eyes { animation: pal-glance 3.2s ease-in-out infinite; }
+.pal[data-mood="thinking"] .pal-mouth { animation: pal-pulse-x 1.6s ease-in-out infinite; }
+.pal[data-mood="needs-you"] { animation: pal-float 1s ease-in-out infinite; }
+.pal[data-mood="needs-you"] .pal-mouth { animation: pal-pulse 1s ease-in-out infinite; }
+.pal[data-mood="napping"] { animation: pal-breathe 5s ease-in-out infinite; }
+.pal[data-mood="broke"] { animation: pal-shake 0.45s ease-in-out 1; }
+@keyframes pal-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5%); } }
+@keyframes pal-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes pal-glow { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+@keyframes pal-tilt { 0%, 100% { transform: rotate(0) translateY(0); } 50% { transform: rotate(6deg) translateY(-4%); } }
+@keyframes pal-glance { 0%, 10%, 90%, 100% { transform: translateX(0); } 25%, 40% { transform: translateX(-5px); } 60%, 75% { transform: translateX(5px); } }
+@keyframes pal-pulse-x { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(0.7); } }
+@keyframes pal-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+@keyframes pal-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.94); } }
+@keyframes pal-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8%); } 40%, 80% { transform: translateX(8%); } }
 .ambient {
   position: absolute; inset: 0 0 auto 0; height: 760px; pointer-events: none; opacity: 0.5;
   background: radial-gradient(60% 60% at 50% 0%, rgba(45, 91, 255, 0.55), rgba(123, 75, 255, 0.18) 45%, transparent 72%);
@@ -129,6 +165,8 @@ figure { margin: 0; }
 .tm-win th { font-size: 12px; font-weight: 400; color: #c9c9c9; }
 .tm-win th:first-child, .tm-win td:first-child { text-align: left; }
 .tm-win td + td { background: rgba(45, 91, 255, 0.16); }
+.tm-win tbody tr:not(.tm-app) td:first-child { padding-left: 44px; color: #c9c9c9; }
+.tm-win .tm-app td { background: none; }
 .tm-win td img { display: inline-block; vertical-align: -4px; margin-right: 10px; border-radius: 4px; }
 .stats { list-style: none; margin: 0 0 30px; padding: 0; display: flex; flex-wrap: wrap; gap: 14px 44px; }
 .stats b { display: block; font-size: clamp(34px, 4vw, 46px); line-height: 1.1; font-weight: 800; background: var(--glow); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -201,7 +239,8 @@ footer { margin-top: 90px; padding: 40px 0 50px; border-top: 1px solid var(--lin
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .js .reveal { opacity: 1; transform: none; transition: none; }
-  .eye { animation: none; }
+  .pal, .pal *, .n-spin, .n-wave i { animation: none !important; }
+  .notch { transition: none; }
 }
 
 @media (max-width: 860px) {
