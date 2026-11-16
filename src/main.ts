@@ -21,6 +21,8 @@ import { addDue, chime, currentDue, initReminders, overdue, showReminders, type 
 import { hydrateIcons, icon } from "./icons-line";
 import { hideTip, initTooltips } from "./tooltip";
 import { hitRectFor, initDrag, type Edge } from "./drag";
+import { initCompact, ring } from "./compact/compact";
+import { CARDS, type CardId } from "./compact/pager";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
@@ -68,6 +70,7 @@ const ui = {
 };
 
 const look = () => ui.look.appearance;
+const compactView = () => ui.state === "hover" && look().view === "compact";
 const side = () => ui.edge === "left" || ui.edge === "right";
 const pillTop = () => (look().shape === "notch" && ui.edge === "top" ? 0 : 10); // the notch shape exists only on the top edge
 const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
@@ -94,6 +97,7 @@ function targetSize(): [number, number] {
   if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
   if (ui.state === "reminder") return [640, 76];
   if (ui.state === "dictation") return [["done", "error"].includes($("dictation").dataset.phase ?? "") ? 400 : 300, a.collapsedH]; // room for the text
+  if (compactView()) return [500, 140]; // the compact notch: one card at a time
   return [a.openW, a.openH]; // every tab shares the open size; long pages scroll
 }
 
@@ -122,6 +126,7 @@ function geometry(): void {
   shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
   shell.dataset.shape = ui.edge === "top" ? look().shape : "pill";
   shell.dataset.edge = ui.edge;
+  shell.dataset.view = look().view;
   sendHitRect(w, h, k);
 }
 
@@ -231,7 +236,21 @@ function onUsage(u: Usage): void {
 
 const clockTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
+// compact view: the idle pill shows a ring and sound bars beside the clock / song (compact.css)
+const idleRing = ring(14);
+const idleEq = Object.assign(document.createElement("span"), { className: "eq idle-eq" });
+idleEq.append(...Array.from({ length: 4 }, () => document.createElement("i")));
+/** Header ring: how far into the playing song; null = hidden. */
+const ringFraction = (): number | null => (ui.media.state === "Playing" && ui.progress.duration > 0 ? ui.progress.position / ui.progress.duration : null);
+const compact = initCompact(
+  $("compact"),
+  Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => el.replaceChildren(Object.assign(document.createElement("div"), { className: "cmp-placeholder", textContent: id }))])) as Record<CardId, (el: HTMLElement) => void>,
+  { ring: ringFraction },
+);
+
 function renderHeader(): void {
+  idleRing.set(ringFraction());
+  idleEq.classList.toggle("on", ui.media.state === "Playing");
   if (ui.state === "notify") {
     const { title, text, mood } = ui.event;
     if (mood) popPal.setMood(mood);
@@ -282,7 +301,10 @@ function renderView(): void {
   $("reminder").hidden = !reminder;
   $("dictation").hidden = !dict;
   chime(reminder ? currentDue()?.id ?? null : null);
-  $("open").hidden = !hover && !prompt;
+  const cmp = compactView();
+  $("open").hidden = (!hover && !prompt) || cmp;
+  $("compact").hidden = !cmp;
+  if (cmp) compact.show();
   $("prompt").hidden = !prompt;
   $("pages").hidden = prompt; // the prompt state is sized for the prompt alone
   $("tabbar").setAttribute("aria-disabled", String(prompt)); // visible but inert until the prompt closes
@@ -788,6 +810,8 @@ function wireInput(): void {
 // ---------- boot ----------
 async function boot(): Promise<void> {
   hydrateIcons();
+  $("header").prepend(idleRing.el);
+  $("header").append(idleEq);
   initTooltips();
   // hold anywhere that isn't a control, then drag to any screen edge (drag.ts, Rust moves the window)
   initDrag(shell, {
@@ -863,7 +887,7 @@ async function boot(): Promise<void> {
   if (snap.usage) onUsage(snap.usage as Usage);
   const call = snap.notetaker as CallEvent | undefined;
   if (call && (call.state === "recording" || call.state === "processing")) setCall(call);
-  if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
+  if (snap.display) [ui.scale, ui.edge] = [(snap.display as Display).uiScale, (snap.display as Display).edge ?? "top"]; // edge too: a saved side placement survives restarts // applied by onSettings' transition below
   if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 
   ui.tasks = await invoke<Task[]>("list_tasks");

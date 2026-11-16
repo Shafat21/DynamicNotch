@@ -109,7 +109,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #shell[data-edge="right"].away { translate: 150% -50%; }
 /* the slim side tab shows just Pal (no room for the clock or the song) */
 #shell:is([data-edge="left"], [data-edge="right"]) .header :is(.title, .spinner, #status-icon) { display: none; }
-#shell:is([data-edge="left"], [data-edge="right"]) .header { justify-content: center; padding: 0; }
+#shell:is([data-edge="left"], [data-edge="right"]) .header { flex-direction: column; justify-content: center; gap: 10px; padding: 0; height: 120px; } /* stacked, centred in the 40x120 tab (base px) */
 /* while dragged: lifted, and no size animation fighting the pointer */
 #shell.dragging { transition: none; filter: drop-shadow(0 12px 28px rgb(0 0 0 / 0.5)); cursor: grabbing; }
 #shell[data-shape="notch"] { --top: 0px; }

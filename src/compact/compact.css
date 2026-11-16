@@ -1,0 +1,30 @@
+/* Compact notch (compact.ts). Sizes are base px inside the zoomed #view, like the rest of the island. */
+#compact { display: flex; flex-direction: column; height: calc(var(--h) / var(--ui)); padding: 8px 14px 6px; box-sizing: border-box; }
+#compact[hidden] { display: none; }
+.cmp-head { display: flex; align-items: center; justify-content: center; gap: 8px; height: 22px; flex: none; font-size: var(--t13); }
+.cmp-date { color: var(--text); font-weight: 600; }
+.cmp-time { font-weight: 800; font-variant-numeric: tabular-nums; }
+.cmp-ring { flex: none; rotate: -90deg; }
+.cmp-ring circle { fill: none; stroke-width: 3; }
+.cmp-ring .track { stroke: var(--track); }
+.cmp-ring .arc { stroke: var(--success); stroke-linecap: round; transition: stroke-dasharray 0.6s var(--ease); }
+.cmp-body { flex: 1; min-height: 0; display: flex; align-items: center; gap: 8px; }
+.cmp-card { flex: 1; min-width: 0; height: 100%; overflow: hidden; }
+.cmp-card.in { animation: cmp-in 0.32s var(--ease); }
+.cmp-card.in[data-dir="-1"] { animation-name: cmp-in-back; }
+@keyframes cmp-in { from { opacity: 0; transform: translateX(18px); } }
+@keyframes cmp-in-back { from { opacity: 0; transform: translateX(-18px); } }
+.cmp-arrow {
+  flex: none; width: 24px; height: 24px; display: grid; place-items: center; padding: 0 0 2px; border: 0; border-radius: 50%;
+  background: var(--hover); color: var(--text); font-size: 16px; line-height: 1; opacity: 0.75; transition: opacity 0.2s, background 0.2s;
+}
+.cmp-arrow:hover { opacity: 1; background: var(--active); }
+.cmp-dots { display: flex; justify-content: center; gap: 5px; height: 10px; flex: none; align-items: center; }
+.cmp-dot { width: 5px; height: 5px; padding: 0; border: 0; border-radius: 999px; background: var(--track); transition: width 0.25s var(--ease), background 0.25s; }
+.cmp-dot[aria-selected="true"] { width: 14px; background: var(--text); }
+.cmp-placeholder { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: var(--t13); }
+/* the idle pill in compact view: ring · time/song · sound bars, no Pal */
+#shell[data-view="compact"] #status-pal { display: none; }
+.header :is(.cmp-ring, .idle-eq) { display: none; }
+#shell[data-view="compact"] .header :is(.cmp-ring, .idle-eq) { display: inline-flex; }
+@media (prefers-reduced-motion: reduce) { .cmp-card.in { animation: none; } }
