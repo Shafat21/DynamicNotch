@@ -14,6 +14,7 @@ mod launcher;
 mod menu;
 mod monitors;
 mod notes;
+mod placement;
 mod notetaker;
 mod reminders;
 mod shelf;
