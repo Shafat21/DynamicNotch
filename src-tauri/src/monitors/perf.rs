@@ -13,6 +13,7 @@ struct Perf {
     disk: f64,
     down: f64,
     up: f64,
+    gpu: Option<f64>,
 }
 
 pub fn spawn(app: AppHandle) {
@@ -20,6 +21,7 @@ pub fn spawn(app: AppHandle) {
         let mut sys = System::new();
         let mut nets = Networks::new_with_refreshed_list();
         let mut disks = Disks::new_with_refreshed_list();
+        let gpu = super::gpu::Gpu::new();
         // the system drive: C:\ on Windows, the root filesystem elsewhere
         let drive = if cfg!(windows) { format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())) } else { "/".into() };
         sys.refresh_cpu_usage();
@@ -50,6 +52,7 @@ pub fn spawn(app: AppHandle) {
                     disk,
                     down: down as f64 / dt,
                     up: up as f64 / dt,
+                    gpu: gpu.as_ref().and_then(|g| g.read()),
                 },
             );
         }

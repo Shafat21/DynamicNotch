@@ -39,7 +39,7 @@ import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
 
 type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
-type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
+type Perf = { cpu: number; ram: number; disk: number; gpu: number | null; down: number; up: number };
 type LyricLine = { t: number; text: string };
 type LyricData = { state: "loading" | "none" | "ready"; lines: LyricLine[] };
 type Weather = { city: string; temp: string; desc: string; icon: string; feels?: string | null; high?: string | null; low?: string | null; humidity?: number | null; wind?: number | null; rain?: number | null; hourly: { time: string; temp: string; icon: string; rain?: number | null }[] };
@@ -396,6 +396,8 @@ function onPerf(p: Perf): void {
     $(bar).closest<HTMLElement>(".stat, #card-system")!.dataset.level = level(v, false); // amber from 80 %, red from 95 %
   };
   for (const [k, v] of [["cpu", p.cpu], ["ram", p.ram], ["disk", p.disk]] as const) set(`${k}-val`, `${k}-bar`, v);
+  if (p.gpu == null) $("gpu-val").textContent = "n/a"; // no GPU counters (Linux, old driver)
+  else set("gpu-val", "gpu-bar", p.gpu);
   set("card-cpu", "card-cpu-bar", p.cpu);
   set("card-ram", "card-ram-bar", p.ram);
   const fmt = (b: number) => (b < 1024 ? `${Math.round(b)} B/s` : b < 1048576 ? `${Math.round(b / 1024)} KB/s` : `${(b / 1048576).toFixed(1)} MB/s`);

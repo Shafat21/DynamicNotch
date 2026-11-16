@@ -5,6 +5,7 @@ pub mod calendar;
 pub mod calendar_desktop;
 pub mod media;
 pub mod notify;
+pub mod gpu;
 pub mod perf;
 pub mod system;
 pub mod weather;

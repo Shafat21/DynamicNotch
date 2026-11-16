@@ -502,8 +502,16 @@ select option { background: var(--popover); color: var(--text); }
   border: none; border-radius: var(--radius-md); background: transparent; font-size: var(--t12); text-align: left; }
 .strip-rem:hover, .focus-chip:hover { background: var(--hover); color: var(--text); }
 .strip-rem .card-ic { display: grid; flex: none; }
-.strip-notes { flex: 0 1 160px; min-width: 120px; display: flex; align-items: center; gap: 8px; }
-.strip-notes input { flex: 1; min-width: 0; }
+/* one pill: icon · field · mic; the container shows the focus ring */
+.strip-notes { flex: 1 1 200px; min-width: 140px; max-width: 300px; display: flex; align-items: center; gap: 6px;
+  height: var(--control-lg); padding: 0 3px 0 6px; box-sizing: border-box; border: 1px solid var(--line);
+  border-radius: var(--radius-full); background: var(--field); transition: border-color 0.2s, box-shadow 0.2s; }
+.strip-notes:hover { border-color: color-mix(in srgb, var(--text) 22%, var(--line)); }
+.strip-notes:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 25%, transparent); }
+.strip-notes .card-ic { flex: none; display: grid; }
+.strip-notes input { flex: 1; min-width: 0; height: 100%; padding: 0; border: none; border-radius: 0; background: transparent; box-shadow: none; }
+.strip-notes input:focus-visible { border: none; box-shadow: none; }
+.strip-notes .bar-btn { flex: none; width: calc(var(--control-lg) - 8px); height: calc(var(--control-lg) - 8px); border-radius: var(--radius-full); }
 .focus-chip { flex: none; display: flex; align-items: center; gap: 6px; height: var(--control); padding: 0 6px; border: none;
   border-radius: var(--radius-md); background: transparent; color: var(--muted); font-size: var(--t13); }
 .focus-chip::after { content: "▶"; font-size: 0.8em; }
@@ -706,14 +714,6 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
   color: var(--muted); font-size: var(--t15); font-weight: 600; overflow: hidden;
   background: linear-gradient(160deg, color-mix(in srgb, var(--media) 22%, var(--card-bg)), var(--card-bg) 70%);
 }
-.lyric-line { color: var(--text); font-size: var(--t20); font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; text-wrap: balance;
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; animation: lyric-in 0.35s var(--ease); }
-@keyframes lyric-in { from { opacity: 0; transform: translateY(8px); } }
-.lyrics-panel.empty { align-content: center; gap: 4px; }
-.lyric-note { font-size: calc(var(--t20) * 1.6); line-height: 1; color: color-mix(in srgb, var(--media) 60%, var(--muted)); }
-.lyric-hint { font-size: var(--t12); font-weight: 500; }
-@media (prefers-reduced-motion: reduce) { .lyric-line { animation: none; } }
-
 /* the whole song, scrolled so the line being sung sits in the middle */
 .lyrics-panel.ready { display: block; position: relative; padding: 0 18px; text-align: center; overflow: hidden;
   -webkit-mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
@@ -723,6 +723,14 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .lyr.near { opacity: 0.5; }
 .lyr.cur { opacity: 1; transform: scale(1.1); text-shadow: 0 0 20px color-mix(in srgb, var(--media) 70%, transparent); }
 @media (prefers-reduced-motion: reduce) { .lyr { transition: none; } }
+.lyric-line { color: var(--text); font-size: var(--t20); font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; text-wrap: balance;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; animation: lyric-in 0.35s var(--ease); }
+@keyframes lyric-in { from { opacity: 0; transform: translateY(8px); } }
+.lyrics-panel.empty { align-content: center; gap: 4px; }
+.lyric-note { font-size: calc(var(--t20) * 1.6); line-height: 1; color: color-mix(in srgb, var(--media) 60%, var(--muted)); }
+.lyric-hint { font-size: var(--t12); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .lyric-line { animation: none; } }
+
 /* calendar tab (agenda) */
 #agenda-list { display: flex; flex-direction: column; gap: 8px; }
 .agenda-row .cal-title { font-size: var(--t13); }
@@ -813,7 +821,7 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 
 /* system */
 /* system: one card per metric; its bar goes amber from 80 %, red from 95 % (main.ts onPerf sets data-level) */
-.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; } /* one row: the page is short */
+.stat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; } /* one row: the page is short */
 .stat { --lv: var(--primary); padding: 10px 12px; border-radius: var(--radius-lg); background: var(--row); box-shadow: inset 0 0 0 1px var(--line); }
 .stat[data-level="warn"] { --lv: var(--warning); }
 .stat[data-level="crit"] { --lv: var(--destructive-text); }

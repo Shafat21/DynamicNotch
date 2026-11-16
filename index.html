@@ -148,9 +148,9 @@
                     <button class="app" id="launcher-more" data-goto="launcher" hidden></button>
                     <button class="app add" data-add-app data-icon="plus" title="Add app" aria-label="Add app"></button>
                   </div>
-                  <div class="strip-notes" id="card-notes" title="Notes: press Enter to add">
+                  <div class="strip-notes" id="card-notes" title="Quick note: type and press Enter">
                     <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
-                    <input id="notes-quick" placeholder="Jot something down…" maxlength="20000" autocomplete="off" spellcheck="false" />
+                    <input id="notes-quick" placeholder="Quick note…" aria-label="Quick note" maxlength="20000" autocomplete="off" spellcheck="false" />
                     <button class="bar-btn" id="notes-quick-mic" data-icon="mic" data-size="14" title="Voice note: click to start / stop, or hold" aria-label="Voice note"></button>
                   </div>
                   <button class="strip-rem" id="card-reminders" data-goto="reminders" title="Reminders">
@@ -265,6 +265,7 @@
                 <div class="stat-grid">
                   <div class="stat"><div class="stat-label"><i data-icon="cpu" data-size="14"></i>CPU</div><div class="stat-val" id="cpu-val">0%</div><div class="bar"><div id="cpu-bar"></div></div></div>
                   <div class="stat"><div class="stat-label"><i data-icon="memory" data-size="14"></i>RAM</div><div class="stat-val" id="ram-val">0%</div><div class="bar"><div id="ram-bar"></div></div></div>
+                  <div class="stat"><div class="stat-label"><i data-icon="gpu" data-size="14"></i>GPU</div><div class="stat-val" id="gpu-val">n/a</div><div class="bar"><div id="gpu-bar"></div></div></div>
                   <div class="stat"><div class="stat-label"><i data-icon="disk" data-size="14"></i>STORAGE</div><div class="stat-val" id="disk-val">0%</div><div class="bar"><div id="disk-bar"></div></div></div>
                   <div class="stat"><div class="stat-label"><i data-icon="web" data-size="14"></i>NETWORK</div><div class="net down" id="net-down">↓ 0 KB/s</div><div class="net up" id="net-up">↑ 0 KB/s</div></div>
                 </div>
