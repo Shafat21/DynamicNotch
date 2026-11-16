@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Dynamic Notch Island",
-  "version": "0.1.88",
+  "version": "0.1.89",
   "identifier": "com.dynamicnotch.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -44,5 +44,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUwMDE4MjVFNEVENEYzMUMKUldRYzg5Uk9Yb0lCNEhBbmo5ZlptRk5relkyOGhwcHZOTWpidlBDbDJub2dROUNQS3FtazAycGsK",
+      "endpoints": [
+        "https://github.com/Shafat21/DynamicNotch/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

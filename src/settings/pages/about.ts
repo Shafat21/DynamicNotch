@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import icon from "../../../docs/assets/icon.png";
 import { button, h, page, report, row, section } from "../ui";
 
+type UpdateInfo = { version: string; notes: string | null; can_install: boolean };
+
 const FEATURES = ["Music & lyrics", "Calendar", "Weather", "Launcher", "Clipboard", "Notes & reminders", "Voice dictation", "Coding agents"];
 
 export function renderAbout(root: HTMLElement): void {
@@ -24,6 +26,7 @@ export function renderAbout(root: HTMLElement): void {
       ),
     ),
     h("div", { className: "about-chips", ariaLabel: "What it does" }, ...FEATURES.map((f) => h("span", {}, f))),
+    section("Updates", updatesRow(link)),
     section(
       "Links",
       row("Source code", "Open source under the Apache License 2.0.", link("GitHub", "repo")),
@@ -34,4 +37,48 @@ export function renderAbout(root: HTMLElement): void {
     section("Privacy", h("p", { className: "page-hint" }, "No accounts and no telemetry. Your settings, notes and history stay on this PC; the app only contacts services you set up (weather, lyrics, your calendar link, your dictation provider).")),
   );
   root.append(p);
+}
+
+/** Check now / Install & restart. The island checks by itself a minute after start and every 6 hours
+ *  (updater.rs) and shows a toast; nothing installs until this button is clicked. */
+function updatesRow(link: (text: string, id: string) => HTMLButtonElement): HTMLElement {
+  const desc = h("span", {}, "Checks GitHub a minute after start and every 6 hours.");
+  const controls = h("div", { className: "row-actions" });
+  const r = row("Software update", "", controls);
+  r.querySelector(".row-desc")!.replaceChildren(desc);
+  const check = button("Check for updates", () => {
+    check.disabled = true;
+    check.textContent = "Checking…";
+    invoke<UpdateInfo | null>("check_update").then(show, (e) => {
+      desc.textContent = `Couldn't check: ${e}`;
+      check.disabled = false;
+      check.textContent = "Try again";
+    });
+  });
+  const show = (u: UpdateInfo | null) => {
+    check.disabled = false;
+    check.textContent = "Check for updates";
+    if (!u) {
+      desc.textContent = "You're on the latest version.";
+      controls.replaceChildren(check);
+      return;
+    }
+    desc.textContent = u.can_install ? `Version ${u.version} is available.` : `Version ${u.version} is available. Your package manager owns this install: download it from Releases.`;
+    const install = u.can_install
+      ? button("Install & restart", () => {
+          install.disabled = true;
+          install.textContent = "Installing…";
+          desc.textContent = `Downloading ${u.version}. The app restarts by itself.`;
+          invoke("install_update").catch((e) => {
+            desc.textContent = `Update failed: ${e}`;
+            install.disabled = false;
+            install.textContent = "Try again";
+          });
+        }, "btn primary")
+      : link("Download", "releases");
+    controls.replaceChildren(install);
+  };
+  controls.append(check);
+  invoke<UpdateInfo | null>("update_status").then((u) => u && show(u), () => {});
+  return r;
 }

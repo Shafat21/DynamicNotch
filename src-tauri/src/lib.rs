@@ -19,6 +19,7 @@ mod notetaker;
 mod reminders;
 mod shelf;
 mod sound;
+mod updater;
 pub mod statusline;
 mod window;
 mod worker;
@@ -95,6 +96,7 @@ pub fn run() {
             let _ = commands::show_settings(app);
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .on_window_event(|win, event| {
             if let (tauri::WindowEvent::DragDrop(d), "main") = (event, win.label()) {
@@ -140,6 +142,7 @@ pub fn run() {
             // "AirBuds connected" toast; not on Linux yet: there each poll spawns bluetoothctl several times
             #[cfg(windows)]
             bluetooth::watch(app.handle().clone());
+            updater::watch(app.handle().clone()); // "Update 0.1.90 available" toast; installs only on the user's click
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));
@@ -214,6 +217,9 @@ pub fn run() {
             commands::launch_app,
             commands::set_hit_rect,
             commands::power_status,
+            commands::check_update,
+            commands::install_update,
+            commands::update_status,
             commands::island_drag_start,
             commands::island_drag_move,
             commands::island_drag_end,

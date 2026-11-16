@@ -204,6 +204,8 @@ chmod +x *.AppImage
 
 Linux builds are experimental, see [Platform support](#platform-support).
 
+**Updates:** the app checks GitHub for a new version a minute after it starts and every 6 hours, and shows a toast when one is out. Install it from **Settings → About → Install & restart** (or click **Check for updates** there). Nothing installs on its own. The Windows installer and the AppImage update in place; for the .deb and .rpm, download the new package from Releases.
+
 ## Usage
 
 | Action | What happens |

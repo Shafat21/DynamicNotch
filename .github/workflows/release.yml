@@ -52,7 +52,12 @@ jobs:
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # signs the update files (in-app updater). Key made with `npx tauri signer generate --ci`: no password.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
+          # update files + latest.json only when the signing key secret is set; without it releases still build
+          args: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}
           # a manual run from a branch only builds; releases come from tags
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Dynamic Notch Island ${{ github.ref_name }}"

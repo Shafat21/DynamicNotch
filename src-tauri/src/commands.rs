@@ -451,6 +451,24 @@ pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
 
 const NO_DRAG: &str = "Moving the island isn't available on Linux yet";
 
+/// Settings → About: ask GitHub for a newer version now.
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> Res<Option<crate::updater::UpdateInfo>> {
+    crate::updater::check(&app).await
+}
+
+/// Settings → About: download, verify, install and restart.
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Res<()> {
+    crate::updater::install(app).await
+}
+
+/// Settings → About on open: what the background check found, without a network call.
+#[tauri::command]
+pub fn update_status() -> Option<crate::updater::UpdateInfo> {
+    crate::updater::found()
+}
+
 /// AC / battery for the compact Widgets card.
 #[tauri::command]
 pub fn power_status() -> monitors::system::Power {

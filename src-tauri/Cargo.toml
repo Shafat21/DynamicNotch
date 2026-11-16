@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-notch"
-version = "0.1.88"
+version = "0.1.89"
 description = "Dynamic Island for Windows, written in Rust (Tauri 2 + SQLite)"
 edition = "2021"
 publish = false
@@ -36,6 +36,7 @@ unicode-normalization = "0.1"
 # offline speech to text: sherpa-onnx (Apache-2.0) + NVIDIA Parakeet / Meta Omnilingual ASR, onnxruntime
 # linked statically (prebuilt libs are downloaded at build time); models are downloaded on the user's click.
 sherpa-onnx = { version = "1.13.8", default-features = false, features = ["static"] }
+tauri-plugin-updater = "2"
 
 [target.'cfg(windows)'.dependencies]
 drag = "2.1" # native drag-out of shelf files
