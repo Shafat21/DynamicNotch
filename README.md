@@ -140,9 +140,12 @@ been compiled or run on real hardware. Dictation on Linux copies the text and yo
 **Windows:** download `Dynamic Notch Island_<version>_x64-setup.exe` from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest)
 and run it. The installer isn't code-signed yet, so Windows SmartScreen may warn on first run ("Unknown publisher"): click **More info**, then **Run anyway**.
 
-<p align="center">
-  <img src="docs/screenshots/smartscreen.png" width="380" alt="Windows SmartScreen: after More info, click Run anyway">
-</p>
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/screenshots/smartscreen-1.png" width="300" alt="Windows SmartScreen: click More info"><br><sub><b>1.</b> Click <b>More info</b></sub></td>
+    <td align="center"><img src="docs/screenshots/smartscreen-2.png" width="300" alt="Windows SmartScreen: click Run anyway"><br><sub><b>2.</b> Click <b>Run anyway</b></sub></td>
+  </tr>
+</table>
 
 **Linux:** download the package for your distro from the [latest release](https://github.com/Shafat21/DynamicNotch/releases/latest):
 
