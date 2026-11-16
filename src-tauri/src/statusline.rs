@@ -146,14 +146,14 @@ fn shells(cmd: &str) -> Vec<Command> {
 
 /// Runs the user's original statusLine command with the same stdin and prints its stdout unchanged.
 fn run_chain(cmd: &str, input: &[u8]) {
-    if let Some(out) = chain_output(cmd, input) {
+    if let Some(out) = chain_output(cmd, input, CHAIN_TIMEOUT) {
         let mut so = std::io::stdout().lock();
         let _ = so.write_all(&out).and_then(|()| so.flush());
     }
 }
 
 /// The chained command's stdout; None if no shell starts or it doesn't finish within CHAIN_TIMEOUT (then killed).
-fn chain_output(cmd: &str, input: &[u8]) -> Option<Vec<u8>> {
+fn chain_output(cmd: &str, input: &[u8], timeout: Duration) -> Option<Vec<u8>> {
     for mut c in shells(cmd) {
         c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
         #[cfg(windows)]
@@ -177,7 +177,7 @@ fn chain_output(cmd: &str, input: &[u8]) -> Option<Vec<u8>> {
             });
         }
         // stdout closes when the command exits; a reader stuck on an orphaned grandchild is simply abandoned
-        let out = rx.recv_timeout(CHAIN_TIMEOUT).ok();
+        let out = rx.recv_timeout(timeout).ok();
         if out.is_none() {
             let _ = child.kill();
             let _ = child.wait();
@@ -254,10 +254,10 @@ mod tests {
 
     #[test]
     fn chain_output_returns_stdout_and_kills_slow_commands() {
-        assert_eq!(String::from_utf8_lossy(&chain_output("echo hi", b"{}").unwrap()).trim(), "hi");
+        assert_eq!(String::from_utf8_lossy(&chain_output("echo hi", b"{}", Duration::from_secs(60)).unwrap()).trim(), "hi");
         let t = std::time::Instant::now();
-        assert_eq!(chain_output("sleep 10", b"{}"), None);
-        assert!(t.elapsed() < Duration::from_secs(9));
+        assert_eq!(chain_output("sleep 20", b"{}", Duration::from_secs(2)), None);
+        assert!(t.elapsed() < Duration::from_secs(15));
     }
 
     #[test]
