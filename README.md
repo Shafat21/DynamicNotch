@@ -7,7 +7,7 @@
 A Dynamic Island for Windows and Linux, with Pal, your coding agent companion<br>
 for Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI.
 
-[![Latest release](https://img.shields.io/github/v/release/Shafat21/DynamicNotch?include_prereleases)](https://github.com/Shafat21/DynamicNotch/releases)
+[![Latest release](https://img.shields.io/github/v/release/Shafat21/DynamicNotch?include_prereleases&label=release&display_name=tag)](https://github.com/Shafat21/DynamicNotch/releases)
 [![Downloads](https://img.shields.io/github/downloads/Shafat21/DynamicNotch/total)](https://github.com/Shafat21/DynamicNotch/releases)
 [![Stars](https://img.shields.io/github/stars/Shafat21/DynamicNotch)](https://github.com/Shafat21/DynamicNotch/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
