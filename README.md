@@ -22,6 +22,8 @@ for Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI.
 
 **Windows:** `.exe` installer &nbsp;·&nbsp; **Linux:** `.deb`, `.rpm`, `.AppImage`
 
+**[Website](https://shafat21.github.io/DynamicNotch/)**
+
 </div>
 
 ---
