@@ -137,6 +137,7 @@ pub fn run() {
             reminders::spawn_scheduler(app.handle().clone());
             clipboard::spawn(app.handle().clone());
             sound::spawn(app.handle().clone());
+            bluetooth::watch(app.handle().clone()); // "AirBuds connected" toast
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));

@@ -111,6 +111,32 @@ pub fn state() -> Result<BtState, String> {
     })
 }
 
+/// Devices connected in `after` that weren't in `before` (by id): what the "connected" toast announces.
+pub fn newly_connected(before: &[BtDevice], after: &[BtDevice]) -> Vec<BtDevice> {
+    after.iter().filter(|d| d.connected && !before.iter().any(|b| b.id == d.id && b.connected)).cloned().collect()
+}
+
+/// Watches for paired devices connecting and emits `bt-connected` {id, name, kind, connected} for each.
+/// shortcut: polls every 8 s (enumeration is not free); a WinRT DeviceWatcher would be instant — upgrade if the
+/// toast feels late.
+pub fn watch(app: tauri::AppHandle) {
+    use tauri::Emitter;
+    std::thread::spawn(move || {
+        let mut last: Option<Vec<BtDevice>> = None; // the first look only sets the baseline: no toast at startup
+        loop {
+            if let Ok(st) = state() {
+                if let Some(prev) = &last {
+                    for d in newly_connected(prev, &st.devices) {
+                        let _ = app.emit("bt-connected", &d);
+                    }
+                }
+                last = Some(st.devices);
+            }
+            std::thread::sleep(std::time::Duration::from_secs(8));
+        }
+    });
+}
+
 pub fn set_radio(on: bool) -> Result<(), String> {
     run(move || os::set_radio(on))
 }
@@ -132,6 +158,19 @@ pub fn disconnect(id: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dev(id: &str, connected: bool) -> BtDevice {
+        BtDevice { id: id.into(), name: format!("Dev {id}"), kind: "audio", connected }
+    }
+
+    #[test]
+    fn newly_connected_lists_only_flips() {
+        let before = [dev("a", false), dev("b", true), dev("c", false)];
+        let after = [dev("a", true), dev("b", true), dev("c", false), dev("d", true)];
+        let ids: Vec<String> = newly_connected(&before, &after).into_iter().map(|d| d.id).collect();
+        assert_eq!(ids, ["a", "d"]); // a turned on, d is new and connected; b was already on
+        assert!(newly_connected(&after, &after).is_empty());
+    }
 
     #[test]
     fn class_of_device_maps_to_kind() {

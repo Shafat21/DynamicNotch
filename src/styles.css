@@ -469,6 +469,13 @@ select option { background: var(--popover); color: var(--text); }
 
 /* ---------- reminders: banner (state "reminder"), tab, form, Home strip chip ---------- */
 .reminder { height: calc(var(--h) / var(--ui)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 16px; font-size: var(--t13); }
+/* Live toast (toast.ts): icon · title over subtitle · value on the right */
+.toast { height: calc(var(--h) / var(--ui)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 18px; font-size: var(--t13); }
+.toast[hidden] { display: none; }
+.toast-ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); flex: none; }
+.toast-col { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.toast-text { color: var(--muted); font-size: var(--t11); }
+.toast-value { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent); }
 .rem-ic { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
 .rem-text { flex: 1; gap: 2px; }
