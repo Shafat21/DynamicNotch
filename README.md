@@ -4,7 +4,8 @@
 
 # Dynamic Notch Island
 
-A Dynamic Island for Windows and Linux, with Pal, your Claude Code companion.
+A Dynamic Island for Windows and Linux, with Pal, your coding agent companion<br>
+for Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI.
 
 [![Latest release](https://img.shields.io/github/v/release/Shafat21/DynamicNotch?include_prereleases)](https://github.com/Shafat21/DynamicNotch/releases)
 [![Downloads](https://img.shields.io/github/downloads/Shafat21/DynamicNotch/total)](https://github.com/Shafat21/DynamicNotch/releases)
@@ -26,9 +27,44 @@ A Dynamic Island for Windows and Linux, with Pal, your Claude Code companion.
 ---
 
 A small pill sits at the top of your screen and shows the time. Hover it and it morphs into a dashboard;
-when Claude Code needs you, Pal tells you and you can answer right from the island.
+when a coding agent needs you, Pal tells you and you can answer right from the island.
+
+<p align="center">
+  <img src="docs/screenshots/idle.png" width="400" alt="Idle pill: Pal, a working spinner and the playing song">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Dashboard Home: clock and weather, coding agent session with plan usage, now playing, calendar">
+</p>
 
 > Architecture, internals and roadmap are in [plan.md](plan.md).
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/music.png" alt="Music player with album art and synced lyrics"><br><sub><b>Music</b>: album art, seek bar, synced lyrics</sub></td>
+    <td width="50%"><img src="docs/screenshots/agents-pal.png" alt="Pal tab: plan usage and coding agent sessions"><br><sub><b>Pal</b>: plan usage and every agent session</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/prompt-permission.png" alt="Codex asks to run a command; Deny or Allow from the island"><br><sub><b>Permission prompt</b>: allow or deny a Codex / Claude Code tool call</sub></td>
+    <td><img src="docs/screenshots/prompt-question.png" alt="Claude Code asks a multiple-choice question in the island"><br><sub><b>Question</b>: answer Claude Code's AskUserQuestion</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/calendar.png" alt="Calendar agenda with a Join button"><br><sub><b>Calendar</b>: today's agenda with Join buttons</sub></td>
+    <td><img src="docs/screenshots/weather.png" alt="Weather with hourly forecast"><br><sub><b>Weather</b>: now and the next hours</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/system.png" alt="System stats: CPU, RAM, storage, network"><br><sub><b>System</b>: CPU, RAM, storage, network</sub></td>
+    <td><img src="docs/screenshots/reminder.png" alt="Reminder banner with Snooze and Done"><br><img src="docs/screenshots/dictation.png" width="60%" alt="Dictation pill while recording"><br><sub><b>Reminder</b> banner and the <b>dictation</b> pill</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/settings-appearance.png" alt="Settings: themes, accent colour and style"><br><sub><b>Settings → Appearance</b>: 7 themes, accent, icons, shape</sub></td>
+    <td><img src="docs/screenshots/settings-agents.png" alt="Settings: connect coding agents"><br><sub><b>Settings → Agents</b>: connect each coding agent</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots use sample data.</sub>
 
 ## Features
 
@@ -46,20 +82,27 @@ when Claude Code needs you, Pal tells you and you can answer right from the isla
 
 **Pal**
 - An animated face with 8 moods: calm, happy, listening, thinking, needs-you, done, napping and broke.
-- Lives in the idle pill next to the clock and on the assistant card; moods follow what Claude Code is doing.
+- Lives in the idle pill next to the clock and on the assistant card; moods follow what your coding agents are doing.
 
-**Claude Code companion**
-- Live status of your Claude Code sessions (working, waiting for you, done, error).
-- Answer permission prompts (allow / deny) and questions from the island instead of the terminal.
-- **Usage limits ring:** your 5-hour and weekly plan usage with reset times, read from Claude Code's official `statusLine` `rate_limits`.
+**Coding agent companion**
+- Works with **Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI**; connect each one in Settings → Agents. See [Coding agents](#coding-agents).
+- Live status of every session, labelled with its agent (working, waiting for you, done, error); a spinner in the idle pill while one works.
+- Answer permission prompts (allow / deny) from the island for Claude Code, Codex and Copilot CLI, and Claude Code's multiple-choice questions.
+- **Usage limits ring:** your Claude 5-hour and weekly plan usage with reset times, read from Claude Code's official `statusLine` `rate_limits`.
 
 **Voice dictation**
 - Hold **Ctrl+Win**, speak, release: the text is pasted into the focused app. Double-tap for hands-free, Esc cancels.
 - Offline transcription with NVIDIA Parakeet (sherpa-onnx, 25 languages), or cloud via OpenAI or Groq. Dictionary, replacements,
   snippets and optional Claude clean-up; local history with words/min and streak. See [Dictation](#dictation).
 
-**Settings window**
-- Themes: Graphite, Midnight, Aurora, Ember, Lime, Rose, Pure black; line or colour-badge icons; density, sizes, tabs and Home layout.
+**Settings window** (right-click the island → Settings…, or the ⚙ button)
+- **General:** start at login, display, island size, hide in fullscreen, which tab opens first.
+- **Appearance:** themes (Graphite, Midnight, Aurora, Ember, Lime, Rose, Pure black), accent colour, line or colour-badge icons,
+  pill or notch shape, density, tab labels, corner radius, text size, card opacity and island sizes.
+- **Tabs** and **Home:** reorder, show or hide tabs and Home cards.
+- **Agents:** connect or disconnect each coding agent.
+- **Integrations:** calendar link, weather city, reminder sound, clipboard history, shelf, launcher apps, sound and Bluetooth shortcuts.
+- **Dictation:** engine, model, hotkey, words and history.
 
 **Fits your desktop**
 - **Hides in fullscreen** games, videos and apps (Windows), and comes back when you leave fullscreen.
@@ -109,26 +152,43 @@ Linux builds are experimental, see [Platform support](#platform-support).
 |---|---|
 | Hover the island | Opens the dashboard |
 | Click a tab | Opens its page (music, calendar, timer, ...) |
-| Right-click | Menu: Settings…, Animation Style, Connect / Disconnect Claude Code, Quit (display, island size, autostart and fullscreen options live in Settings) |
+| Right-click | Menu: Settings…, Animation Style, Coding Agents (tick an agent to connect it), Quit (display, island size, autostart and fullscreen options live in Settings) |
+| Allow / Deny on a prompt | Answers the agent; Enter = Allow / Send, Esc = Dismiss (the agent then asks in its terminal) |
+| Wheel or ‹ › on the Pal card | Switch between agent sessions |
 | ＋ in the launcher | Add an app |
 | Right-click an app twice | Remove it from the launcher |
 | ＋ on the calendar | Paste your iCal link |
 
-## Claude Code
+## Coding agents
 
-Right-click the island and choose **Connect Claude Code**:
+Open **Settings → Agents** (or right-click the island → **Coding Agents**) and click **Connect** next to an agent.
+A confirm dialog shows the file and the events first; the file is backed up as `<file>.dynamicnotch.bak`, and
+**Disconnect** removes only what was added, leaving your own hooks alone.
 
-- Adds Dynamic Notch Island's hooks to `~/.claude/settings.json` and sets `statusLine` to
-  `dynamic-notch.exe --statusline`, which feeds the usage ring and then runs your existing status line (chained), so yours keeps working.
-- The file is backed up first as `settings.json.dynamicnotch.bak`. **Disconnect** removes only what it added and restores your original `statusLine`.
-- The hooks talk to a local endpoint on `127.0.0.1`, default port **47863** (configurable), protected by a random token. Nothing leaves your machine.
-- Permission prompts and questions wait **15 seconds** in the island; if you don't answer, Claude Code falls
-  back to asking in the terminal.
-- Usage limits need a Claude Pro/Max plan and an open Claude Code session (Claude Code only reports `rate_limits` then).
+| Agent | Config file | Sessions | Allow / deny from the island |
+|---|---|---|---|
+| Claude Code | `~/.claude/settings.json` | ✅ | ✅ plus multiple-choice questions |
+| Codex | `~/.codex/hooks.json` | ✅ | ✅ |
+| Copilot CLI | `~/.copilot/hooks/dynamic-notch.json` | ✅ | ✅ |
+| Gemini CLI | `~/.gemini/settings.json` | ✅ | — (asks in its terminal) |
+| Cursor | `~/.cursor/hooks.json` | ✅ | — (asks in its terminal) |
+
+**How it works**
+- **Claude Code** sends its hooks straight to a local endpoint on `127.0.0.1`, default port **47863** (configurable),
+  protected by a random token. Its `statusLine` is set to `dynamic-notch.exe --statusline`, which feeds the usage ring and
+  then runs your existing status line (chained), so yours keeps working; Disconnect restores it.
+- **The other agents** can only run commands, so their hooks run `dynamic-notch.exe --hook --agent <name>`. This relay reads the
+  agent's event, maps it onto the same events Claude Code sends, and forwards it to the same local endpoint. It reads the
+  token from the app's database, so the token never goes into the agent's config file.
+- **Never blocks an agent:** if the island isn't running the relay exits at once, and nothing is ever allowed without your click.
+  Prompts wait **15 seconds** in the island (and are skipped while a fullscreen app is in front); then the agent asks in its terminal as usual.
+- **Codex** asks you to review and trust new hooks once (`/hooks` in Codex).
+- Usage limits are Claude only: they need a Claude Pro/Max plan and an open Claude Code session (Claude Code only reports `rate_limits` then).
+- Nothing leaves your machine.
 
 ## Dictation
 
-- **Setup:** Settings → Features → Dictation → Offline model → **Download** (about 670 MB, once; SHA-256 verified). Or choose
+- **Setup:** Settings → Integrations → Dictation → Offline model → **Download** (about 670 MB, once; SHA-256 verified). Or choose
   OpenAI/Groq and add your API key. Then hold **Ctrl+Win** (changeable) and speak; two quick taps keep listening until the next press.
 - **Text:** dictionary (always-spell words), replacements, snippets (say a trigger phrase, paste a text) and an optional
   clean-up (Natural / Polished) by your own Claude Code login (`claude -p`; only the text is sent). Off by default.
@@ -180,6 +240,7 @@ git push origin v0.2.0
 - Network calls: **Open-Meteo** (weather and city search), **LRCLIB** (lyrics; sends artist and title only),
   **your calendar link**, **your chosen dictation provider** (OpenAI or Groq, only when cloud dictation is used) and
   **Hugging Face** (only when you download the offline dictation model). The calendar link stays on your machine.
+- Connecting a coding agent edits only that agent's config file (backed up first), and only after you confirm.
 - No accounts, no telemetry.
 
 ## Star History

@@ -4,7 +4,6 @@ import type { LauncherApp } from "../../panels";
 import { setGeneral, store } from "../store";
 import { button, h, page, report, row, section, segmented, select, toggle } from "../ui";
 
-type Bridge = { online: boolean; agents?: { id: string; label: string; connected: boolean }[]; error?: string };
 type Calendar = { configured: boolean; error: string | null };
 type Dictation = { engine: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string; cleanup: string };
 type Models = { installed: boolean; size: number; claude: boolean };
@@ -174,28 +173,6 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
 }
 
 export function renderFeatures(root: HTMLElement): () => void {
-  // Coding agents: one row per agent the bridge knows (Claude Code, Codex, …)
-  const agentsSection = section("Coding agents", h("p", { className: "row-desc" }, "Loading…"));
-  const onBridge = (b: Bridge) => {
-    const offline = b.online ? null : h("p", { className: "row-desc" }, `Bridge offline${b.error ? `: ${b.error}` : ""}`);
-    const rows = (b.agents ?? []).map((a) => {
-      const btn = button(a.connected ? "Disconnect" : "Connect", async () => {
-        btn.disabled = true;
-        try {
-          await invoke("set_agent", { id: a.id, on: !a.connected });
-        } catch (e) {
-          report(String(e));
-        } finally {
-          btn.disabled = false;
-        }
-      });
-      btn.ariaLabel = `${a.connected ? "Disconnect" : "Connect"} ${a.label}`;
-      const state = h("span", { className: "row-desc" }, a.connected ? "Connected" : "Not connected");
-      return row(a.label, "Show sessions and answer prompts from the island.", h("div", { className: "stack" }, btn, state));
-    });
-    agentsSection.replaceChildren(agentsSection.firstElementChild!, ...(offline ? [offline] : []), ...rows);
-  };
-
   // Calendar (the stored link never comes back to the webview)
   const calState = h("span", { className: "row-desc" });
   const calInput = h("input", { type: "url", placeholder: "https://…/basic.ics", ariaLabel: "Calendar link (iCal)", spellcheck: false });
@@ -250,9 +227,8 @@ export function renderFeatures(root: HTMLElement): () => void {
   const addApp = button("Add app…", () => invoke<LauncherApp[]>("pick_app").then(drawApps, (e) => report(String(e))));
 
   const dictation = dictationSection();
-  const p = page("Features");
+  const p = page("Integrations");
   p.append(
-    agentsSection,
     section("Calendar", row("Calendar link", "Paste a private iCal (.ics) link from Google or Outlook.", h("div", { className: "stack" }, calForm, calState))),
     section(
       "Reminders",
@@ -303,15 +279,12 @@ export function renderFeatures(root: HTMLElement): () => void {
   root.append(p);
 
   // Live status while the page is open; initial values from the sticky snapshot.
-  onBridge({ online: false });
   onCalendar({ configured: false, error: null });
   invoke<Record<string, unknown>>("get_snapshot").then((snap) => {
-    if (snap.bridge) onBridge(snap.bridge as Bridge);
     if (snap.calendar) onCalendar(snap.calendar as Calendar);
   });
   invoke<LauncherApp[]>("list_apps").then(drawApps, (e) => report(String(e)));
   const unlisten: Promise<UnlistenFn>[] = [
-    listen<Bridge>("bridge", (e) => onBridge(e.payload)),
     listen<Calendar>("calendar", (e) => onCalendar(e.payload)),
     listen<LauncherApp[]>("apps", (e) => drawApps(e.payload)),
   ];

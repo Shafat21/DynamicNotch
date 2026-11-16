@@ -83,7 +83,8 @@ pub fn plausible(cleaned: &str, raw: &str) -> bool {
     after > 0.0 && after <= before * 1.4 + 4.0 && after >= before * 0.35
 }
 
-fn ask(system: &str, prompt: &str) -> Result<String, String> {
+/// `prompt` (stdin) answered under `system` by `claude -p`, or an error after `timeout`. Also used by the notetaker.
+pub fn ask(system: &str, prompt: &str, timeout: Duration) -> Result<String, String> {
     let exe = exe().ok_or("Claude Code is not installed")?;
     // an empty folder of ours, so no CLAUDE.md is picked up
     let work = std::env::temp_dir().join("dynamic-notch-cleanup");
@@ -105,7 +106,7 @@ fn ask(system: &str, prompt: &str) -> Result<String, String> {
         let _ = stdout.read_to_end(&mut buf);
         buf
     });
-    let until = Instant::now() + TIMEOUT;
+    let until = Instant::now() + timeout;
     loop {
         if child.try_wait().map_err(|e| e.to_string())?.is_some() {
             break;
@@ -125,7 +126,7 @@ pub fn clean(raw: &str, style: &str, app: Option<&str>, words: &[String]) -> Str
     if style == "verbatim" || text::word_count(raw) < 3 {
         return raw.to_string();
     }
-    match ask(&system(style, app, words), &format!("<dictation>\n{raw}\n</dictation>")) {
+    match ask(&system(style, app, words), &format!("<dictation>\n{raw}\n</dictation>"), TIMEOUT) {
         Ok(reply) => {
             let cleaned = reply.replace("<dictation>", "").replace("</dictation>", "").trim().to_string();
             if plausible(&cleaned, raw) {
@@ -194,7 +195,7 @@ mod tests {
         println!("exe={:?}", exe());
         println!("{:?}", ask(&system("natural", None, &[]), &format!("<dictation>
 {raw}
-</dictation>")));
+</dictation>"), TIMEOUT));
         let out = clean(raw, "natural", None, &[]);
         println!("CLEANED: {out}");
         assert!(out.contains('4') || out.contains("four"));

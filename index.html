@@ -21,9 +21,10 @@
           <div class="header" id="header">
             <span class="icon" id="status-pal"><span class="usage-dot" id="usage-dot" title="Claude Code usage" hidden></span></span>
             <span class="icon" id="status-pop" hidden></span>
-            <span class="spinner" id="status-spin" hidden title="Claude Code is working"></span>
+            <span class="spinner" id="status-spin" hidden title="A coding agent is working"></span>
             <span class="icon" id="status-icon" hidden></span>
             <span class="title" id="status-text"></span>
+            <span class="rec-badge" id="rec-badge" role="status" hidden></span>
           </div>
 
           <!-- Reminder banner (state "reminder", reminders.ts): stays until Snooze / Done -->
@@ -40,6 +41,7 @@
               <span class="spacer"></span>
               <span class="top-clock" id="top-clock"></span>
               <div class="quick">
+                <button class="qb" id="btn-call" title="Record a call"></button>
                 <button class="qb" id="btn-pal-status" title="Pal"></button>
                 <button class="qb" id="btn-pin" title="Keep open" aria-pressed="false"><span data-icon="pin"></span></button>
                 <button class="qb" data-settings title="Settings"><span class="qb-ic" data-badge="settings" data-icon="cog"></span></button>
@@ -145,6 +147,7 @@
                   <div class="strip-notes" id="card-notes" title="Notes: press Enter to add">
                     <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
                     <input id="notes-quick" placeholder="Jot something down…" maxlength="20000" autocomplete="off" spellcheck="false" />
+                    <button class="bar-btn" id="notes-quick-mic" data-icon="mic" data-size="14" title="Voice note: click to start / stop, or hold" aria-label="Voice note"></button>
                   </div>
                   <button class="strip-rem" id="card-reminders" data-goto="reminders" title="Reminders">
                     <span class="card-ic" data-badge="reminders" data-icon="bell" data-size="14"></span>
@@ -295,14 +298,17 @@
                     <div class="notes-bar">
                       <input id="notes-search" type="search" placeholder="Search notes" maxlength="100" autocomplete="off" spellcheck="false" />
                       <button class="action-btn" id="notes-new" data-icon="plus" data-size="16" title="New note"></button>
+                      <button class="action-btn" id="notes-call" title="Record a call"></button>
                     </div>
+                    <div class="call-strip" id="call-strip" role="status" hidden></div>
                     <div class="notes-list" id="notes-list"></div>
                   </div>
                   <div class="notes-edit">
-                    <textarea id="note-body" placeholder="Write a note…" maxlength="20000" spellcheck="false"></textarea>
+                    <textarea id="note-body" placeholder="Write a note…" maxlength="200000" spellcheck="false"></textarea>
                     <div class="notes-actions">
                       <button class="action-btn" id="note-pin" data-icon="pin" data-size="16" title="Pin"></button>
                       <button class="action-btn" id="note-del" data-icon="trash" data-size="16" title="Delete"></button>
+                      <button class="action-btn" id="note-mic" data-icon="mic" data-size="16" title="Voice note: click to start / stop, or hold" aria-label="Voice note"></button>
                     </div>
                   </div>
                 </div>

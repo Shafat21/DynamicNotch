@@ -2,8 +2,8 @@
 import {
   Activity, Bell, Bluetooth, Headphones, Keyboard, Smartphone, CalendarRange, Check, Clipboard, Calendar, ChevronDown, ChevronUp, Circle, CirclePlay, Cloud, CloudDrizzle, CloudFog, CloudLightning,
   CloudRain, CloudSun, Cpu, Ellipsis, ExternalLink, Folder, Globe, HardDrive, House, LayoutGrid, ListTodo, Lock, Volume2, VolumeX, Mail, StickyNote, Trash2, MemoryStick,
-  MessageSquareQuote, Mic, Moon, Music, Pause, Pencil, Pin, Play, Plus, Power, Repeat, RotateCw, Settings, SkipBack, SkipForward, Smile,
-  Snowflake, SquareTerminal, Sun, Timer, Zap, type IconNode,
+  MessageSquareQuote, Mic, Moon, Music, Pause, Pencil, PhoneCall, Pin, Play, Plus, Power, Repeat, RotateCw, Settings, SkipBack, SkipForward, Smile,
+  Snowflake, Square, SquareTerminal, Sun, Timer, Zap, type IconNode,
 } from "lucide";
 
 const ICONS: Record<string, IconNode> = {
@@ -12,7 +12,7 @@ const ICONS: Record<string, IconNode> = {
   home: House, plus: Plus, chevronUp: ChevronUp, chevronDown: ChevronDown, timer: Timer, lyrics: MessageSquareQuote, dots: Ellipsis,
   calendar: Calendar, month: CalendarRange, tasks: ListTodo, launcher: LayoutGrid, pal: Smile, pin: Pin, cog: Settings, notes: StickyNote, trash: Trash2,
   bell: Bell, clipboard: Clipboard, check: Check, repeat: Repeat, volume: Volume2, mute: VolumeX, lock: Lock,
-  bluetooth: Bluetooth, headphones: Headphones, keyboard: Keyboard, phone: Smartphone, mic: Mic,
+  bluetooth: Bluetooth, headphones: Headphones, keyboard: Keyboard, phone: Smartphone, mic: Mic, phoneCall: PhoneCall, stop: Square,
   // weather keys come from the Rust weather monitor
   sunny: Sun, partly: CloudSun, cloudy: Cloud, fog: CloudFog, rainy: CloudDrizzle, pouring: CloudRain, snowy: Snowflake, lightning: CloudLightning,
   // launcher built-in actions (lucide has no brand icons: chrome → globe, youtube → circle-play)

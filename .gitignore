@@ -1,13 +1,33 @@
+# Dependencies and build output
 node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/
+
+# Logs, local databases (also Windows' Thumbs.db)
 *.log
+*.db
+*.db-journal
+
+# Local secrets
+.env
+.env.*
+
+# Editors and temp files (incl. atomic-write leftovers like lib.rs.tmp.1234.abcd)
 .vscode/*
 !.vscode/extensions.json
 .idea/
-*.db
-*.db-journal
+*.swp
+*~
+*.tmp
+*.tmp.*
+
+# OS junk
+.DS_Store
+desktop.ini
+
+# Local AI tooling
+.claude/settings.local.json
+.superpowers/
 docs/superpowers/specs/
 docs/superpowers/plans/2026-11-15-assistant-dashboard.md
-.superpowers/

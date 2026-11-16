@@ -2,7 +2,8 @@
 
 use serde::Serialize;
 
-pub const MAX_BODY: usize = 20_000;
+/// Room for a long call's transcript (~1,000 chars per minute).
+pub const MAX_BODY: usize = 200_000;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -11,6 +12,8 @@ pub struct Note {
     pub body: String,
     pub pinned: bool,
     pub updated_at: i64,
+    /// Written by the notetaker.
+    pub call: bool,
 }
 
 /// Trimmed body; empty or over `MAX_BODY` chars is an error.

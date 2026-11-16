@@ -196,6 +196,11 @@ impl Db {
                  COMMIT;",
             )?;
         }
+        if version < 8 {
+            let has: i64 = self.conn.query_row("SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name = 'is_call'", [], |r| r.get(0))?;
+            let add = if has == 0 { "ALTER TABLE notes ADD COLUMN is_call INTEGER NOT NULL DEFAULT 0;" } else { "" };
+            self.conn.execute_batch(&format!("BEGIN; {add} PRAGMA user_version = 8; COMMIT;"))?;
+        }
         Ok(())
     }
 
@@ -264,17 +269,23 @@ impl Db {
     pub fn notes(&self, query: &str) -> Result<Vec<Note>> {
         let like = format!("%{}%", query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
         let mut stmt = self.conn.prepare(
-            "SELECT id, body, pinned, updated_at FROM notes WHERE body LIKE ?1 ESCAPE '\\'
+            "SELECT id, body, pinned, updated_at, is_call FROM notes WHERE body LIKE ?1 ESCAPE '\\'
              ORDER BY pinned DESC, updated_at DESC, id DESC",
         )?;
         let rows = stmt.query_map([like], |r| {
-            Ok(Note { id: r.get(0)?, body: r.get(1)?, pinned: r.get::<_, i64>(2)? != 0, updated_at: r.get(3)? })
+            Ok(Note { id: r.get(0)?, body: r.get(1)?, pinned: r.get::<_, i64>(2)? != 0, updated_at: r.get(3)?, call: r.get::<_, i64>(4)? != 0 })
         })?;
         rows.collect()
     }
 
     pub fn add_note(&self, body: &str) -> Result<i64> {
         self.conn.execute("INSERT INTO notes (body, updated_at) VALUES (?1, strftime('%s','now'))", [body])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// A note written by the notetaker (badged in the list).
+    pub fn add_call_note(&self, body: &str) -> Result<i64> {
+        self.conn.execute("INSERT INTO notes (body, updated_at, is_call) VALUES (?1, strftime('%s','now'), 1)", [body])?;
         Ok(self.conn.last_insert_rowid())
     }
 
@@ -700,6 +711,20 @@ mod tests {
         assert_eq!(db.dictations("", 1).unwrap().len(), 1);
         db.delete_dictation(a).unwrap();
         assert_eq!(db.dictation_rows().unwrap(), vec![(2, 900, 2_000, None)]);
+        db.migrate().unwrap();
+    }
+
+    #[test]
+    fn v7_upgrades_to_v8_marking_call_notes() {
+        let conn = Db::open_in_memory().unwrap().conn;
+        conn.execute_batch("ALTER TABLE notes DROP COLUMN is_call; PRAGMA user_version = 7;").unwrap();
+        conn.execute("INSERT INTO notes (body, updated_at) VALUES ('old', 1)", []).unwrap();
+        let db = Db::init(conn).unwrap();
+        let call = db.add_call_note("Call notes").unwrap();
+        let notes = db.notes("").unwrap();
+        assert_eq!(notes.iter().map(|n| (n.body.as_str(), n.call)).collect::<Vec<_>>(), [("Call notes", true), ("old", false)]);
+        db.update_note(call, "edited").unwrap();
+        assert!(db.notes("edited").unwrap()[0].call); // editing keeps the badge
         db.migrate().unwrap();
     }
 }

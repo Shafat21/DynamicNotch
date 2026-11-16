@@ -14,6 +14,7 @@ mod launcher;
 mod menu;
 mod monitors;
 mod notes;
+mod notetaker;
 mod reminders;
 mod shelf;
 mod sound;
@@ -200,6 +201,11 @@ pub fn run() {
             dictation::commands::delete_dictation,
             dictation::commands::dictation_stats,
             dictation::commands::dictation_copy,
+            dictation::commands::voice_note_start,
+            dictation::commands::voice_note_stop,
+            notetaker::notetaker_start,
+            notetaker::notetaker_stop,
+            notetaker::notetaker_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running DynamicNotch");

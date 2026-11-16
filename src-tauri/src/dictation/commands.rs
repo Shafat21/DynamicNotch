@@ -134,3 +134,14 @@ pub async fn list_mics() -> Vec<String> {
 pub fn dictation_cancel() {
     send(Msg::Cancel);
 }
+
+/// Voice note from the island's mic button: the text comes back in the `dictation` "done" event (page: true).
+#[tauri::command]
+pub fn voice_note_start() {
+    send(Msg::PageStart);
+}
+
+#[tauri::command]
+pub fn voice_note_stop() {
+    send(Msg::PageStop);
+}

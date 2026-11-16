@@ -1,8 +1,9 @@
 //! Voice dictation (spec §23.7): hold the hotkey, speak, release → transcribe (offline Parakeet via
 //! sherpa-onnx, or a cloud API) → dictionary / replacements / snippets / optional Claude clean-up → paste
 //! at the cursor → history. Two quick taps lock hands-free recording until the next press; Esc cancels.
+//! Voice notes (the island's mic button) run the same way but hand the text back to the page (`page`).
 //! Audio stays in memory. Events: `dictation` {state: "recording"|"transcribing"|"done"|"error"|"idle",
-//! level?, ms?, locked?, escCancels?, text?, pasted?, error?}; `dictation-history` after each saved one.
+//! level?, ms?, locked?, escCancels?, page?, text?, pasted?, inserted?, error?}; `dictation-history` after each saved one.
 //! Works while a fullscreen app hides the island too; the UI decides what to show.
 //!
 //! Portions adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
@@ -53,6 +54,9 @@ pub enum Msg {
     Escape,
     /// The island's cancel: drops a recording or forgets the running transcription.
     Cancel,
+    /// Voice note from the island's mic button: start hands-free / finish it.
+    PageStart,
+    PageStop,
     /// Transcription job finished (final text, after the text pipeline).
     Done(u64, Result<String, String>),
 }
@@ -109,6 +113,15 @@ impl Machine {
             }
             Phase::Recording { .. } | Phase::Transcribing { .. } => Step::None, // key repeat / busy
         }
+    }
+
+    /// A voice note: recording hands-free from the start, finished by the next press (or `PageStop`).
+    pub fn start_locked(&mut self, now: u64) -> Step {
+        if self.phase != Phase::Idle {
+            return Step::None;
+        }
+        self.phase = Phase::Recording { start: now, locked: true };
+        Step::Start
     }
 
     fn finish(&mut self) -> Step {
@@ -263,6 +276,8 @@ struct Rec {
     s: Settings,
     engine: &'static str,
     front: Option<String>,
+    /// A voice note: the text goes back to the page, not to the app in front.
+    page: bool,
 }
 
 /// What the Done handler needs from the running transcription.
@@ -270,6 +285,7 @@ struct Job {
     s: Settings,
     front: Option<String>,
     ms: u64,
+    page: bool,
 }
 
 fn record_history(app: &AppHandle, text: &str, front: Option<&str>, ms: u64) {
@@ -286,6 +302,7 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
     let mut m = Machine::default();
     let mut rec: Option<Rec> = None;
     let mut job: Option<Job> = None;
+    let mut page_next = false;
     loop {
         let msg = rx.recv_timeout(TICK);
         let now = t0.elapsed().as_millis() as u64;
@@ -294,16 +311,24 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
             Ok(Msg::Release) => m.release(now),
             Ok(Msg::Escape) => m.escape(),
             Ok(Msg::Cancel) => m.cancel(),
+            Ok(Msg::PageStart) => {
+                let step = m.start_locked(now);
+                page_next = step == Step::Start;
+                step
+            }
+            Ok(Msg::PageStop) if rec.as_ref().is_some_and(|r| r.page) => m.press(now),
+            Ok(Msg::PageStop) => Step::None,
             Ok(Msg::Done(id, r)) => {
                 if m.done(id) {
-                    let j = job.take().unwrap_or(Job { s: Settings::default(), front: None, ms: 0 });
+                    let j = job.take().unwrap_or(Job { s: Settings::default(), front: None, ms: 0, page: false });
                     let r = r.map(|t| t.trim().to_string()).and_then(|t| if t.is_empty() { Err("No speech detected".to_string()) } else { Ok(t) });
-                    match r.and_then(|t| deliver(&j.s, &t).map(|pasted| (t, pasted))) {
+                    // a voice note's text is inserted by the page itself
+                    match r.and_then(|t| if j.page { Ok((t, false)) } else { deliver(&j.s, &t).map(|pasted| (t, pasted)) }) {
                         Ok((text, pasted)) => {
                             record_history(&app, &text, j.front.as_deref(), j.ms);
-                            emit(&app, json!({"state": "done", "text": text, "pasted": pasted}));
+                            emit(&app, json!({"state": "done", "text": text, "pasted": pasted, "inserted": j.page, "page": j.page}));
                         }
-                        Err(e) => emit(&app, json!({"state": "error", "error": e})),
+                        Err(e) => emit(&app, json!({"state": "error", "error": e, "page": j.page})),
                     }
                 }
                 Step::None
@@ -314,32 +339,35 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
         match step {
             Step::Start | Step::Restart => {
                 rec = None;
+                let page = std::mem::take(&mut page_next);
                 let s = load(&app);
                 let started = preflight(&app, &s).and_then(|engine| {
                     let r = audio::Recorder::start(Some(s.mic.as_str()).filter(|n| !n.is_empty()))?;
-                    Ok(Rec { r, engine, front: paste_os::foreground_app(), s })
+                    let front = if page { Some("Notes".to_string()) } else { paste_os::foreground_app() };
+                    Ok(Rec { r, engine, front, s, page })
                 });
                 match started {
                     Ok(r) => rec = Some(r),
                     Err(e) => {
                         m.cancel();
-                        emit(&app, json!({"state": "error", "error": e}));
+                        emit(&app, json!({"state": "error", "error": e, "page": page}));
                     }
                 }
             }
             Step::Discard => {
+                page_next = false;
                 rec = None;
                 job = None;
                 emit(&app, json!({"state": "idle"}));
             }
             Step::Transcribe(id) => {
-                let Some(Rec { r, s, engine, front }) = rec.take() else {
+                let Some(Rec { r, s, engine, front, page }) = rec.take() else {
                     m.done(id);
                     continue;
                 };
-                emit(&app, json!({"state": "transcribing"}));
+                emit(&app, json!({"state": "transcribing", "page": page}));
                 let samples = r.stop();
-                job = Some(Job { s: s.clone(), front: front.clone(), ms: samples.len() as u64 / 16 });
+                job = Some(Job { s: s.clone(), front: front.clone(), ms: samples.len() as u64 / 16, page });
                 let app = app.clone();
                 std::thread::spawn(move || {
                     let peak = samples.iter().fold(0f32, |p, v| p.max(v.abs()));
@@ -357,7 +385,7 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
         if let (Phase::Recording { start, .. } | Phase::TapWait { start, .. }, Some(r)) = (m.phase, &rec) {
             let locked = matches!(m.phase, Phase::Recording { locked: true, .. });
             // Esc always reaches the Windows keyboard hook
-            emit(&app, json!({"state": "recording", "level": r.r.level(), "ms": now - start, "locked": locked, "escCancels": cfg!(windows)}));
+            emit(&app, json!({"state": "recording", "level": r.r.level(), "ms": now - start, "locked": locked, "escCancels": cfg!(windows), "page": r.page}));
         }
     }
 }
@@ -471,6 +499,20 @@ mod tests {
         assert_eq!(m.cancel(), Step::Discard);
         assert!(!m.done(1)); // result arrives after cancel: nothing is pasted
         assert_eq!(m.press(12_000), Step::Start);
+    }
+
+    #[test]
+    fn a_voice_note_records_hands_free_until_the_next_press() {
+        let mut m = Machine::default();
+        assert_eq!(m.start_locked(0), Step::Start);
+        assert_eq!(m.release(50), Step::None); // the click's mouse-up doesn't stop it
+        assert_eq!(m.tick(30_000), Step::None);
+        assert_eq!(m.start_locked(31_000), Step::None); // already recording
+        assert_eq!(m.press(40_000), Step::Transcribe(1));
+        assert_eq!(m.start_locked(40_100), Step::None); // busy transcribing
+        assert!(m.done(1));
+        assert_eq!(m.start_locked(41_000), Step::Start);
+        assert_eq!(m.escape(), Step::Discard);
     }
 
     #[test]

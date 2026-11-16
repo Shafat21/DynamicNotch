@@ -9,6 +9,7 @@ import { renderGeneral } from "./pages/general";
 import { renderAppearance } from "./pages/appearance";
 import { renderTabs } from "./pages/tabs";
 import { renderHome } from "./pages/home";
+import { renderAgents } from "./pages/agents";
 import { renderFeatures } from "./pages/features";
 import { renderDictation } from "./pages/dictation";
 import { renderAbout } from "./pages/about";
@@ -21,7 +22,8 @@ const PAGES: [id: string, label: string, render: Render][] = [
   ["appearance", "Appearance", renderAppearance],
   ["tabs", "Tabs", renderTabs],
   ["home", "Home", renderHome],
-  ["features", "Features", renderFeatures],
+  ["agents", "Agents", renderAgents],
+  ["features", "Integrations", renderFeatures],
   ["dictation", "Dictation", renderDictation],
   ["about", "About", renderAbout],
 ];
