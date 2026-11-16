@@ -74,6 +74,7 @@ export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLEl
   };
   const render = () => {
     localStorage.setItem(KEY, CARDS[i]);
+    if (card.dataset.card !== CARDS[i]) delete card.dataset.built; // cards share this element: the next one rebuilds
     card.dataset.card = CARDS[i];
     card.setAttribute("aria-label", CARD_NAMES[CARDS[i]]);
     dotButtons.forEach((d, n) => d.setAttribute("aria-selected", String(n === i)));

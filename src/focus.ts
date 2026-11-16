@@ -4,7 +4,11 @@ import { icon } from "./icons-line";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-export function initFocus(els: HTMLElement[], onDone: () => void): void {
+export type FocusState = { left: number; total: number; running: boolean; end: number };
+export type Focus = { state(): FocusState; toggle(): void; reset(): void };
+
+/** `onChange` runs on every tick and change (the compact Pomodoro card follows the same timer). */
+export function initFocus(els: HTMLElement[], onDone: () => void, onChange: () => void = () => {}): Focus {
   let minutes = 25;
   let left = minutes * 60; // seconds remaining
   let end = 0; // deadline in ms while running (timers drift, the clock doesn't)
@@ -30,6 +34,7 @@ export function initFocus(els: HTMLElement[], onDone: () => void): void {
       p.label.textContent = timer ? "Focusing" : left < minutes * 60 ? "Paused" : "Focus";
       p.el.classList.toggle("running", timer !== 0);
     }
+    onChange();
   };
   const stop = () => {
     clearInterval(timer);
@@ -66,4 +71,13 @@ export function initFocus(els: HTMLElement[], onDone: () => void): void {
     el.addEventListener("wheel", wheel, { passive: true });
   }
   render();
+  return {
+    state: () => ({ left, total: minutes * 60, running: timer !== 0, end }),
+    toggle,
+    reset: () => {
+      stop();
+      left = minutes * 60;
+      render();
+    },
+  };
 }

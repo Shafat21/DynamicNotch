@@ -11,7 +11,9 @@ import { dictating, dictatingPage, initDictation, onDictation, type DictEvent } 
 import { initNotetaker, recWidth, setCall, type CallEvent } from "./notetaker";
 import { level, live, warnDot, type Usage } from "./usage";
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
-import { initFocus } from "./focus";
+import { initFocus, type Focus } from "./focus";
+import { renderMusic } from "./compact/music";
+import { renderPomodoro } from "./compact/pomodoro";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initShelf, showShelf } from "./shelf";
 import { initNotes, openNote, showNotes } from "./notes";
@@ -240,11 +242,37 @@ const clockTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", 
 const idleRing = ring(14);
 const idleEq = Object.assign(document.createElement("span"), { className: "eq idle-eq" });
 idleEq.append(...Array.from({ length: 4 }, () => document.createElement("i")));
-/** Header ring: how far into the playing song; null = hidden. */
-const ringFraction = (): number | null => (ui.media.state === "Playing" && ui.progress.duration > 0 ? ui.progress.position / ui.progress.duration : null);
+let focus: Focus | null = null; // set in wireInput (initFocus)
+let artUri = ""; // last media-art data URI, for the compact Music card
+let cmpLyrics = false; // compact Music card shows its Lyrics side
+const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+/** Header ring: a running focus timer, else how far into the playing song; null = hidden. */
+const ringFraction = (): number | null => {
+  const f = focus?.state();
+  if (f?.running) return 1 - f.left / f.total;
+  return ui.media.state === "Playing" && ui.progress.duration > 0 ? ui.progress.position / ui.progress.duration : null;
+};
+const placeholder = (el: HTMLElement, text: string) => el.replaceChildren(Object.assign(document.createElement("div"), { className: "cmp-placeholder", textContent: text }));
 const compact = initCompact(
   $("compact"),
-  Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => el.replaceChildren(Object.assign(document.createElement("div"), { className: "cmp-placeholder", textContent: id }))])) as Record<CardId, (el: HTMLElement) => void>,
+  {
+    ...(Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => placeholder(el, id)])) as Record<CardId, (el: HTMLElement) => void>),
+    music: (el) =>
+      renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
+    pomodoro: (el) => {
+      const f = focus?.state() ?? { left: 1500, total: 1500, running: false, end: 0 };
+      renderPomodoro(el, {
+        minutes: Math.round(f.total / 60),
+        label: f.running ? "Focusing" : f.left < f.total ? "Paused" : "Focus",
+        remaining: mmss(f.left),
+        endsAt: clockTime(new Date(f.end)),
+        running: f.running,
+        fraction: 1 - f.left / f.total,
+        onToggle: () => focus?.toggle(),
+        onReset: () => focus?.reset(),
+      });
+    },
+  },
   { ring: ringFraction },
 );
 
@@ -362,6 +390,8 @@ function formatTime(secs: number): string {
 
 /** Album art arrives only on track change (or a late retry), separately from `media`. */
 function onArt({ art }: { art: string }): void {
+  artUri = art;
+  compact.refresh();
   for (const id of ["player-art", "tile-media-art"]) {
     const img = $<HTMLImageElement>(id);
     img.hidden = !art;
@@ -374,6 +404,7 @@ function onMedia(m: Media): void {
   const idle = m.state === "Idle";
   if (m.title !== ui.media.title || m.artist !== ui.media.artist) ui.progress.position = 0;
   ui.media = m;
+  compact.refresh();
   ui.progress.duration = m.duration;
   if (idle) ui.lyric = "";
   document.querySelectorAll<HTMLElement>('[data-media="toggle"]').forEach((b) => {
@@ -394,6 +425,7 @@ function onMedia(m: Media): void {
 function onProgress(p: Progress): void {
   if (ui.seekPreview !== null) return; // the user is dragging; their preview wins
   ui.progress = p;
+  compact.refresh();
   renderProgress();
 }
 
@@ -419,6 +451,7 @@ function renderLyric(): void {
 
 function onLyric(text: string): void {
   ui.lyric = text;
+  compact.refresh();
   renderLyric();
 }
 
@@ -686,7 +719,7 @@ function wireInput(): void {
     b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
   });
   new ResizeObserver(() => fitDock()).observe($("card-launcher")); // morph, openW, textScale, density gaps, Home shown
-  initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500));
+  focus = initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500), () => compact.refresh());
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
     b.onclick = () => invoke("run_action", { id: b.dataset.action }).catch(console.error);
@@ -904,6 +937,7 @@ async function boot(): Promise<void> {
     if (ui.media.state === "Playing" && ui.seekPreview === null && ui.progress.duration > 0) {
       ui.progress.position = Math.min(ui.progress.position + 1, ui.progress.duration);
       renderProgress();
+      compact.refresh();
     }
   }, 1000);
   window.setInterval(renderCalendar, 30_000); // relative labels ("In 20 min") while visible
