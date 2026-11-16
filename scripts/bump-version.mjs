@@ -1,11 +1,12 @@
-// Version = 0.1.<number of this commit>. Run by .githooks/pre-commit: every commit carries its own version,
+// Version = 0.2.<commits since 0.2.0>. Run by .githooks/pre-commit: every commit carries its own version,
 // written into the 5 files that hold it. Idempotent. Pass --print to only show the version.
 // shortcut: `git commit --amend` or a rebase leaves the count off by one, run `node scripts/bump-version.mjs` by hand.
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const count = Number(execSync("git rev-list --count HEAD", { encoding: "utf8" }).trim());
-const version = `0.1.${count + 1}`;
+const BASE = 100; // the commit that is 0.2.0
+const version = `0.2.${count + 1 - BASE}`;
 if (process.argv.includes("--print")) {
   console.log(version);
   process.exit(0);
