@@ -229,7 +229,6 @@ Right-click the island for the quick switches. Everything else lives in Settings
 | Item | What it does |
 |---|---|
 | **Settings…** | Themes and layout, tabs, dictation, start at login, which display, and hiding in fullscreen |
-| **Animation Style** | The effect behind the island while music plays: Glow Sweep, Fluid Blobs or Neon Border |
 | **Coding Agents** | Tick Claude Code, Codex, Gemini CLI, Cursor or Copilot CLI to connect it; untick to disconnect |
 | **Quit** | Closes the island completely |
 

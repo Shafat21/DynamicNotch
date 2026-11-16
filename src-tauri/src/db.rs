@@ -10,7 +10,6 @@ use serde::Serialize;
 use std::path::Path;
 
 pub const CATEGORIES: [&str; 5] = ["Work", "Health", "Personal", "Study", "Other"];
-pub const ANIMATION_STYLES: [&str; 3] = ["Glow Sweep", "Fluid Blobs", "Neon Border"];
 pub const ISLAND_SIZES: [&str; 4] = ["Auto", "Small", "Medium", "Large"];
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

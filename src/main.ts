@@ -47,7 +47,6 @@ type Settings = { location: string; lat: number; lon: number; animationStyle: st
 type Display = { uiScale: number; edge?: Edge; anchor?: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
 type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation" | "toast";
 
-const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const shell = $("shell");
@@ -174,7 +173,7 @@ function refresh(): void {
 
 function updateFx(): void {
   const on = ui.state === "hover" ? ui.tab === "music" : playingTitle() !== "";
-  island.dataset.anim = on ? ANIM_KEYS[ui.settings.animationStyle] ?? "blobs" : "";
+  island.dataset.anim = on ? "on" : "";
   island.style.setProperty("--media", ui.media.accent);
 }
 

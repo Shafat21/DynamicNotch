@@ -28,7 +28,12 @@ pub fn found() -> Option<UpdateInfo> {
 }
 
 pub async fn check(app: &AppHandle) -> Result<Option<UpdateInfo>, String> {
-    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    let update = match app.updater().map_err(|e| e.to_string())?.check().await {
+        Ok(u) => u,
+        // the latest release has no latest.json (published before update signing was set up): nothing to offer yet
+        Err(tauri_plugin_updater::Error::ReleaseNotFound) => None,
+        Err(e) => return Err(e.to_string()),
+    };
     let info = update.map(|u| UpdateInfo { version: u.version, notes: u.body, can_install: can_install() });
     *FOUND.lock().unwrap() = info.clone();
     Ok(info)
