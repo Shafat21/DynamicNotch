@@ -14,6 +14,8 @@ import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus, type Focus } from "./focus";
 import { renderMusic } from "./compact/music";
 import { renderPomodoro } from "./compact/pomodoro";
+import { renderShelf, type ShelfMode } from "./compact/shelf";
+import { renderTodo } from "./compact/todo";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initShelf, showShelf } from "./shelf";
 import { initNotes, openNote, showNotes } from "./notes";
@@ -245,6 +247,7 @@ idleEq.append(...Array.from({ length: 4 }, () => document.createElement("i")));
 let focus: Focus | null = null; // set in wireInput (initFocus)
 let artUri = ""; // last media-art data URI, for the compact Music card
 let cmpLyrics = false; // compact Music card shows its Lyrics side
+let cmpShelf: ShelfMode = "files"; // compact Shelf card: files or clipboard
 const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 /** Header ring: a running focus timer, else how far into the playing song; null = hidden. */
 const ringFraction = (): number | null => {
@@ -259,6 +262,8 @@ const compact = initCompact(
     ...(Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => placeholder(el, id)])) as Record<CardId, (el: HTMLElement) => void>),
     music: (el) =>
       renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
+    shelf: (el) => renderShelf(el, { mode: cmpShelf, onMode: (m) => ((cmpShelf = m), compact.refresh()) }),
+    todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh()) }),
     pomodoro: (el) => {
       const f = focus?.state() ?? { left: 1500, total: 1500, running: false, end: 0 };
       renderPomodoro(el, {
@@ -755,6 +760,7 @@ function wireInput(): void {
       ui.hovering = true; // stay open while the drag is over the island
       if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder") return;
       ui.tab = "shelf";
+      if (look().view === "compact") compact.select("shelf"); // the compact notch has no tabs: show the Shelf card
       if (ui.state === "hover") openTab("shelf");
       else setState("hover");
     },
@@ -769,6 +775,7 @@ function wireInput(): void {
     try {
       ui.tasks = await invoke<Task[]>("delete_task", { id });
       renderTasks(ui.tasks);
+      compact.refresh();
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
@@ -782,6 +789,7 @@ function wireInput(): void {
       ui.tasks = await invoke<Task[]>("add_task", { name: name.value, time: time.value, category: $("task-cat").dataset.cat ?? "Other" });
       name.value = time.value = "";
       renderTasks(ui.tasks);
+      compact.refresh();
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
@@ -878,6 +886,8 @@ async function boot(): Promise<void> {
 
   await Promise.all([
     listen<boolean>("hover", (e) => onHover(e.payload)),
+    listen("shelf", () => cmpShelf === "files" && compact.refresh()), // a file dropped on the compact notch
+    listen("clips", () => cmpShelf === "clips" && compact.refresh()),
     listen<Perf>("perf", (e) => onPerf(e.payload)),
     listen<Media>("media", (e) => onMedia(e.payload)),
     listen<string>("lyric", (e) => onLyric(e.payload)),

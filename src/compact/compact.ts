@@ -35,7 +35,7 @@ export function ring(size: number): { el: SVGSVGElement; set(fraction: number | 
   };
 }
 
-export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLElement) => void>, opts: { ring: () => number | null }): { show(): void; refresh(): void } {
+export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLElement) => void>, opts: { ring: () => number | null }): { show(): void; refresh(): void; select(id: CardId): void } {
   let i = Math.max(0, CARDS.indexOf(localStorage.getItem(KEY) as CardId));
   const r = ring(18);
   const date = el("span", "cmp-date");
@@ -103,5 +103,5 @@ export function initCompact(root: HTMLElement, cards: Record<CardId, (el: HTMLEl
   });
   window.setInterval(() => !root.hidden && clock(), 15_000);
 
-  return { show: render, refresh: () => !root.hidden && render() };
+  return { show: render, refresh: () => !root.hidden && render(), select: (id) => ((i = Math.max(0, CARDS.indexOf(id))), render()) };
 }
