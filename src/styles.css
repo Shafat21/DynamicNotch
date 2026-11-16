@@ -99,6 +99,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transition: width 0.85s var(--ease), height 0.85s var(--ease), top 0.3s ease, translate 0.4s ease, opacity 0.4s ease;
 }
 #shell.away { translate: -50% -150%; opacity: 0; }
+/* other edges (placement.rs): anchored to that edge, growing away from it; cards are never rotated */
+#shell[data-edge="bottom"] { top: auto; bottom: var(--top); transition: width 0.85s var(--ease), height 0.85s var(--ease), bottom 0.3s ease, translate 0.4s ease, opacity 0.4s ease; }
+#shell[data-edge="left"], #shell[data-edge="right"] { top: 50%; translate: 0 -50%; }
+#shell[data-edge="left"] { left: var(--top); }
+#shell[data-edge="right"] { left: auto; right: var(--top); }
+#shell[data-edge="bottom"].away { translate: -50% 150%; }
+#shell[data-edge="left"].away { translate: -150% -50%; }
+#shell[data-edge="right"].away { translate: 150% -50%; }
+/* the slim side tab shows just Pal (no room for the clock or the song) */
+#shell:is([data-edge="left"], [data-edge="right"]) .header :is(.title, .spinner, #status-icon) { display: none; }
+#shell:is([data-edge="left"], [data-edge="right"]) .header { justify-content: center; padding: 0; }
+/* while dragged: lifted, and no size animation fighting the pointer */
+#shell.dragging { transition: none; filter: drop-shadow(0 12px 28px rgb(0 0 0 / 0.5)); cursor: grabbing; }
 #shell[data-shape="notch"] { --top: 0px; }
 
 #island {

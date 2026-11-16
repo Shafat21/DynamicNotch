@@ -20,6 +20,7 @@ import { initSound, showSound } from "./sound";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
 import { hideTip, initTooltips } from "./tooltip";
+import { hitRectFor, initDrag, type Edge } from "./drag";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
@@ -32,7 +33,7 @@ type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
-type Display = { uiScale: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
+type Display = { uiScale: number; edge?: Edge; monitor: { index: number; name: string; width: number; height: number; scale: number } };
 type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation";
 
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
@@ -61,11 +62,14 @@ const ui = {
   settings: { animationStyle: "Fluid Blobs" } as Settings,
   look: DEFAULT_LOOK as Look,
   tasks: [] as Task[],
+  edge: "top" as Edge, // which screen edge the island sits on (Rust placement)
+  dragging: false, // hold-and-drag in progress: hover changes are ignored
   scale: 1, // display uiScale from Rust: sizes below are 1080p base px, multiplied in transition()
 };
 
 const look = () => ui.look.appearance;
-const pillTop = () => (look().shape === "notch" ? 0 : 10);
+const side = () => ui.edge === "left" || ui.edge === "right";
+const pillTop = () => (look().shape === "notch" && ui.edge === "top" ? 0 : 10); // the notch shape exists only on the top edge
 const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
 
 let measureCtx: CanvasRenderingContext2D | null = null;
@@ -85,7 +89,7 @@ function idleWidth(): number {
 function targetSize(): [number, number] {
   const a = look();
   if (ui.charging) return [850, a.collapsedH];
-  if (ui.state === "idle") return [idleWidth(), a.collapsedH];
+  if (ui.state === "idle") return side() ? [40, 120] : [idleWidth(), a.collapsedH]; // a slim tab on a side edge
   if (ui.state === "notify") return [380, a.collapsedH];
   if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
   if (ui.state === "reminder") return [640, 76];
@@ -116,7 +120,8 @@ function geometry(): void {
   shell.style.setProperty("--r", `${r}px`);
   shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25 * k)}px`);
   shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
-  shell.dataset.shape = look().shape;
+  shell.dataset.shape = ui.edge === "top" ? look().shape : "pill";
+  shell.dataset.edge = ui.edge;
   sendHitRect(w, h, k);
 }
 
@@ -156,8 +161,7 @@ function updateFx(): void {
 
 /** Tell Rust where the island is so it can toggle click-through. */
 function sendHitRect(w: number, h: number, k: number): void {
-  const left = (window.innerWidth - w) / 2;
-  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : { x: left - 15 * k, y: 0, w: w + 30 * k, h: pillTop() + h + 30 * k };
+  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : hitRectFor(ui.edge, w, h, window.innerWidth, window.innerHeight, pillTop(), k);
   hitRect = rect;
   invoke("set_hit_rect", { rect }).catch(console.error);
 }
@@ -452,6 +456,7 @@ function onSessions(list: Session[]): void {
 
 function onDisplay(d: Display): void {
   ui.scale = d.uiScale;
+  ui.edge = d.edge ?? "top";
   transition(); // the window may also have been resized: re-centre the hit rect
 }
 
@@ -484,6 +489,7 @@ let backendHover = false; // last `hover` event: the pointer is really over the 
 
 function onHover(inside: boolean): void {
   backendHover = inside;
+  if (ui.dragging) return; // the window follows the pointer: it is always "inside"
   if (!inside) hideTip(); // click-through from here on: the webview gets no pointerout
   if (ui.hidden) return;
   ui.hovering = inside;
@@ -783,6 +789,22 @@ function wireInput(): void {
 async function boot(): Promise<void> {
   hydrateIcons();
   initTooltips();
+  // hold anywhere that isn't a control, then drag to any screen edge (drag.ts, Rust moves the window)
+  initDrag(shell, {
+    canStart: (t) => !ui.hidden && (ui.state === "idle" || ui.state === "hover") && !t.closest("button, input, textarea, select, a, [role=button], [contenteditable], .sel"),
+    anchor: () => ({ x: hitRect.x + hitRect.w / 2, y: hitRect.y + hitRect.h / 2 }),
+    onStart: () => {
+      ui.dragging = true;
+      shell.classList.add("dragging");
+      ui.hovering = false;
+      setPinned(false);
+      setState("idle"); // drag the pill, not the open dashboard
+    },
+    onEnd: () => {
+      ui.dragging = false;
+      shell.classList.remove("dragging");
+    },
+  });
   if (LINUX) trackHoverInPage();
   // Pals follow the shared mood (assistant.ts feeds it from coding agent sessions)
   $("status-pal").append(createPal(22).el);

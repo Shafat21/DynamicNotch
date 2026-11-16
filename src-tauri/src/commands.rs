@@ -451,15 +451,15 @@ pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
 
 const NO_DRAG: &str = "Moving the island isn't available on Linux yet";
 
-/// Hold-and-drag, start: remember where the pointer holds the window (physical px).
+/// Hold-and-drag, start: from now on keep window point (`x`, `y`) (CSS px, the pill's centre) under the pointer.
 #[tauri::command]
-pub fn island_drag_start(app: AppHandle, state: State<AppState>) -> Res<()> {
+pub fn island_drag_start(app: AppHandle, state: State<AppState>, x: f64, y: f64) -> Res<()> {
     if !cfg!(windows) {
         return Err(NO_DRAG.into());
     }
     let win = app.get_webview_window("main").ok_or("no island window")?;
-    let (c, p) = (app.cursor_position().map_err(err)?, win.outer_position().map_err(err)?);
-    *state.drag.lock().unwrap() = Some((c.x - p.x as f64, c.y - p.y as f64));
+    let sf = win.scale_factor().map_err(err)?;
+    *state.drag.lock().unwrap() = Some((x * sf, y * sf));
     Ok(())
 }
 
