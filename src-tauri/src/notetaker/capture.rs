@@ -116,7 +116,7 @@ pub fn read_wav(path: &Path) -> Result<Vec<f32>, String> {
     let ch = u16::from_le_bytes([bytes[22], bytes[23]]);
     let rate = u32::from_le_bytes([bytes[24], bytes[25], bytes[26], bytes[27]]);
     let data = bytes.windows(4).position(|w| w == b"data").map_or(44, |p| p + 8);
-    let pcm: Vec<f32> = bytes[data.min(bytes.len())..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
+    let pcm: Vec<f32> = bytes[data.min(bytes.len())..].as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b) as f32 / 32768.0).collect();
     Ok(crate::dictation::audio::resample_to_16k(&pcm, rate, ch))
 }
 
@@ -274,8 +274,7 @@ mod tests {
         }
         assert_eq!(out.len(), whole.len());
         // window edges may differ by one input sample (ceil vs floor), nothing more
-        let worst = out.iter().zip(&whole).enumerate().map(|(i, (a, b))| ((a - b).abs(), i)).fold((0f32, 0), |m, x| if x.0 > m.0 { x } else { m });
-        assert!(worst.0 < 0.01, "{worst:?} {} vs {}", out[worst.1], whole[worst.1]);
+        assert!(out.iter().zip(&whole).all(|(a, b)| (a - b).abs() < 0.02)); // the signal moves 0.01 per input sample
         let mut up = Vec::new();
         Down::new(8_000).push(&[0.5; 800], &mut up);
         assert_eq!(up.len(), 1_600);

@@ -7,13 +7,14 @@ import {
   addPrompt, anyWorking, closePrompt, currentPrompt, dismissAll, dismissPrompt, initAssistant, popMood, promptHeight, setBridge, setDictating, setSessions, setTyping, setUsage, usage,
   type Bridge, type Prompt, type Session,
 } from "./assistant";
-import { dictating, initDictation, onDictation, type DictEvent } from "./dictation";
+import { dictating, dictatingPage, initDictation, onDictation, type DictEvent } from "./dictation";
+import { initNotetaker, recWidth, setCall, type CallEvent } from "./notetaker";
 import { level, live, warnDot, type Usage } from "./usage";
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initShelf, showShelf } from "./shelf";
-import { initNotes, showNotes } from "./notes";
+import { initNotes, openNote, showNotes } from "./notes";
 import { initBluetooth, showBluetooth } from "./bluetooth";
 import { initSound, showSound } from "./sound";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
@@ -74,10 +75,10 @@ const spinning = () => ui.state === "idle" && anyWorking();
 /** Idle pill: clock width, or wide enough for the playing song title (never lyrics); + the working spinner. */
 function idleWidth(): number {
   const title = playingTitle();
-  if (!title) return idlePillWidth(null, look().collapsedW, anyWorking());
+  if (!title) return idlePillWidth(null, look().collapsedW, anyWorking(), recWidth());
   measureCtx ??= document.createElement("canvas").getContext("2d")!;
   measureCtx.font = getComputedStyle($("status-text")).font;
-  return idlePillWidth(measureCtx.measureText(title).width, look().collapsedW, anyWorking());
+  return idlePillWidth(measureCtx.measureText(title).width, look().collapsedW, anyWorking(), recWidth());
 }
 
 /** Base px at 1080p (appearance sizes); geometry() multiplies by the display scale. */
@@ -461,7 +462,7 @@ function onHover(inside: boolean): void {
   backendHover = inside;
   if (ui.hidden) return;
   ui.hovering = inside;
-  if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder" || ui.state === "dictation") return;
+  if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder" || (ui.state === "dictation" && !dictatingPage())) return;
   clearTimeout(revertTimer);
   if (inside) setState("hover");
   else if (ui.state === "hover" && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 1200);
@@ -503,6 +504,7 @@ function onDictationEvent(e: DictEvent): void {
   clearTimeout(dictTimer);
   const showing = ui.state === "dictation";
   if (stay < 0) return void (showing && settle());
+  if (e.page && ui.state === "hover") return; // a voice note in the open Notes tab: its mic button shows the state
   if (ui.hidden || ui.state === "prompt" || ui.state === "reminder") return; // fullscreen / answer first: settle() brings it back
   if (!showing) {
     clearTimeout(revertTimer); // a notify pop gives way
@@ -642,6 +644,15 @@ function wireInput(): void {
   wirePlayer();
 
   initNotes();
+  initNotetaker({
+    changed: refresh, // the idle pill widens for the recording badge
+    error: (msg) => showEvent("Notetaker", msg, 4000),
+    // open, the Notes tab already shows the new note: pop only when the island is closed
+    done: (id) => {
+      void openNote(id);
+      if (ui.state !== "hover") showEvent("Notetaker", "Call note saved in Notes", 3500);
+    },
+  });
   initClipboard();
   initShelf({
     dragging: (on) => {
@@ -803,6 +814,8 @@ async function boot(): Promise<void> {
   if (snap.bridge) setBridge(snap.bridge as Bridge);
   if (snap.sessions) setSessions(snap.sessions as Session[]);
   if (snap.usage) onUsage(snap.usage as Usage);
+  const call = snap.notetaker as CallEvent | undefined;
+  if (call && (call.state === "recording" || call.state === "processing")) setCall(call);
   if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
   if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 

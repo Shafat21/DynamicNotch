@@ -77,7 +77,7 @@ function stop(): void {
 function toggle(): void {
   if (cur.state === "recording") return stop();
   if (cur.state === "processing") return;
-  invoke("notetaker_start").catch((e) => hooks.error(String(e)));
+  invoke("notetaker_start").catch((e) => setCall({ state: "error", error: String(e) })); // pop + the Notes strip
 }
 
 /** Applies a `notetaker` event (or the snapshot's last one). */

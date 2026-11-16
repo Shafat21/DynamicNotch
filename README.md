@@ -196,6 +196,11 @@ A confirm dialog shows the file and the events first; the file is backed up as `
 - **Privacy:** audio stays in memory and is never written to disk. The API key is stored in Windows Credential Manager
   (Secret Service on Linux), not in the database. With cloud dictation the audio is sent to the provider you chose.
 - **Build:** the offline engine links sherpa-onnx (with onnxruntime) statically; its prebuilt libraries are downloaded during the first `cargo build`.
+- **Voice notes:** the mic button in the Notes editor and on the Home notes input (click to start/stop, or hold) inserts the text at the caret.
+- **Notetaker:** "Record a call" (Notes tab or the island's top bar) records your microphone and the computer's sound (up to 3 h)
+  into temporary files in the app data folder. On Stop it transcribes offline ("You" / "Them"), asks your Claude Code login for a
+  summary, key points and to-dos (transcript only if that fails) and saves a call note; the audio files are then deleted. Tell the
+  people in the call you're recording.
 
 ## Build from source
 
@@ -258,7 +263,7 @@ git push origin v0.2.0
 Weather by [Open-Meteo](https://open-meteo.com), lyrics by [LRCLIB](https://lrclib.net).
 Offline speech recognition by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) with NVIDIA's
 [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0).
-Portions of the dictation code adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
+Portions of the dictation and notetaker code adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
 
 ## License
 

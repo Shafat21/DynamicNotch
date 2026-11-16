@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { icon } from "./icons-line";
 import { createPal } from "./pal";
 
-export type DictEvent = { state: "recording" | "transcribing" | "done" | "error" | "idle"; level?: number; ms?: number; locked?: boolean; escCancels?: boolean; text?: string; pasted?: boolean; error?: string };
+export type DictEvent = { state: "recording" | "transcribing" | "done" | "error" | "idle"; level?: number; ms?: number; locked?: boolean; escCancels?: boolean; page?: boolean; text?: string; pasted?: boolean; inserted?: boolean; error?: string };
 
 const BARS = 18;
 const KEEP = 10;
@@ -13,10 +13,13 @@ const levels: number[] = Array(BARS).fill(0);
 const recent: string[] = [];
 const pal = createPal(22, "listening");
 let phase: DictEvent["state"] = "idle";
+let page = false; // a voice note from the Notes mic button
 let bars: HTMLElement[] = [];
 
 /** Recording or transcribing: the pill should be up (main.ts priority: below prompt / reminder, above notify). */
 export const dictating = () => phase === "recording" || phase === "transcribing";
+/** A voice note is under way: the open island may stay on the Notes editor instead of the pill. */
+export const dictatingPage = () => dictating() && page;
 
 const span = (cls: string) => Object.assign(document.createElement("span"), { className: cls });
 
@@ -41,6 +44,7 @@ const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms /
 export function onDictation(e: DictEvent): number {
   const was = phase;
   phase = e.state;
+  page = !!e.page;
   const box = $("dictation");
   const [text, time, hint] = (["dict-text", "dict-time", "dict-hint"] as const).map((c) => box.querySelector<HTMLElement>(`.${c}`)!);
   box.dataset.phase = e.state;
@@ -64,7 +68,7 @@ export function onDictation(e: DictEvent): number {
   if (e.state === "done") {
     pal.setMood("done");
     const words = (e.text ?? "").trim();
-    text.replaceChildren(Object.assign(document.createElement("b"), { textContent: e.pasted ? "Pasted" : "Copied" }), ` ${words}`);
+    text.replaceChildren(Object.assign(document.createElement("b"), { textContent: e.inserted ? "Inserted" : e.pasted ? "Pasted" : "Copied" }), ` ${words}`);
     text.title = words;
     if (words) {
       recent.unshift(words);

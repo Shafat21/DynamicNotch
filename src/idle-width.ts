@@ -1,6 +1,7 @@
-/** Idle pill width: clock width, or wide enough for the title text; + the working spinner (12px + 10px gap). */
-export function idlePillWidth(textW: number | null, collapsedW: number, working: boolean): number {
-  const spin = working ? 22 : 0;
+/** Idle pill width: clock width, or wide enough for the title text; + the working spinner (12px + 10px gap)
+ *  + `extra` (the call recording badge). */
+export function idlePillWidth(textW: number | null, collapsedW: number, working: boolean, extra = 0): number {
+  const spin = (working ? 22 : 0) + extra;
   const min = collapsedW + spin;
   if (textW === null) return min;
   // + 2x25px padding + 22px icon + 10px gap
