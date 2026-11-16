@@ -1,12 +1,13 @@
 {
   "name": "dynamic-notch",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.53",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
