@@ -238,6 +238,11 @@ function renderClock(): void {
 const calHandlers = {
   join: (id: string) => invoke("open_join", { id }).catch((err) => showEvent("Calendar", String(err), 3500)),
   add: () => openCalendarEditor(),
+  desktop: () =>
+    invoke<CalPayload>("set_calendar_desktop", { on: true }).then(
+      (p) => onCalendar(p),
+      (err) => showEvent("Calendar", String(err), 4500),
+    ),
 };
 
 function renderCalendar(): void {

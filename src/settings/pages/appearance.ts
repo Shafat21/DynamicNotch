@@ -33,8 +33,17 @@ export function renderAppearance(root: HTMLElement): void {
   // Accent: "Theme" (empty = the theme's own), the preset accents, or a custom #RRGGBB.
   const hex = h("input", { type: "text", className: "hex", value: a.accent, placeholder: "#RRGGBB", maxLength: 7, spellcheck: false, ariaLabel: "Custom accent colour (#RRGGBB)" });
   const accents = h("div", { className: "accents", role: "group", ariaLabel: "Accent colour" });
-  const markAccent = () => accents.querySelectorAll<HTMLButtonElement>("button").forEach((b) => (b.ariaPressed = String(b.dataset.accent === store.look.appearance.accent)));
-  const options = [["", store.look.theme.accent, "Theme accent"], ...[...new Set(store.look.themes.map((t) => t.accent))].map((c) => [c, c, c])];
+  const same = (x: string, y: string) => x.toLowerCase() === y.toLowerCase();
+  // the theme's own accent is one swatch, "Theme accent": a custom value equal to it counts as that swatch, not a second one
+  const markAccent = () => {
+    const cur = store.look.appearance.accent;
+    accents.querySelectorAll<HTMLButtonElement>("button").forEach((b) => {
+      const v = b.dataset.accent!;
+      b.ariaPressed = String(v === "" ? cur === "" || same(cur, store.look.theme.accent) : same(v, cur));
+    });
+  };
+  const themeAccent = store.look.theme.accent;
+  const options = [["", themeAccent, "Theme accent"], ...[...new Set(store.look.themes.map((t) => t.accent.toLowerCase()))].filter((c) => !same(c, themeAccent)).map((c) => [c, c, c])];
   for (const [value, colour, label] of options) {
     const b = h("button", { type: "button", className: value ? "accent" : "accent theme-accent", ariaLabel: label, title: label });
     b.style.background = colour;

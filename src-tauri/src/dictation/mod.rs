@@ -252,8 +252,9 @@ fn preflight(app: &AppHandle, s: &Settings) -> Result<&'static str, String> {
 
 fn transcribe(app: &AppHandle, engine: &str, s: &Settings, samples: &[f32]) -> Result<String, String> {
     if engine == "cloud" {
-        // no language = whisper-1 / Groq Whisper detect it
-        let lang = (s.language != "auto").then_some(s.language.as_str());
+        // no language = whisper-1 / Groq Whisper detect it ("auto", or a list like "bn,en")
+        let codes = local::codes(&s.language);
+        let lang = (codes.len() == 1).then(|| codes[0]);
         cloud::transcribe(&s.cloud_provider, &s.cloud_model, &cloud::get_key(&s.cloud_provider)?, samples, lang)
     } else {
         let m = if engine == models::WHISPER.id { &models::WHISPER } else { &models::PARAKEET };
@@ -428,7 +429,7 @@ pub fn spawn(app: AppHandle) {
     }
     let s = load(&app);
     if let Some(d) = models::chosen(&app, &s.speech).and_then(|m| models::dir(&app, m).ok()) {
-        local::preload(d, s.language);
+        local::preload(d);
     }
     std::thread::spawn(move || run(app, rx));
 }

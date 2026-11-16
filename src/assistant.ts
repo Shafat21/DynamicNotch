@@ -151,7 +151,7 @@ function bridgeText(): string | null {
   const b = st.bridge;
   if (!b.online) return `Bridge offline: ${b.error ?? "unknown error"}`;
   if (!b.connected) return st.note || "Not connected";
-  return st.sessions.length ? null : "No sessions yet: start a connected agent in a terminal";
+  return st.sessions.length ? null : "No sessions yet";
 }
 
 function render(): void {
@@ -171,8 +171,8 @@ function renderCard(): void {
   if (text !== null) {
     const sub = el("span", "muted ell", st.bridge.online ? (st.bridge.connected ? "Connected" : st.note || "Not connected") : "Offline");
     sub.title = sub.textContent!;
-    col.append(el("b", "ell", "Coding agents"), sub);
-    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect", connect, "Connect a coding agent in Settings") : el("div", "pal-msg muted", text);
+    col.append(el("b", "ell", "Agents"), sub);
+    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect", connect, "Connect a coding agent in Settings") : Object.assign(el("div", "pal-msg muted", text), { title: "Start a connected agent in a terminal to see its session here" });
     return card.replaceChildren(row, ...(st.bridge.connected ? usageCard() : []), foot);
   }
   const list = st.sessions;

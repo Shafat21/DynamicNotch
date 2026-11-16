@@ -113,14 +113,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #island::after { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 1px solid var(--line); pointer-events: none; }
 #island:not([data-anim=""])::after { display: none; }
 
-#shell[data-shape="notch"] #island { border-radius: 0 0 var(--r) var(--r); }
+/* Notch shape: the island is widened by one ear on each side and cut with a mask (rect + rounded bottom corners +
+   the two inverted top corners that blend into the screen edge). One element, so the gradient and the media tint
+   paint straight across the ears. --rr is --r as an animatable length: the mask can't use the island's
+   border-radius transition. The shadow is a filter, since a mask would clip a box-shadow. */
+@property --rr { syntax: "<length>"; inherits: true; initial-value: 20px; }
+#shell[data-shape="notch"] { filter: drop-shadow(0 8px 12px rgb(0 0 0 / 0.3)); }
+#shell[data-shape="notch"] #island {
+  --rr: var(--r);
+  inset: 0 calc(-1 * var(--scoop));
+  border-radius: 0;
+  box-shadow: none;
+  transition: --rr 0.85s var(--ease);
+  mask:
+    linear-gradient(#000, #000) var(--scoop) 0 / calc(100% - 2 * var(--scoop)) calc(100% - var(--rr) + 1px) no-repeat,
+    linear-gradient(#000, #000) calc(var(--scoop) + var(--rr)) 100% / calc(100% - 2 * var(--scoop) - 2 * var(--rr)) var(--rr) no-repeat,
+    radial-gradient(circle at 100% 0, #000 calc(var(--rr) - 0.5px), transparent var(--rr)) var(--scoop) 100% / var(--rr) var(--rr) no-repeat,
+    radial-gradient(circle at 0 0, #000 calc(var(--rr) - 0.5px), transparent var(--rr)) calc(100% - var(--scoop)) 100% / var(--rr) var(--rr) no-repeat,
+    radial-gradient(circle at 0 100%, transparent calc(var(--scoop) - 0.5px), #000 var(--scoop)) 0 0 / var(--scoop) var(--scoop) no-repeat,
+    radial-gradient(circle at 100% 100%, transparent calc(var(--scoop) - 0.5px), #000 var(--scoop)) 100% 0 / var(--scoop) var(--scoop) no-repeat;
+}
 #shell[data-shape="notch"] #island::after { display: none; }
-
-/* notch "ears": inverted corners that blend the notch into the screen edge */
-.ear { display: none; position: absolute; top: 0; width: var(--scoop); height: var(--scoop); }
-#shell[data-shape="notch"] .ear { display: block; }
-.ear.l { right: 100%; background: radial-gradient(circle at 0 100%, transparent calc(var(--scoop) - 0.5px), var(--bg-from) var(--scoop)); }
-.ear.r { left: 100%; background: radial-gradient(circle at 100% 100%, transparent calc(var(--scoop) - 0.5px), var(--bg-from) var(--scoop)); }
+.ear { display: none; } /* superseded by the mask above */
 
 /* ---------- media animations (tinted by album art) ---------- */
 .fx { position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity 0.6s; pointer-events: none; }
@@ -551,6 +565,7 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 @container card (max-height: 57px) { .usage { display: none; } }
 
 .now { display: flex; align-items: center; gap: 10px; }
+#tile-media-title { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.25; } /* long titles wrap instead of "Tu Aake Dek…" */
 .now-art { width: 40px; height: 40px; flex: none; overflow: hidden; border-radius: var(--radius-md); background: linear-gradient(180deg, color-mix(in srgb, var(--media), #ff5fa2 40%), color-mix(in srgb, var(--media), #7b2ff7 60%)); }
 .now-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ctrl { display: flex; align-items: center; justify-content: center; gap: var(--gap-sm); }
@@ -616,6 +631,12 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .cal-when { font-size: var(--t12); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-note { font-size: var(--t11); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-prompt { margin: 8px 0 0; padding: 0; text-align: left; }
+.agenda-setup { margin: 6px 0 10px; }
+.agenda-setup-title { font-size: var(--t15); font-weight: 600; margin-bottom: 2px; }
+.agenda-setup-actions { display: flex; gap: 8px; }
+.agenda-row.past { opacity: 0.45; }
+.agenda-row.now { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.agenda-row.now .cal-bar { box-shadow: 0 0 8px var(--accent); }
 
 /* ---------- pages ---------- */
 .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }

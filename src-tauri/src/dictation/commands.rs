@@ -27,9 +27,9 @@ pub async fn set_dictation_settings(app: AppHandle, patch: Value) -> Res<Setting
         }
     }
     next.save(&app.state::<AppState>().db.lock().unwrap())?;
-    if (next.speech != cur.speech || next.language != cur.language) && next.engine != "cloud" {
+    if next.speech != cur.speech && next.engine != "cloud" {
         if let Some(d) = models::chosen(&app, &next.speech).and_then(|m| models::dir(&app, m).ok()) {
-            local::preload(d, next.language.clone());
+            local::preload(d);
         }
     }
     Ok(next)
@@ -62,7 +62,7 @@ pub async fn download_model(app: AppHandle, model: Option<String>) -> Res<()> {
         s.save(&db)?;
     }
     if let Some(m) = models::chosen(&app, &s.speech) {
-        local::preload(models::dir(&app, m)?, s.language);
+        local::preload(models::dir(&app, m)?);
     }
     Ok(())
 }

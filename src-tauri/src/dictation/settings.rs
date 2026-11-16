@@ -194,8 +194,10 @@ pub fn apply_patch(cur: &Settings, patch: &Value, mics: impl FnOnce() -> Vec<Str
         *s.field(k) = v;
     }
     one_of(&s.engine, &ENGINES, "engine")?;
+    // "auto", a code ("bn": forced) or 2–3 codes ("bn,en": detected among them)
     let l = &s.language;
-    if l != "auto" && !(l.len() == 2 && l.bytes().all(|b| b.is_ascii_lowercase())) {
+    let n = super::local::codes(l).len();
+    if l != "auto" && !(n >= 1 && n <= 3 && l.split(',').count() == n && !l.contains(' ')) {
         return Err(format!("Unknown language \"{l}\""));
     }
     s.hotkey = parse_hotkey(&s.hotkey)?.canonical();
@@ -248,12 +250,15 @@ mod tests {
         assert_eq!((cur.engine.as_str(), cur.cleanup.as_str(), cur.speech.as_str()), ("auto", "verbatim", "multilingual"));
         let s = apply_patch(&cur, &json!({"speech": "european", "language": "bn"}), none).unwrap();
         assert_eq!((s.speech.as_str(), s.language.as_str()), ("european", "bn"));
+        assert_eq!(apply_patch(&cur, &json!({"language": "bn,en"}), none).unwrap().language, "bn,en");
         for bad in [
             json!({"engine": "gpu"}),
             json!({"model": "base"}),
             json!({"cleanup": "fancy"}),
             json!({"language": "english"}),
             json!({"language": "EN"}),
+            json!({"language": "bn,"}),
+            json!({"language": "bn,en,de,fr"}),
             json!({"hotkey": "Q"}),
             json!({"cloudProvider": "azure"}),
             json!({"cloudModel": ""}),

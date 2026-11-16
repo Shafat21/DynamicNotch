@@ -113,6 +113,8 @@ pub fn open_link(id: String) -> Res<()> {
     let url = match id.as_str() {
         "repo" => "https://github.com/Shafat21/DynamicNotch",
         "issues" => "https://github.com/Shafat21/DynamicNotch/issues",
+        "releases" => "https://github.com/Shafat21/DynamicNotch/releases",
+        "site" => "https://shafat21.online",
         _ => return Err(format!("unknown link {id}")),
     };
     launcher::os::shell_open(url)

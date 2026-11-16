@@ -3,8 +3,8 @@
 
 export type CalEvent = { id: string; title: string; start: number; end: number; allDay: boolean; join: string | null };
 /** `fatal`: nothing could be loaded (show `error` instead of events); otherwise `error` is just a note. */
-export type CalPayload = { configured: boolean; error: string | null; fatal: boolean; today: CalEvent[]; tomorrowFirst: CalEvent | null };
-type Handlers = { join: (id: string) => void; add: () => void };
+export type CalPayload = { configured: boolean; desktop?: boolean; error: string | null; fatal: boolean; today: CalEvent[]; tomorrowFirst: CalEvent | null };
+type Handlers = { join: (id: string) => void; add: () => void; desktop: () => void };
 
 const $ = (id: string) => document.getElementById(id)!;
 const time = (ms: number) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -53,13 +53,13 @@ export function renderCard(p: CalPayload | null, h: Handlers): void {
   if (!p?.configured) return body.replaceChildren(button("link-btn cal-prompt", "Add your calendar", h.add));
 
   const left = p.today.filter((e) => !e.allDay && e.end > now); // sorted by start: ongoing first, then upcoming
-  count.textContent = `${left.length} event${left.length === 1 ? "" : "s"} left today`;
+  count.textContent = left.length ? `${left.length} event${left.length === 1 ? "" : "s"} left today` : ""; // the body says it when there are none
   count.title = count.textContent;
   const note = p.error && !p.fatal ? [el("div", "cal-note", p.error)] : [];
   if (left[0]) return body.replaceChildren(eventRow(left[0], h, now, "cal-row"), ...note);
 
   const rest = el("div", "cal-det");
-  rest.append(el("div", "cal-title", p.fatal ? "Calendar unavailable" : "No more events today"));
+  rest.append(el("div", "cal-title", p.fatal ? "Calendar unavailable" : "You're free today"));
   const t = p.tomorrowFirst;
   const sub = p.fatal ? p.error : t ? `Tomorrow ${t.allDay ? "" : time(t.start) + " · "}${t.title}` : "";
   if (sub) rest.append(el("div", "cal-when", sub));
@@ -69,9 +69,23 @@ export function renderCard(p: CalPayload | null, h: Handlers): void {
 export function renderAgenda(p: CalPayload | null, h: Handlers): void {
   const now = Date.now();
   const list = $("agenda-list");
-  if (!p?.configured) return list.replaceChildren(button("link-btn cal-prompt", "Add your calendar link", h.add));
+  if (!p?.configured) {
+    const empty = el("div", "agenda-setup");
+    empty.append(
+      el("div", "agenda-setup-title", "Show your events here"),
+      el("div", "muted small", "Read the calendar app on this PC, or paste a private iCal link from Google, Outlook or iCloud."),
+    );
+    const actions = el("div", "agenda-setup-actions");
+    actions.append(button("btn primary", "Use desktop calendar", h.desktop), button("btn", "Add iCal link", h.add));
+    return list.replaceChildren(empty, actions);
+  }
   const events = [...p.today].sort((a, b) => Number(b.allDay) - Number(a.allDay)); // stable: all-day first, then by start
-  const rows = events.map((e) => eventRow(e, h, now, "agenda-row"));
+  const rows = events.map((e) => {
+    const row = eventRow(e, h, now, "agenda-row");
+    if (!e.allDay && e.end <= now) row.classList.add("past"); // already over
+    else if (!e.allDay && e.start <= now) row.classList.add("now");
+    return row;
+  });
   if (!rows.length) rows.push(el("div", "muted agenda-empty", "No events today"));
   if (p.error) rows.push(el("div", p.fatal ? "agenda-empty" : "muted agenda-empty cal-note", p.error));
   list.replaceChildren(...rows);

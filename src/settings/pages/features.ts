@@ -4,7 +4,7 @@ import type { LauncherApp } from "../../panels";
 import { setGeneral, store } from "../store";
 import { button, h, page, report, row, section, segmented, select, toggle } from "../ui";
 
-type Calendar = { configured: boolean; error: string | null };
+type Calendar = { configured: boolean; desktop?: boolean; error: string | null };
 type Dictation = { engine: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string; cleanup: string };
 type Models = { installed: boolean; size: number; claude: boolean };
 type Words = { words: string[]; replacements: { from: string; to: string }[]; snippets: { trigger: string; text: string }[] };
@@ -177,8 +177,17 @@ export function renderFeatures(root: HTMLElement): () => void {
   const calState = h("span", { className: "row-desc" });
   const calInput = h("input", { type: "url", placeholder: "https://…/basic.ics", ariaLabel: "Calendar link (iCal)", spellcheck: false });
   const calRemove = button("Remove", () => saveCalendar(""));
+  const desktopSwitch = toggle("Desktop calendar", false, async (on) => {
+    try {
+      onCalendar(await invoke<Calendar>("set_calendar_desktop", { on }));
+    } catch (e) {
+      desktopSwitch.checked = !on;
+      report(String(e));
+    }
+  });
   const onCalendar = (c: Calendar) => {
-    calState.textContent = !c.configured ? "No calendar linked." : c.error ? `Linked, last update failed: ${c.error}` : "Linked.";
+    desktopSwitch.checked = !!c.desktop;
+    calState.textContent = !c.configured ? "No calendar connected." : c.error ? `Last update: ${c.error}` : "Connected.";
     calRemove.hidden = !c.configured;
   };
   const saveCalendar = async (url: string) => {
@@ -229,7 +238,11 @@ export function renderFeatures(root: HTMLElement): () => void {
   const dictation = dictationSection();
   const p = page("Integrations");
   p.append(
-    section("Calendar", row("Calendar link", "Paste a private iCal (.ics) link from Google or Outlook.", h("div", { className: "stack" }, calForm, calState))),
+    section(
+      "Calendar",
+      row("Desktop calendar", "Show events from the Windows Calendar app (Outlook, Google, iCloud and Exchange accounts added there). Read-only.", desktopSwitch),
+      row("Calendar link", "Or paste a private iCal (.ics) link from Google or Outlook. Both can be on; events are merged.", h("div", { className: "stack" }, calForm, calState)),
+    ),
     section(
       "Reminders",
       row(
