@@ -22,6 +22,12 @@ pub fn plugged_in() -> bool {
     unsafe { GetSystemPowerStatus(&mut s).is_ok() && s.ACLineStatus == 1 }
 }
 
+/// (ACLineStatus, BatteryLifePercent); (255, 255) when Windows can't say.
+pub fn power_raw() -> (u8, u8) {
+    let mut s = SYSTEM_POWER_STATUS::default();
+    if unsafe { GetSystemPowerStatus(&mut s) }.is_ok() { (s.ACLineStatus, s.BatteryLifePercent) } else { (255, 255) }
+}
+
 pub fn accent_color() -> Option<String> {
     let c = UISettings::new().ok()?.GetColorValue(UIColorType::Accent).ok()?;
     Some(format!("#{:02x}{:02x}{:02x}", c.R, c.G, c.B))

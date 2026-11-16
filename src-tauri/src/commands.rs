@@ -449,6 +449,64 @@ pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
     window::set_hit_rect(&app, rect);
 }
 
+const NO_DRAG: &str = "Moving the island isn't available on Linux yet";
+
+/// AC / battery for the compact Widgets card.
+#[tauri::command]
+pub fn power_status() -> monitors::system::Power {
+    monitors::system::power()
+}
+
+/// Hold-and-drag, start: from now on keep window point (`x`, `y`) (CSS px, the pill's centre) under the pointer.
+#[tauri::command]
+pub fn island_drag_start(state: State<AppState>, x: f64, y: f64) -> Res<()> {
+    if !cfg!(windows) {
+        return Err(NO_DRAG.into());
+    }
+    *state.drag.lock().unwrap() = Some((x, y)); // CSS px: scaled on each move, the monitor can change mid-drag
+    Ok(())
+}
+
+/// Hold-and-drag, move: the window follows the pointer.
+#[tauri::command]
+pub fn island_drag_move(app: AppHandle, state: State<AppState>) -> Res<()> {
+    let Some(anchor) = *state.drag.lock().unwrap() else { return Ok(()) };
+    let win = app.get_webview_window("main").ok_or("no island window")?;
+    let c = app.cursor_position().map_err(err)?;
+    let (x, y) = crate::placement::drag_window_pos((c.x, c.y), anchor, win.scale_factor().map_err(err)?);
+    win.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)
+}
+
+/// Hold-and-drag, end: snap to the nearest edge of the display under the pointer, save it, place the window.
+/// Returns the placement (`"left:0.4"`). Always ends the drag, also when something fails.
+#[tauri::command]
+pub fn island_drag_end(app: AppHandle, state: State<AppState>) -> Res<String> {
+    if state.drag.lock().unwrap().take().is_none() || !cfg!(windows) {
+        window::place(&app).map_err(err)?;
+        return Err(NO_DRAG.into());
+    }
+    let c = app.cursor_position().map_err(err)?;
+    let (mons, infos) = display::monitors(&app).map_err(err)?;
+    let here = app.monitor_from_point(c.x, c.y).map_err(err)?;
+    let i = here.and_then(|h| mons.iter().position(|m| m.position() == h.position())).or_else(|| infos.iter().position(|m| m.primary)).unwrap_or(0);
+    let m = mons.get(i).ok_or("no display")?;
+    let wa = m.work_area();
+    let p = crate::placement::snap(c.x, c.y, (wa.position.x as f64, wa.position.y as f64, wa.size.width as f64, wa.size.height as f64));
+    let text = crate::placement::format(p);
+    {
+        let db = state.db.lock().unwrap();
+        db.set("placement", &text).map_err(err)?;
+        let cur = db.settings().map_err(err)?.display;
+        let keep_primary = cur == "primary" && infos[i].primary; // still "the primary", even if it changes later
+        if !keep_primary && cur != infos[i].name {
+            db.set("display", &infos[i].name).map_err(err)?;
+        }
+    }
+    window::place(&app).map_err(err)?;
+    emit_settings(&app);
+    Ok(text)
+}
+
 #[tauri::command]
 pub fn show_context_menu(app: AppHandle, window: WebviewWindow) -> Res<()> {
     menu::popup(&app, &window).map_err(err)

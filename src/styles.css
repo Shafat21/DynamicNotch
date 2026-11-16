@@ -92,13 +92,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --w: 180px; --h: 40px; --r: 20px; --scoop: 25px; --top: 10px; --ui: 1; --ch: 40px;
   position: absolute;
   top: var(--top);
-  left: 50%;
+  /* centred on the pill's spot (--ax, display.anchor), pushed back inside the window near a screen corner */
+  left: clamp(calc(var(--w) / 2), var(--ax, 50%), calc(100% - var(--w) / 2));
   width: var(--w);
   height: var(--h);
   translate: -50% 0;
   transition: width 0.85s var(--ease), height 0.85s var(--ease), top 0.3s ease, translate 0.4s ease, opacity 0.4s ease;
 }
 #shell.away { translate: -50% -150%; opacity: 0; }
+/* other edges (placement.rs): anchored to that edge, growing away from it; cards are never rotated */
+#shell[data-edge="bottom"] { top: auto; bottom: var(--top); transition: width 0.85s var(--ease), height 0.85s var(--ease), bottom 0.3s ease, translate 0.4s ease, opacity 0.4s ease; }
+#shell[data-edge="left"], #shell[data-edge="right"] { top: clamp(calc(var(--h) / 2), var(--ax, 50%), calc(100% - var(--h) / 2)); translate: 0 -50%; }
+#shell[data-edge="left"] { left: var(--top); }
+#shell[data-edge="right"] { left: auto; right: var(--top); }
+#shell[data-edge="bottom"].away { translate: -50% 150%; }
+#shell[data-edge="left"].away { translate: -150% -50%; }
+#shell[data-edge="right"].away { translate: 150% -50%; }
+/* the slim side tab shows just Pal (no room for the clock or the song) */
+#shell:is([data-edge="left"], [data-edge="right"]) .header :is(.title, .spinner, #status-icon) { display: none; }
+#shell:is([data-edge="left"], [data-edge="right"]) .header { flex-direction: column; justify-content: center; gap: 10px; padding: 0; height: 120px; } /* stacked, centred in the 40x120 tab (base px) */
+/* while dragged: lifted, and no size animation fighting the pointer */
+#shell.dragging { transition: none; filter: drop-shadow(0 12px 28px rgb(0 0 0 / 0.5)); cursor: grabbing; }
 #shell[data-shape="notch"] { --top: 0px; }
 
 #island {
@@ -456,6 +470,13 @@ select option { background: var(--popover); color: var(--text); }
 
 /* ---------- reminders: banner (state "reminder"), tab, form, Home strip chip ---------- */
 .reminder { height: calc(var(--h) / var(--ui)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 16px; font-size: var(--t13); }
+/* Live toast (toast.ts): icon · title over subtitle · value on the right */
+.toast { height: calc(var(--h) / var(--ui)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 18px; font-size: var(--t13); }
+.toast[hidden] { display: none; }
+.toast-ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); flex: none; }
+.toast-col { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.toast-text { color: var(--muted); font-size: var(--t11); }
+.toast-value { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent); }
 .rem-ic { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
 .rem-text { flex: 1; gap: 2px; }

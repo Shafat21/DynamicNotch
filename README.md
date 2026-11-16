@@ -70,6 +70,10 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
     <td><img src="docs/screenshots/reminder.png" alt="Reminder banner with Snooze and Done"><br><img src="docs/screenshots/dictation.png" width="60%" alt="Dictation pill while recording"><br><sub><b>Reminder</b> banner and the <b>dictation</b> pill</sub></td>
   </tr>
   <tr>
+    <td><img src="docs/screenshots/compact-music.png" alt="Compact notch: music card with arrows and page dots"><br><sub><b>Compact notch</b>: one card at a time (music, Pomodoro, shelf, to-do, widgets)</sub></td>
+    <td><img src="docs/screenshots/compact-widgets.png" alt="Compact notch: this week and battery"><br><img src="docs/screenshots/toast-bluetooth.png" width="49%" alt="Toast: AirBuds connected"> <img src="docs/screenshots/toast-charging.png" width="49%" alt="Toast: charging at 82%"><br><sub><b>Widgets</b> card and <b>live toasts</b></sub></td>
+  </tr>
+  <tr>
     <td><img src="docs/screenshots/settings-appearance.png" alt="Settings: themes, accent colour and style"><br><sub><b>Settings → Appearance</b>: 7 themes, accent, icons, shape</sub></td>
     <td><img src="docs/screenshots/settings-agents.png" alt="Settings: connect coding agents"><br><sub><b>Settings → Agents</b>: connect each coding agent</sub></td>
   </tr>
@@ -91,6 +95,14 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 - **Bluetooth devices:** radio on/off, connect / disconnect paired devices.
 - **Shelf:** drop files on the island to park them; open, reveal, copy path, drag back out (Windows).
 
+**Compact notch** (Settings → Appearance → Layout → Compact) - a smaller black notch instead of the dashboard:
+- A header with date, time and a progress ring (focus timer, else the song), and one card at a time:
+  **Music** (flip to lyrics), **Pomodoro**, **Shelf** (files / clipboard), **To-do** and **Widgets** (this week + battery).
+- Flip with ‹ ›, the page dots, the mouse wheel or ← →; the last card is remembered.
+
+**Live toasts** - a short pop when a Bluetooth device connects ("AirBuds Pro · Connected") or the charger goes in
+("Charging · 82%"), in both layouts. Prompts, reminders and dictation come first.
+
 **Pal**
 - An animated face with 8 moods: calm, happy, listening, thinking, needs-you, done, napping and broke.
 - Lives in the idle pill next to the clock and on the assistant card; moods follow what your coding agents are doing.
@@ -109,7 +121,7 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 
 **Settings window** (right-click the island → Settings…, or the ⚙ button)
 - **General:** start at login, display, island size, hide in fullscreen, which tab opens first.
-- **Appearance:** themes (Graphite, Midnight, Aurora, Ember, Lime, Rose, Pure black), accent colour, line or colour-badge icons,
+- **Appearance:** layout (Dashboard or Compact), themes (Graphite, Midnight, Aurora, Ember, Lime, Rose, Pure black), accent colour, line or colour-badge icons,
   pill or notch shape, density, tab labels, corner radius, text size, card opacity and island sizes.
 - **Tabs** and **Home:** reorder, show or hide tabs and Home cards.
 - **Agents:** connect or disconnect each coding agent.
@@ -122,6 +134,8 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
   DPI and monitor changes (Island Size: Auto, Small, Medium, Large).
 - **Caps Lock / Num Lock** indicators, **charging** animation and **notifications** in the island (Windows).
 - **Click-through:** the desktop under the island stays usable; only the pill takes the mouse (Windows).
+- **Drag it anywhere:** hold the island and drag it to any screen edge (top, bottom, left, right); it snaps to the
+  nearest edge and remembers the spot. On the sides it becomes a slim tab (Windows).
 
 ## Performance
 
@@ -188,7 +202,9 @@ Linux builds are experimental, see [Platform support](#platform-support).
 
 | Action | What happens |
 |---|---|
-| Hover the island | Opens the dashboard |
+| Hover the island | Opens the dashboard (or the compact notch) |
+| Hold the island, then drag | Moves it to any screen edge; it snaps when you let go (Windows) |
+| ‹ › / wheel / ← → in the compact notch | Next or previous card |
 | Click a tab | Opens its page (music, calendar, timer, ...) |
 | Right-click | Opens the menu, see [Right-click menu](#right-click-menu) |
 | Allow / Deny on a prompt | Answers the agent; Enter = Allow / Send, Esc = Dismiss (the agent then asks in its terminal) |

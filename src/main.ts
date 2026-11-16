@@ -11,7 +11,14 @@ import { dictating, dictatingPage, initDictation, onDictation, type DictEvent } 
 import { initNotetaker, recWidth, setCall, type CallEvent } from "./notetaker";
 import { level, live, warnDot, type Usage } from "./usage";
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
-import { initFocus } from "./focus";
+import { initFocus, type Focus } from "./focus";
+import { renderMusic } from "./compact/music";
+import { renderPomodoro } from "./compact/pomodoro";
+import { renderShelf, type ShelfMode } from "./compact/shelf";
+import { renderTodo } from "./compact/todo";
+import { renderWidgets } from "./compact/widgets";
+import { renderToast, TOAST_MS, type Toast } from "./toast";
+import { freshOnly, takesOver } from "./toast-queue";
 import { initClipboard, showClipboard } from "./clipboard";
 import { initShelf, showShelf } from "./shelf";
 import { initNotes, openNote, showNotes } from "./notes";
@@ -20,6 +27,9 @@ import { initSound, showSound } from "./sound";
 import { addDue, chime, currentDue, initReminders, overdue, showReminders, type Due } from "./reminders";
 import { hydrateIcons, icon } from "./icons-line";
 import { hideTip, initTooltips } from "./tooltip";
+import { hitRectFor, initDrag, type Edge } from "./drag";
+import { initCompact, ring } from "./compact/compact";
+import { CARDS, type CardId } from "./compact/pager";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
@@ -32,8 +42,8 @@ type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; down: number; up: number };
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
-type Display = { uiScale: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
-type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation";
+type Display = { uiScale: number; edge?: Edge; anchor?: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
+type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation" | "toast";
 
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
@@ -61,11 +71,16 @@ const ui = {
   settings: { animationStyle: "Fluid Blobs" } as Settings,
   look: DEFAULT_LOOK as Look,
   tasks: [] as Task[],
+  edge: "top" as Edge, // which screen edge the island sits on (Rust placement)
+  anchor: undefined as number | undefined, // the pill's centre along that edge, window CSS px (off-centre near a corner)
+  dragging: false, // hold-and-drag in progress: hover changes are ignored
   scale: 1, // display uiScale from Rust: sizes below are 1080p base px, multiplied in transition()
 };
 
 const look = () => ui.look.appearance;
-const pillTop = () => (look().shape === "notch" ? 0 : 10);
+const compactView = () => ui.state === "hover" && look().view === "compact";
+const side = () => ui.edge === "left" || ui.edge === "right";
+const pillTop = () => (look().shape === "notch" && ui.edge === "top" ? 0 : 10); // the notch shape exists only on the top edge
 const playingTitle = () => (ui.media.state === "Playing" ? ui.media.title : "");
 
 let measureCtx: CanvasRenderingContext2D | null = null;
@@ -84,12 +99,14 @@ function idleWidth(): number {
 /** Base px at 1080p (appearance sizes); geometry() multiplies by the display scale. */
 function targetSize(): [number, number] {
   const a = look();
-  if (ui.charging) return [850, a.collapsedH];
-  if (ui.state === "idle") return [idleWidth(), a.collapsedH];
+  if (ui.charging && !side()) return [850, a.collapsedH]; // a side tab keeps its size: 850 px across would leave the screen
+  if (ui.state === "idle") return side() ? [40, 120] : [idleWidth(), a.collapsedH]; // a slim tab on a side edge
   if (ui.state === "notify") return [380, a.collapsedH];
   if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
   if (ui.state === "reminder") return [640, 76];
+  if (ui.state === "toast") return [360, 60];
   if (ui.state === "dictation") return [["done", "error"].includes($("dictation").dataset.phase ?? "") ? 400 : 300, a.collapsedH]; // room for the text
+  if (compactView()) return [500, 140]; // the compact notch: one card at a time
   return [a.openW, a.openH]; // every tab shares the open size; long pages scroll
 }
 
@@ -116,7 +133,10 @@ function geometry(): void {
   shell.style.setProperty("--r", `${r}px`);
   shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25 * k)}px`);
   shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
-  shell.dataset.shape = look().shape;
+  shell.dataset.shape = ui.edge === "top" ? look().shape : "pill";
+  shell.dataset.edge = ui.edge;
+  shell.dataset.view = look().view;
+  shell.style.setProperty("--ax", ui.anchor === undefined ? "50%" : `${ui.anchor}px`); // styles.css clamps #shell inside the window
   sendHitRect(w, h, k);
 }
 
@@ -156,8 +176,7 @@ function updateFx(): void {
 
 /** Tell Rust where the island is so it can toggle click-through. */
 function sendHitRect(w: number, h: number, k: number): void {
-  const left = (window.innerWidth - w) / 2;
-  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : { x: left - 15 * k, y: 0, w: w + 30 * k, h: pillTop() + h + 30 * k };
+  const rect = ui.hidden ? { x: 0, y: 0, w: 0, h: 0 } : hitRectFor(ui.edge, w, h, window.innerWidth, window.innerHeight, pillTop(), k, ui.anchor);
   hitRect = rect;
   invoke("set_hit_rect", { rect }).catch(console.error);
 }
@@ -178,7 +197,12 @@ function trackHoverInPage(): void {
   document.documentElement.addEventListener("mouseleave", () => backendHover && onHover(false));
 }
 
+/** Live toasts waiting or showing (first = on screen); see showToast(). */
+const toasts: (Toast & { at: number })[] = [];
+let toastTimer = 0;
+
 function setState(s: State): void {
+  if (s === "idle" && toasts.length && !ui.hidden && nextToast()) return; // a toast that waited for the island to close
   if (s === "idle") {
     setPinned(false);
     if (look().openOn === "home") ui.tab = "home"; // otherwise the next hover reopens the last tab
@@ -192,7 +216,7 @@ function setState(s: State): void {
 }
 
 function showEvent(title: string, text: string, ms: number, mood: PalMood | null = null): void {
-  if (ui.hidden || ui.state === "prompt" || ui.state === "reminder" || ui.state === "dictation") return; // pops are dropped, not queued; a prompt / reminder / dictation wins
+  if (ui.hidden || ui.state === "prompt" || ui.state === "reminder" || ui.state === "dictation" || ui.state === "toast") return; // pops are dropped, not queued; a prompt / reminder / dictation / toast wins
   ui.event = { title, text, mood };
   clearTimeout(revertTimer);
   if (ui.state === "notify") transition();
@@ -227,7 +251,51 @@ function onUsage(u: Usage): void {
 
 const clockTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
+// compact view: the idle pill shows a ring and sound bars beside the clock / song (compact.css)
+const idleRing = ring(14);
+const idleEq = Object.assign(document.createElement("span"), { className: "eq idle-eq" });
+idleEq.append(...Array.from({ length: 4 }, () => document.createElement("i")));
+let focus: Focus | null = null; // set in wireInput (initFocus)
+let artUri = ""; // last media-art data URI, for the compact Music card
+let cmpLyrics = false; // compact Music card shows its Lyrics side
+let cmpShelf: ShelfMode = "files"; // compact Shelf card: files or clipboard
+const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+/** Header ring: a running focus timer, else how far into the playing song; null = hidden. */
+const ringFraction = (): number | null => {
+  const f = focus?.state();
+  if (f?.running) return 1 - f.left / f.total;
+  return ui.media.state === "Playing" && ui.progress.duration > 0 ? ui.progress.position / ui.progress.duration : null;
+};
+const placeholder = (el: HTMLElement, text: string) => el.replaceChildren(Object.assign(document.createElement("div"), { className: "cmp-placeholder", textContent: text }));
+const compact = initCompact(
+  $("compact"),
+  {
+    ...(Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => placeholder(el, id)])) as Record<CardId, (el: HTMLElement) => void>),
+    music: (el) =>
+      renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
+    widgets: (el) => renderWidgets(el, { calendar: ui.calendar, taskCount: ui.tasks.length }),
+    shelf: (el) => renderShelf(el, { mode: cmpShelf, onMode: (m) => ((cmpShelf = m), compact.refresh()) }),
+    todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh("todo")) }),
+    pomodoro: (el) => {
+      const f = focus?.state() ?? { left: 1500, total: 1500, running: false, end: 0 };
+      renderPomodoro(el, {
+        minutes: Math.round(f.total / 60),
+        label: f.running ? "Focusing" : f.left < f.total ? "Paused" : "Focus",
+        remaining: mmss(f.left),
+        endsAt: clockTime(new Date(f.end)),
+        running: f.running,
+        fraction: 1 - f.left / f.total,
+        onToggle: () => focus?.toggle(),
+        onReset: () => focus?.reset(),
+      });
+    },
+  },
+  { ring: ringFraction },
+);
+
 function renderHeader(): void {
+  idleRing.set(ringFraction());
+  idleEq.classList.toggle("on", ui.media.state === "Playing");
   if (ui.state === "notify") {
     const { title, text, mood } = ui.event;
     if (mood) popPal.setMood(mood);
@@ -274,11 +342,16 @@ function renderView(): void {
   const reminder = ui.state === "reminder";
   const dict = ui.state === "dictation";
   const t = ui.tab;
-  $("header").hidden = hover || prompt || reminder || dict;
+  $("header").hidden = hover || prompt || reminder || dict || ui.state === "toast";
   $("reminder").hidden = !reminder;
+  $("toast").hidden = ui.state !== "toast";
+  if (ui.state === "toast" && toasts[0]) renderToast($("toast"), toasts[0]);
   $("dictation").hidden = !dict;
   chime(reminder ? currentDue()?.id ?? null : null);
-  $("open").hidden = !hover && !prompt;
+  const cmp = compactView();
+  $("open").hidden = (!hover && !prompt) || cmp;
+  $("compact").hidden = !cmp;
+  if (cmp) compact.show();
   $("prompt").hidden = !prompt;
   $("pages").hidden = prompt; // the prompt state is sized for the prompt alone
   $("tabbar").setAttribute("aria-disabled", String(prompt)); // visible but inert until the prompt closes
@@ -336,6 +409,8 @@ function formatTime(secs: number): string {
 
 /** Album art arrives only on track change (or a late retry), separately from `media`. */
 function onArt({ art }: { art: string }): void {
+  artUri = art;
+  compact.refresh("music");
   for (const id of ["player-art", "tile-media-art"]) {
     const img = $<HTMLImageElement>(id);
     img.hidden = !art;
@@ -348,6 +423,7 @@ function onMedia(m: Media): void {
   const idle = m.state === "Idle";
   if (m.title !== ui.media.title || m.artist !== ui.media.artist) ui.progress.position = 0;
   ui.media = m;
+  compact.refresh("music");
   ui.progress.duration = m.duration;
   if (idle) ui.lyric = "";
   document.querySelectorAll<HTMLElement>('[data-media="toggle"]').forEach((b) => {
@@ -368,6 +444,7 @@ function onMedia(m: Media): void {
 function onProgress(p: Progress): void {
   if (ui.seekPreview !== null) return; // the user is dragging; their preview wins
   ui.progress = p;
+  compact.refresh("music");
   renderProgress();
 }
 
@@ -393,6 +470,7 @@ function renderLyric(): void {
 
 function onLyric(text: string): void {
   ui.lyric = text;
+  compact.refresh("music");
   renderLyric();
 }
 
@@ -452,6 +530,8 @@ function onSessions(list: Session[]): void {
 
 function onDisplay(d: Display): void {
   ui.scale = d.uiScale;
+  ui.edge = d.edge ?? "top";
+  ui.anchor = d.anchor;
   transition(); // the window may also have been resized: re-centre the hit rect
 }
 
@@ -463,6 +543,11 @@ function onCharging(): void {
     ui.charging = false;
     shell.classList.remove("charging");
     transition();
+    // then the "Charging" toast, with the battery level when there is one
+    invoke<{ plugged: boolean | null; percent: number | null }>("power_status").then(
+      (p) => showToast({ icon: "bolt", title: "Charging", text: "Charger connected", value: p.percent === null ? undefined : `${p.percent}%` }),
+      () => showToast({ icon: "bolt", title: "Charging", text: "Charger connected" }),
+    );
   }, 3100);
 }
 
@@ -470,6 +555,7 @@ function onCharging(): void {
 function onFullscreen(hidden: boolean): void {
   ui.hidden = hidden;
   if (hidden) dismissAll(); // the terminal asks instead
+  if (hidden) (toasts.length = 0), clearTimeout(toastTimer); // live toasts are moments: none queue up behind a game
   shell.classList.toggle("away", hidden);
   clearTimeout(revertTimer);
   ui.hovering = false;
@@ -484,10 +570,11 @@ let backendHover = false; // last `hover` event: the pointer is really over the 
 
 function onHover(inside: boolean): void {
   backendHover = inside;
+  if (ui.dragging) return; // the window follows the pointer: it is always "inside"
   if (!inside) hideTip(); // click-through from here on: the webview gets no pointerout
   if (ui.hidden) return;
   ui.hovering = inside;
-  if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder" || (ui.state === "dictation" && !dictatingPage())) return;
+  if (ui.state === "notify" || ui.state === "toast" || ui.state === "prompt" || ui.state === "reminder" || (ui.state === "dictation" && !dictatingPage())) return; // settle() opens it after
   clearTimeout(revertTimer);
   if (inside) setState("hover");
   else if (ui.state === "hover" && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 1200);
@@ -513,8 +600,30 @@ function onPromptClosed(id: number): void {
   settle();
 }
 
-/** After a prompt, reminder or dictation ends: the next prompt, then the next reminder, a running dictation, then hover/idle. */
+/** Live toasts, shown one at a time below prompts, reminders and dictation; never while hidden. */
+function showToast(t: Toast): void {
+  if (ui.hidden) return;
+  toasts.push({ ...t, at: Date.now() });
+  if (takesOver(ui.state)) nextToast();
+}
+/** Shows the first fresh queued toast; false when none is left. */
+function nextToast(): boolean {
+  toasts.splice(0, toasts.length, ...freshOnly(toasts, Date.now()));
+  if (!toasts.length) return false;
+  clearTimeout(revertTimer);
+  if (ui.state === "toast") transition(); // the next queued one
+  else setState("toast");
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toasts.shift();
+    if (ui.state === "toast") settle(); // pre-empted by a prompt etc.: that one's settle() shows the rest
+  }, toasts[0].ms ?? TOAST_MS);
+  return true;
+}
+
+/** After a prompt, reminder, dictation or toast ends: the next prompt, reminder, a running dictation, a queued toast, then hover/idle. */
 function settle(): void {
+  if (!currentPrompt() && !currentDue() && !dictating() && nextToast()) return;
   const next: State = currentPrompt() ? "prompt" : currentDue() ? "reminder" : dictating() ? "dictation" : ui.hovering || ui.pinned ? "hover" : "idle";
   if (next === ui.state) transition(); // the next queued one
   else setState(next);
@@ -559,6 +668,7 @@ function openLocationEditor(): void {
 
 function onCalendar(p: CalPayload): void {
   ui.calendar = p;
+  compact.refresh("widgets");
   renderCalendar();
 }
 
@@ -658,7 +768,7 @@ function wireInput(): void {
     b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
   });
   new ResizeObserver(() => fitDock()).observe($("card-launcher")); // morph, openW, textScale, density gaps, Home shown
-  initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500));
+  focus = initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500), () => compact.refresh("pomodoro"));
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
     b.onclick = () => invoke("run_action", { id: b.dataset.action }).catch(console.error);
@@ -694,6 +804,7 @@ function wireInput(): void {
       ui.hovering = true; // stay open while the drag is over the island
       if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder") return;
       ui.tab = "shelf";
+      if (look().view === "compact") compact.select("shelf"); // the compact notch has no tabs: show the Shelf card
       if (ui.state === "hover") openTab("shelf");
       else setState("hover");
     },
@@ -708,6 +819,7 @@ function wireInput(): void {
     try {
       ui.tasks = await invoke<Task[]>("delete_task", { id });
       renderTasks(ui.tasks);
+      compact.refresh("todo", "widgets");
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
@@ -721,6 +833,7 @@ function wireInput(): void {
       ui.tasks = await invoke<Task[]>("add_task", { name: name.value, time: time.value, category: $("task-cat").dataset.cat ?? "Other" });
       name.value = time.value = "";
       renderTasks(ui.tasks);
+      compact.refresh("todo", "widgets");
     } catch (err) {
       showEvent("Tasks", String(err), 3500);
     }
@@ -782,7 +895,25 @@ function wireInput(): void {
 // ---------- boot ----------
 async function boot(): Promise<void> {
   hydrateIcons();
+  $("header").prepend(idleRing.el);
+  $("header").append(idleEq);
   initTooltips();
+  // hold anywhere that isn't a control, then drag to any screen edge (drag.ts, Rust moves the window)
+  initDrag(shell, {
+    canStart: (t) => !LINUX && !ui.hidden && (ui.state === "idle" || ui.state === "hover") && !t.closest("button, input, textarea, select, a, [role=button], [contenteditable], .sel"),
+    anchor: () => ({ x: hitRect.x + hitRect.w / 2, y: hitRect.y + hitRect.h / 2 }),
+    onStart: () => {
+      ui.dragging = true;
+      shell.classList.add("dragging");
+      ui.hovering = false;
+      setPinned(false);
+      setState("idle"); // drag the pill, not the open dashboard
+    },
+    onEnd: () => {
+      ui.dragging = false;
+      shell.classList.remove("dragging");
+    },
+  });
   if (LINUX) trackHoverInPage();
   // Pals follow the shared mood (assistant.ts feeds it from coding agent sessions)
   $("status-pal").append(createPal(22).el);
@@ -799,6 +930,11 @@ async function boot(): Promise<void> {
 
   await Promise.all([
     listen<boolean>("hover", (e) => onHover(e.payload)),
+    listen<{ name: string; kind: string }>("bt-connected", (e) =>
+      showToast({ icon: e.payload.kind === "audio" ? "headphones" : e.payload.kind === "input" ? "keyboard" : e.payload.kind === "phone" ? "phone" : "bluetooth", title: e.payload.name, text: "Connected" }),
+    ),
+    listen("shelf", () => cmpShelf === "files" && compact.refresh("shelf")), // a file dropped on the compact notch
+    listen("clips", () => cmpShelf === "clips" && compact.refresh("shelf")),
     listen<Perf>("perf", (e) => onPerf(e.payload)),
     listen<Media>("media", (e) => onMedia(e.payload)),
     listen<string>("lyric", (e) => onLyric(e.payload)),
@@ -841,7 +977,7 @@ async function boot(): Promise<void> {
   if (snap.usage) onUsage(snap.usage as Usage);
   const call = snap.notetaker as CallEvent | undefined;
   if (call && (call.state === "recording" || call.state === "processing")) setCall(call);
-  if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
+  if (snap.display) [ui.scale, ui.edge, ui.anchor] = [(snap.display as Display).uiScale, (snap.display as Display).edge ?? "top", (snap.display as Display).anchor]; // edge too: a saved side placement survives restarts // applied by onSettings' transition below
   if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 
   ui.tasks = await invoke<Task[]>("list_tasks");
@@ -858,6 +994,7 @@ async function boot(): Promise<void> {
     if (ui.media.state === "Playing" && ui.seekPreview === null && ui.progress.duration > 0) {
       ui.progress.position = Math.min(ui.progress.position + 1, ui.progress.duration);
       renderProgress();
+      compact.refresh("music");
     }
   }, 1000);
   window.setInterval(renderCalendar, 30_000); // relative labels ("In 20 min") while visible

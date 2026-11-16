@@ -59,6 +59,9 @@ function taskRow(t: Task, check: boolean): HTMLElement {
   return row;
 }
 
+/** A Tasks-tab row (cross-off circle + undo) for elsewhere: the compact Todo card. */
+export const taskRowFor = (t: Task): HTMLElement => taskRow(t, true);
+
 /** `done(id)` removes a task once its cross-off can no longer be undone. */
 export function initTasks(done: (id: number) => void): void {
   onDone = done;

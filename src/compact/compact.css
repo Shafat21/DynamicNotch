@@ -1,0 +1,116 @@
+/* Compact notch (compact.ts). Sizes are base px inside the zoomed #view, like the rest of the island. */
+#compact { display: flex; flex-direction: column; height: calc(var(--h) / var(--ui)); padding: 8px 14px 6px; box-sizing: border-box; }
+#compact[hidden] { display: none; }
+.cmp-head { display: flex; align-items: center; justify-content: center; gap: 8px; height: 22px; flex: none; font-size: var(--t13); }
+.cmp-date { color: var(--text); font-weight: 600; }
+.cmp-time { font-weight: 800; font-variant-numeric: tabular-nums; }
+.cmp-ring { flex: none; rotate: -90deg; }
+.cmp-ring circle { fill: none; stroke-width: 3; }
+.cmp-ring .track { stroke: var(--track); }
+.cmp-ring .arc { stroke: var(--success); stroke-linecap: round; transition: stroke-dasharray 0.6s var(--ease); }
+.cmp-body { flex: 1; min-height: 0; display: flex; align-items: center; gap: 8px; }
+.cmp-card { flex: 1; min-width: 0; height: 100%; overflow: hidden; }
+.cmp-card.in { animation: cmp-in 0.32s var(--ease); }
+.cmp-card.in[data-dir="-1"] { animation-name: cmp-in-back; }
+@keyframes cmp-in { from { opacity: 0; transform: translateX(18px); } }
+@keyframes cmp-in-back { from { opacity: 0; transform: translateX(-18px); } }
+.cmp-arrow {
+  flex: none; width: 24px; height: 24px; display: grid; place-items: center; padding: 0 0 2px; border: 0; border-radius: 50%;
+  background: var(--hover); color: var(--text); font-size: 16px; line-height: 1; opacity: 0.75; transition: opacity 0.2s, background 0.2s;
+}
+.cmp-arrow:hover { opacity: 1; background: var(--active); }
+.cmp-dots { display: flex; justify-content: center; gap: 5px; height: 10px; flex: none; align-items: center; }
+.cmp-dot { width: 5px; height: 5px; padding: 0; border: 0; border-radius: 999px; background: var(--track); transition: width 0.25s var(--ease), background 0.25s; }
+.cmp-dot[aria-selected="true"] { width: 14px; background: var(--text); }
+.cmp-placeholder { height: 100%; display: grid; place-items: center; color: var(--muted); font-size: var(--t13); }
+/* the idle pill in compact view: ring · time/song · sound bars, no Pal */
+#shell[data-view="compact"] #status-pal { display: none; }
+.header :is(.cmp-ring, .idle-eq) { display: none; }
+#shell[data-view="compact"] .header :is(.cmp-ring, .idle-eq) { display: inline-flex; }
+@media (prefers-reduced-motion: reduce) { .cmp-card.in { animation: none; } }
+
+/* ----- cards (music.ts, pomodoro.ts) ----- */
+.cm-btn { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text); transition: background 0.2s; }
+.cm-btn:hover { background: var(--hover); }
+.cm-btn.cm-play { width: 36px; height: 36px; background: var(--text); color: #000; }
+.cm-btn.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.cm-music { height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.cm-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cm-art { width: 44px; height: 44px; flex: none; border-radius: 10px; overflow: hidden; background: linear-gradient(160deg, color-mix(in srgb, var(--media, #444) 70%, #fff 10%), #111); }
+.cm-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cm-meta { min-width: 0; }
+.cm-title { font-weight: 700; font-size: var(--t15); }
+.cm-artist { color: var(--muted); font-size: var(--t12); }
+.cm-bar { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; cursor: pointer; }
+.cm-fill { display: block; height: 100%; width: 0; background: var(--text); border-radius: 2px; transition: width 0.4s linear; }
+.cm-times { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--t11); font-variant-numeric: tabular-nums; }
+.cm-times .cm-bar { flex: 1; }
+.cm-music.player { flex-direction: row; align-items: center; gap: 14px; }
+.cm-music.player .cm-art { width: 72px; height: 72px; border-radius: 14px; }
+.cm-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cm-music.player .cm-btn { width: 28px; height: 28px; }
+.cm-music.player .cm-btn.cm-play { width: 32px; height: 32px; }
+.cm-ctrl { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.cm-ctrl .cm-lyr { margin-right: auto; }
+.cm-ctrl::after { content: ""; width: 30px; margin-left: auto; } /* balances the lyrics button so play stays centred */
+.cm-music.lyrics { flex-direction: row; align-items: stretch; gap: 14px; }
+.cm-side { width: 52%; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; }
+.cm-lyrics { flex: 1; min-width: 0; display: grid; align-items: center; padding-left: 14px; border-left: 1px solid var(--line); }
+.cm-line { font-weight: 800; font-size: var(--t15); line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.cm-line.in { animation: cmp-in 0.3s var(--ease); }
+.cp { height: 100%; display: flex; align-items: center; gap: 18px; }
+.cp-left { flex: 1; min-width: 0; }
+.cp-time { font-size: 34px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.cp-ends { color: color-mix(in srgb, var(--accent) 80%, var(--text)); margin-top: 2px; }
+.cp-bar { margin-top: 8px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.cp-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.4s linear; }
+.cp-right { display: flex; align-items: center; gap: 8px; padding-left: 18px; border-left: 1px solid var(--line); align-self: stretch; }
+
+/* ----- shelf / todo cards ----- */
+[data-card="shelf"] { display: flex; flex-direction: column; gap: 6px; }
+.cs-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cs-seg { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--hover); }
+.cs-mode { padding: 2px 10px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: var(--t11); font-weight: 600; }
+.cs-mode[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.cs-list { flex: 1; min-height: 0; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.cs-drop { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1.5px dashed var(--track); border-radius: 12px; font-size: var(--t13); }
+.cs-tile, .cs-clip { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--hover); color: var(--text); text-align: left; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.cs-tile { width: 76px; align-items: center; }
+.cs-tile img { width: 28px; height: 28px; }
+.cs-tile.gone { opacity: 0.45; }
+.cs-name { max-width: 100%; font-size: var(--t11); }
+.cs-clip { width: 112px; justify-content: space-between; }
+.cs-text { font-size: var(--t11); line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+:is(.cs-tile, .cs-clip):hover { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: var(--active); }
+.cs-note { flex: none; }
+.ct { height: 100%; display: flex; gap: 14px; }
+.ct-left { width: 34%; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.ct-title { font-weight: 800; font-size: var(--t13); color: var(--success); }
+.ct-count b { font-size: 28px; font-weight: 800; line-height: 1; }
+.ct-add input { margin-top: 6px; width: 100%; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--hover); color: var(--text); font-size: var(--t12); }
+.ct-list { flex: 1; min-width: 0; overflow-y: auto; gap: 4px; scrollbar-width: thin; }
+.ct-list .task-row { padding: 3px 8px; gap: 8px; }
+.ct-list .task-name { font-size: var(--t13); }
+.ct-list .task-check { width: 16px; height: 16px; }
+.ct-list .task-cat { font-size: var(--t11); }
+
+/* ----- widgets card ----- */
+.cw { height: 100%; display: flex; gap: 10px; }
+.cw > div { border-radius: 14px; background: var(--hover); padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.cw-week { flex: 1.5; min-width: 0; }
+.cw-power { flex: 1; }
+.cw-label { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; color: var(--muted); }
+.cw-days { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+.cw-day { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding-bottom: 5px; }
+.cw-dow { font-size: 9px; color: var(--muted); font-weight: 700; }
+.cw-num { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-size: var(--t12); }
+.cw-day.past .cw-num { color: var(--muted); font-weight: 500; }
+.cw-day.today .cw-num { background: var(--accent); color: var(--accent-fg); }
+.cw-dot { position: absolute; bottom: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--success); }
+.cw-line { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.cw-pip { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.cw-pbody { display: flex; align-items: center; gap: 10px; }
+.cw-pct { display: block; font-size: 22px; font-weight: 800; line-height: 1.1; }
+.cw-state { color: var(--muted); }
+.cw-power.charging .cw-state { color: var(--success); }
+.cw-power .cmp-ring { stroke-width: 2.5; }

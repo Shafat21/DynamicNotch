@@ -7,7 +7,7 @@ export type LayoutItem = { id: string; visible: boolean };
 export type Layout = { tabs: LayoutItem[]; home: LayoutItem[] };
 export type Appearance = {
   theme: string; accent: string; iconStyle: string; shape: string; density: string;
-  radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string;
+  radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string; view: string;
   collapsedW: number; collapsedH: number; openW: number; openH: number;
 };
 export type Look = { appearance: Appearance; layout: Layout; theme: Theme; themes: Theme[] };

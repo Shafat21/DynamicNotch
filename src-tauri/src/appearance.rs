@@ -23,6 +23,8 @@ pub struct Appearance {
     pub collapsed_h: f64,
     pub open_w: f64,
     pub open_h: f64,
+    /// "dashboard" (tab bar + pages) or "compact" (the compact notch: one card at a time).
+    pub view: String,
 }
 
 impl Default for Appearance {
@@ -43,6 +45,7 @@ impl Default for Appearance {
             collapsed_h: 40.0,
             open_w: 760.0,
             open_h: 260.0,
+            view: "dashboard".into(),
         }
     }
 }
@@ -120,6 +123,7 @@ pub fn sanitize(a: Appearance) -> Appearance {
         card_opacity: clamp(a.card_opacity, 0.3, 1.0, d.card_opacity),
         tab_labels: one_of(a.tab_labels, &["always", "active", "never"], &d.tab_labels),
         open_on: one_of(a.open_on, &["home", "last"], &d.open_on),
+        view: one_of(a.view, &["dashboard", "compact"], &d.view),
         collapsed_w: clamp(a.collapsed_w, 140.0, 320.0, d.collapsed_w),
         collapsed_h: clamp(a.collapsed_h, 28.0, 48.0, d.collapsed_h),
         open_w: clamp(a.open_w, 560.0, 1000.0, d.open_w),
@@ -201,6 +205,14 @@ pub fn save(db: &Db, a: &Appearance, l: &Layout) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn view_defaults_and_rejects_unknown() {
+        let d = Appearance::default();
+        assert_eq!(d.view, "dashboard");
+        assert_eq!(merge_patch(&d, &json!({"view": "weird"})).view, "dashboard");
+        assert_eq!(merge_patch(&d, &json!({"view": "compact"})).view, "compact");
+    }
 
     #[test]
     fn defaults_and_sanitize() {
