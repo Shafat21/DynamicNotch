@@ -1,0 +1,39 @@
+/* Tooltip bubble (tooltip.ts). Uses each window's theme variables, with fallbacks. */
+.tip {
+  position: fixed;
+  z-index: 10000;
+  max-width: 280px;
+  padding: 5px 9px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card, #2c3450) 88%, black);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.42), 0 1px 3px rgb(0 0 0 / 0.3);
+  color: var(--text, #f2f4f8);
+  font: 500 12px/1.35 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  opacity: 0;
+  translate: 0 -3px;
+  transition: opacity 0.12s, translate 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tip[data-side="above"] { translate: 0 3px; }
+.tip.on { opacity: 1; translate: 0 0; }
+
+/* little arrow pointing at the element */
+.tip::before {
+  content: "";
+  position: absolute;
+  left: clamp(10px, var(--arrow-x, 50%), calc(100% - 10px));
+  width: 8px;
+  height: 8px;
+  background: inherit;
+  border: inherit;
+  border-radius: 2px;
+  translate: -50% 0;
+  rotate: 45deg;
+}
+.tip[data-side="below"]::before { top: -5px; border-right: 0; border-bottom: 0; }
+.tip[data-side="above"]::before { bottom: -5px; border-left: 0; border-top: 0; }
+
+@media (prefers-reduced-motion: reduce) { .tip { transition: opacity 0.12s; translate: none; } }

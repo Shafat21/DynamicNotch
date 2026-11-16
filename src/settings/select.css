@@ -1,0 +1,45 @@
+/* Themed dropdown (ui.ts select), shared by the Settings window and the island (Sound tab).
+   Uses each window's --field / --line / --card / --accent / --muted / --text / --ease. */
+.sel { position: relative; z-index: 1; min-width: 240px; }
+.sel.open { z-index: 50; } /* above later rows' switches */
+.sel-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 10px 0 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--field); text-align: left; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sel-btn:hover { border-color: rgb(255 255 255 / 0.16); }
+.sel.open .sel-btn { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 7%, var(--field)); }
+.sel-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-text .sel-detail { margin-left: 8px; }
+.sel-chev { flex-shrink: 0; color: var(--muted); transition: transform 0.2s var(--ease); }
+.sel.open .sel-chev { transform: rotate(180deg); color: var(--accent); }
+
+.sel-list {
+  /* right-aligned with the button (controls sit at the row's right edge); grows left to fit its longest option */
+  position: absolute; top: calc(100% + 6px); right: 0; min-width: 100%; width: max-content; max-width: 420px;
+  max-height: 260px; overflow-y: auto;
+  margin: 0; padding: 5px; list-style: none; outline: none;
+  border: 1px solid rgb(255 255 255 / 0.1); border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 92%, black);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+  animation: sel-in 0.16s var(--ease);
+}
+.sel.up .sel-list { top: auto; bottom: calc(100% + 6px); }
+@keyframes sel-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.sel.up .sel-list { animation-name: sel-in-up; }
+@keyframes sel-in-up { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .sel-list { animation: none; } .sel-chev { transition: none; } }
+
+.sel-opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px 7px 8px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.sel-opt.active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.sel-opt[aria-selected="true"] { color: var(--text); font-weight: 600; }
+.sel-check { flex-shrink: 0; color: var(--accent); visibility: hidden; }
+.sel-opt[aria-selected="true"] .sel-check { visibility: visible; }
+.sel-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* only past the list's 420 px max */
+.sel-opt .sel-detail { flex-shrink: 0; margin-right: 6px; }
+.sel-tag, .sel-check { flex-shrink: 0; }
+.sel-detail { color: var(--muted); font-size: 12.5px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.sel-tag {
+  margin-left: auto; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
