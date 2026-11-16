@@ -108,7 +108,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            engine: "local".into(),
+            engine: if super::local::AVAILABLE { "local" } else { "cloud" }.into(), // no Whisper in this build: Cloud
             model: "base".into(),
             language: "auto".into(),
             // Linux has no modifier-only hook (spec §23.7: best effort)

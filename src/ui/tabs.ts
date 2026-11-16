@@ -49,8 +49,9 @@ export function renderTabs(items: LayoutItem[], current: string): void {
   more.onclick = (e) => {
     e.stopPropagation();
     const menu = $("more-menu");
-    menu.style.left = `${more!.offsetLeft}px`;
     menu.hidden = !menu.hidden;
+    // clamp so the (possibly 2-column) menu stays inside the island
+    menu.style.left = `${Math.max(0, Math.min(more!.offsetLeft, menu.parentElement!.clientWidth - menu.offsetWidth))}px`;
   };
   closeMore();
   active = current;

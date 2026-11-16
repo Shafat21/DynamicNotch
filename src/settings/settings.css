@@ -86,7 +86,7 @@ h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .btn:hover { background: var(--card); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn.small { padding: 3px 10px; font-size: 12.5px; }
-select, input[type="text"], input[type="url"] {
+select, input[type="text"], input[type="url"], input[type="password"] {
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -97,6 +97,8 @@ select { min-width: 220px; cursor: pointer; }
 input[aria-invalid="true"] { border-color: #ff6b6b; }
 .inline-form { display: flex; gap: 6px; }
 .inline-form input { width: 240px; }
+.field-err { max-width: 320px; font-size: 12.5px; color: #ff6b6b; text-align: right; }
+.seg button:disabled { opacity: 0.45; cursor: default; }
 
 .seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--field); }
 .seg button { padding: 5px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }

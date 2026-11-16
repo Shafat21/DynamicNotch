@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 pub struct Appearance {
     pub theme: String,
     pub accent: String,
-    pub bg_mode: String,
     pub icon_style: String,
     pub badge_colors: BTreeMap<String, String>,
     pub shape: String,
@@ -31,7 +30,6 @@ impl Default for Appearance {
         Self {
             theme: "Midnight".into(),
             accent: String::new(),
-            bg_mode: "glass".into(),
             icon_style: "line".into(),
             badge_colors: BTreeMap::new(),
             shape: "pill".into(),
@@ -74,8 +72,8 @@ pub const THEMES: [Theme; 7] = [
 ];
 
 pub const TAB_IDS: &[&str] = &["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard", "sound", "devices", "shelf"];
-pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders", "sound", "devices"];
-// extra grid cards (system, tasks, sound, devices) start hidden so Home keeps its 4 primary cards without scrolling
+pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders", "sound", "devices", "dictation"];
+// extra grid cards (system, tasks, sound, devices, dictation) start hidden so Home keeps its 4 primary cards without scrolling
 const HOME_DEFAULT_VISIBLE: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "notes", "reminders"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -109,7 +107,6 @@ pub fn sanitize(a: Appearance) -> Appearance {
     Appearance {
         theme: one_of(a.theme, &names, &d.theme),
         accent: if is_hex(&a.accent) { a.accent } else { String::new() },
-        bg_mode: one_of(a.bg_mode, &["solid", "glass"], &d.bg_mode),
         icon_style: one_of(a.icon_style, &["line", "badges"], &d.icon_style),
         badge_colors: a
             .badge_colors
@@ -188,13 +185,8 @@ pub fn load(db: &Db) -> (Appearance, Layout) {
         .as_deref()
         .and_then(|s| serde_json::from_str::<Value>(s).ok())
         .map_or_else(Appearance::default, |v| merge_patch(&Appearance::default(), &v));
-    if stored.is_none() {
-        match db.get("island_style").ok().flatten().as_deref() {
-            Some("Default") => a.bg_mode = "solid".into(),
-            Some("Liquid Glass") => a.bg_mode = "glass".into(),
-            Some("Notch Nook") => a.shape = "notch".into(),
-            _ => {}
-        }
+    if stored.is_none() && db.get("island_style").ok().flatten().as_deref() == Some("Notch Nook") {
+        a.shape = "notch".into();
     }
     let l = db.get("layout").ok().flatten().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     (sanitize(a), normalize_layout(l))
@@ -213,7 +205,7 @@ mod tests {
     #[test]
     fn defaults_and_sanitize() {
         let d = Appearance::default();
-        assert_eq!((d.theme.as_str(), d.bg_mode.as_str(), d.icon_style.as_str()), ("Midnight", "glass", "line"));
+        assert_eq!((d.theme.as_str(), d.icon_style.as_str()), ("Midnight", "line"));
         let bad = Appearance { theme: "Nope".into(), radius: 99.0, text_scale: 0.1, accent: "red".into(), density: "huge".into(), open_w: 5000.0, ..d.clone() };
         let s = sanitize(bad);
         assert_eq!(s.theme, "Midnight"); assert_eq!(s.radius, 40.0); assert_eq!(s.text_scale, 0.85);
@@ -242,6 +234,7 @@ mod tests {
         assert!(old.home.iter().find(|h| h.id == "notes").unwrap().visible);
         assert!(old.home.iter().find(|h| h.id == "reminders").unwrap().visible);
         assert!(!old.home.iter().find(|h| h.id == "sound").unwrap().visible); // grid card: appended hidden
+        assert!(!old.home.iter().find(|h| h.id == "dictation").unwrap().visible);
         assert!(!old.home.iter().find(|h| h.id == "devices").unwrap().visible);
         assert!(!old.home.iter().find(|h| h.id == "system").unwrap().visible); // other ids keep their (hidden) default
     }
@@ -272,6 +265,19 @@ mod tests {
         let a = load(&db).0;
         assert_eq!((a.theme.as_str(), a.radius, a.open_w, a.text_scale), ("Ember", 20.0, 1000.0, 1.0));
         db.set("appearance", "[1]").unwrap();
+        assert_eq!(load(&db).0, Appearance::default());
+    }
+    #[test]
+    fn stored_glass_background_loads_as_solid_and_is_dropped_on_save() {
+        let db = Db::open_in_memory().unwrap();
+        db.set("appearance", r#"{"theme":"Rose","bgMode":"glass"}"#).unwrap();
+        let (a, l) = load(&db);
+        assert_eq!(a.theme, "Rose");
+        save(&db, &a, &l).unwrap();
+        assert!(!db.get("appearance").unwrap().unwrap().contains("bgMode"));
+        // the old island_style "Liquid Glass" no longer means anything
+        let db = Db::open_in_memory().unwrap();
+        db.set("island_style", "Liquid Glass").unwrap();
         assert_eq!(load(&db).0, Appearance::default());
     }
     #[test]

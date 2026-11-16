@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PalMood } from "./mood";
 import { createPal, updateMood, type Pal } from "./pal";
+import { costText, level, limitText, live, pct, resetText, staleText, type Level, type Usage, type UsageWindow } from "./usage";
 
 export type Status = "idle" | "working" | "needs-you" | "done" | "error";
 export type Session = { id: string; project: string; cwd: string; status: Status; message: string; updatedAt: number }; // updatedAt: unix s
@@ -23,9 +24,11 @@ const st = {
   queue: [] as { p: Prompt; at: number }[], // FIFO; [0] is on screen
   cardId: null as string | null, // session picked on the card (wheel / ‹ ›); null = newest
   note: "", // connect_claude error
+  usage: null as Usage | null, // sticky `usage`; null until a statusLine ever arrived (hide the widget)
 };
 let seen: Map<string, Status> | null = null; // statuses from the previous `sessions`; null before the first
 let typing = false; // an island input has focus
+let dictating = false; // dictation is recording
 let heard = false; // 2 s after a session started working (UserPromptSubmit)
 let doneRecently = false;
 let heardTimer = 0;
@@ -69,7 +72,7 @@ function mood(): void {
     connected: st.bridge.connected,
     statuses: st.sessions.map((s) => s.status),
     promptPending: st.queue.length > 0,
-    listening: typing || heard,
+    listening: typing || heard || dictating,
     doneRecently,
     quietForMs: newest ? Date.now() - newest * 1000 : 0,
   });
@@ -77,6 +80,11 @@ function mood(): void {
 
 export function setTyping(on: boolean): void {
   typing = on;
+  mood();
+}
+
+export function setDictating(on: boolean): void {
+  dictating = on;
   mood();
 }
 
@@ -106,6 +114,14 @@ export function setBridge(b: Bridge): void {
   if (b.connected) st.note = "";
   render();
 }
+
+export function setUsage(u: Usage): void {
+  st.usage = u;
+  renderCard();
+  renderTab();
+}
+
+export const usage = () => st.usage;
 
 export const anyWorking = () => st.sessions.some((s) => s.status === "working");
 
@@ -148,8 +164,8 @@ function renderCard(): void {
     const sub = el("span", "muted ell", st.bridge.online ? (st.bridge.connected ? "Connected" : st.note || "Not connected") : "Offline");
     sub.title = sub.textContent!;
     col.append(el("b", "ell", "Claude Code"), sub);
-    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect Claude Code", connect) : el("div", "pal-msg muted", text);
-    return card.replaceChildren(row, foot);
+    const foot = st.bridge.online && !st.bridge.connected ? button("btn primary pal-connect", "Connect", connect, "Connect Claude Code") : el("div", "pal-msg muted", text);
+    return card.replaceChildren(row, ...(st.bridge.connected ? usageCard() : []), foot);
   }
   const list = st.sessions;
   const i = Math.max(0, list.findIndex((s) => s.id === st.cardId));
@@ -162,7 +178,86 @@ function renderCard(): void {
   msg.title = s.message;
   foot.append(msg);
   if (list.length > 1) foot.append(button("bar-btn", "‹", () => step(-1), "Previous session"), button("bar-btn", "›", () => step(1), "Next session"));
-  card.replaceChildren(row, foot);
+  card.replaceChildren(row, ...usageCard(), foot);
+}
+
+// ---------- plan usage (statusLine rate_limits) ----------
+const nowS = () => Date.now() / 1000;
+const NS = "http://www.w3.org/2000/svg";
+
+/** Small progress ring: accent, amber from 80 %, red from 95 % / limit reached. */
+function ring(p: number, lv: Level): SVGSVGElement {
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("class", "usage-ring");
+  svg.setAttribute("aria-hidden", "true");
+  svg.dataset.level = lv;
+  for (const [cls, frac] of [["track", 1], ["arc", Math.min(1, p / 100)]] as const) {
+    const c = document.createElementNS(NS, "circle");
+    Object.entries({ cx: 10, cy: 10, r: 8, pathLength: 100, class: cls, "stroke-dasharray": `${frac * 100} 100` }).forEach(([k, v]) => c.setAttribute(k, String(v)));
+    svg.append(c);
+  }
+  return svg;
+}
+
+function bar(w: UsageWindow, lv: Level): HTMLElement {
+  const b = el("div", "bar usage-bar");
+  const fill = el("i", "");
+  fill.style.width = `${Math.min(100, w.usedPercentage)}%`;
+  b.dataset.level = lv;
+  b.append(fill);
+  return b;
+}
+
+/** Usage rows for the Home Pal card (empty when nothing is known or every window has reset). */
+function usageCard(): HTMLElement[] {
+  const u = st.usage;
+  const now = nowS();
+  const five = u && live(u.fiveHour, now);
+  const week = u && live(u.sevenDay, now);
+  if (!u || (!five && !week && !u.limitReached)) return [];
+  const box = el("div", "usage");
+  box.title = [u.limitMessage, staleText(u.updatedAt, now)].filter(Boolean).join("\n");
+  if (u.limitReached || five) {
+    const line = el("div", "usage-5h");
+    line.append(ring(u.limitReached ? 100 : five!.usedPercentage, level(five?.usedPercentage ?? 100, u.limitReached)));
+    if (u.limitReached) line.append(el("span", "usage-limit", limitText(u, now)));
+    else line.append(el("b", "", `5h ${pct(five!)}`), el("span", "muted ell", `resets ${resetText(five!.resetsAt, now)}`));
+    box.append(line);
+  }
+  if (week && !u.limitReached) { // the red text needs the room; the Pal tab still shows the week
+    const wk = el("div", "usage-week");
+    wk.append(el("span", "muted ell", `Week ${pct(week)} · ${resetText(week.resetsAt, now)}`), bar(week, level(week.usedPercentage)));
+    box.append(wk);
+  }
+  return [box];
+}
+
+/** Pal tab: both windows, the session cost estimate, staleness and the limit banner. */
+function usageBlock(): HTMLElement[] {
+  const u = st.usage;
+  if (!u) return [];
+  const now = nowS();
+  const block = el("div", "sess usage-block");
+  const head = el("div", "sess-head");
+  head.append(el("b", "", "Plan usage"), el("span", "spacer"));
+  const stale = staleText(u.updatedAt, now);
+  if (stale) head.append(el("span", "muted small", stale));
+  block.append(head);
+  if (u.limitReached) {
+    const lim = el("div", "usage-limit small", limitText(u, now));
+    lim.title = u.limitMessage ?? "";
+    block.append(lim);
+  }
+  for (const [name, w] of [["5 hours", live(u.fiveHour, now)], ["Week", live(u.sevenDay, now)]] as const) {
+    if (!w) continue;
+    const lv = level(w.usedPercentage, u.limitReached && w.usedPercentage >= 100);
+    const r = el("div", "usage-row");
+    r.append(el("span", "usage-name small", name), bar(w, lv), el("b", "small usage-pct", pct(w)), el("span", "muted small ell usage-reset", `resets ${resetText(w.resetsAt, now)}`));
+    block.append(r);
+  }
+  if (u.sessionCostUsd !== undefined) block.append(el("div", "muted small", costText(u.sessionCostUsd)));
+  return block.childElementCount > 1 ? [block] : [];
 }
 
 function step(by: number): void {
@@ -181,6 +276,7 @@ function renderTab(): void {
   state.replaceChildren(el("b", "", "Claude Code"), el("span", "muted small", text ?? `${n} session${n === 1 ? "" : "s"}`));
   if (st.bridge.online && !st.bridge.connected) state.append(button("btn primary", "Connect Claude Code", connect));
   $("pal-sessions").replaceChildren(
+    ...usageBlock(),
     ...st.sessions.map((s) => {
       const row = el("div", "sess");
       const head = el("div", "sess-head");
@@ -317,7 +413,7 @@ function renderPrompt(): void {
     qs.forEach((q, i) => {
       const box = el("div", "q");
       const title = el("div", "q-text");
-      if (q.header) title.append(el("span", "lbl", q.header.toUpperCase()));
+      if (q.header) title.append(el("span", "lbl", q.header));
       title.append(el("span", "", q.question));
       if (q.multiSelect) title.append(el("span", "muted small", "· pick any"));
       const opts = el("div", "opts");
@@ -400,6 +496,7 @@ export function initAssistant(): void {
   window.setInterval(() => {
     mood(); // quietForMs → napping after 30 min
     renderTab(); // "3 min ago"
+    if (st.usage) renderCard(); // usage windows expire at their reset time
   }, 60_000);
   render();
 }

@@ -9,8 +9,6 @@ mod db;
 mod dictation;
 mod display;
 mod fullscreen;
-#[cfg(windows)]
-mod glass_spike; // SPIKE: remove
 mod launcher;
 mod menu;
 mod monitors;
@@ -18,6 +16,7 @@ mod notes;
 mod reminders;
 mod shelf;
 mod sound;
+pub mod statusline;
 mod window;
 mod worker;
 
@@ -39,6 +38,8 @@ pub struct AppState {
     pub sessions: Mutex<bridge::sessions::Sessions>,
     /// Permission / question prompts waiting for an answer in the island.
     pub prompts: bridge::Prompts,
+    /// Latest account-wide plan usage from the statusLine forwarder (sticky event `usage`).
+    pub usage: Mutex<bridge::usage::Usage>,
     /// True while a fullscreen app hides the island (spec §18).
     pub hidden: AtomicBool,
     /// Clipboard history (memory; mirrored to the DB only with "Remember across restarts").
@@ -95,6 +96,7 @@ pub fn run() {
                 hit: Mutex::new(window::Rect::default()),
                 sessions: Mutex::default(),
                 prompts: bridge::Prompts::default(),
+                usage: Mutex::default(),
                 hidden: AtomicBool::new(false),
             });
 
@@ -108,8 +110,6 @@ pub fn run() {
             reminders::spawn_scheduler(app.handle().clone());
             clipboard::spawn(app.handle().clone());
             sound::spawn(app.handle().clone());
-            #[cfg(windows)]
-            glass_spike::run(&win); // SPIKE: remove
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));

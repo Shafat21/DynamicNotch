@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(windows)]
 #[path = "clipboard_windows.rs"]
-mod os;
+pub(crate) mod os;
 #[cfg(target_os = "linux")]
 #[path = "clipboard_linux.rs"]
 mod os;

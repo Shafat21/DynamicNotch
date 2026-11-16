@@ -1,6 +1,6 @@
 //! Voice dictation (spec §23.7): hold the hotkey, speak, release → transcribe (local whisper.cpp or a
 //! cloud API) → paste at the cursor. Audio stays in memory. Events: `dictation`
-//! {state: "recording"|"transcribing"|"done"|"error"|"idle", level?, ms?, text?, pasted?, error?}.
+//! {state: "recording"|"transcribing"|"done"|"error"|"idle", level?, ms?, escCancels?, text?, pasted?, error?}.
 //! Works while a fullscreen app hides the island too; the UI decides what to show.
 
 pub mod audio;
@@ -246,8 +246,10 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
             }
             Step::None => {}
         }
-        if let (Phase::Recording { start }, Some((r, _))) = (m.phase, &rec) {
-            emit(&app, json!({"state": "recording", "level": r.level(), "ms": now - start}));
+        if let (Phase::Recording { start }, Some((r, s))) = (m.phase, &rec) {
+            // Esc (any other key) cancels only through the Windows modifier-only hook
+            let esc = cfg!(windows) && settings::parse_hotkey(&s.hotkey).is_ok_and(|h| h.key.is_none());
+            emit(&app, json!({"state": "recording", "level": r.level(), "ms": now - start, "escCancels": esc}));
         }
     }
 }

@@ -93,6 +93,29 @@ function confirmed(b: HTMLElement, kind: "launch" | "remove", hint: string): boo
 export function renderApps(apps: LauncherApp[], onLaunch: (a: LauncherApp) => void, onRemove: (a: LauncherApp) => void): void {
   clearTimeout(armTimer);
   for (const id of ["launcher", "launcher-grid"]) $(id).replaceChildren(...apps.map((a) => appButton(a, onLaunch, onRemove)));
+  fitDock();
+}
+
+/** Home dock: tiles that wrap past row 1 get .off and are counted on "+N" (opens the Launcher tab). */
+export function fitDock(): void {
+  const dock = $("launcher"), more = $("launcher-more");
+  if (!dock.offsetParent) return; // Home/launcher hidden: every offsetTop is 0; the observer refits on show
+  const apps = [...dock.children] as HTMLElement[];
+  dock.style.width = ""; // measure at the flexible width; trimmed to the visible tiles below
+  const wrapped = () => apps.filter((b) => b.offsetTop > apps[0].offsetTop);
+  more.hidden = true; // measure with the most room first
+  let off = wrapped();
+  if (off.length) {
+    more.hidden = false; // "+N" takes a slot: re-measure
+    off = wrapped();
+  }
+  apps.forEach((b) => b.classList.toggle("off", off.includes(b)));
+  // a wrapped flex row keeps its unwrapped width: trim it so the divider sits right after the last visible tile
+  const last = apps.filter((b) => !off.includes(b)).pop();
+  if (off.length && last) dock.style.width = `${last.offsetLeft + last.offsetWidth - dock.offsetLeft}px`;
+  more.textContent = `+${off.length}`;
+  more.title = `All apps (${off.length} more)`;
+  more.setAttribute("aria-label", more.title);
 }
 
 function appButton(a: LauncherApp, onLaunch: (a: LauncherApp) => void, onRemove: (a: LauncherApp) => void): HTMLElement {

@@ -47,7 +47,7 @@ fn open(owner: Option<HWND>) -> bool {
 }
 
 /// With the clipboard open: true when the source asked not to be recorded.
-fn private() -> bool {
+pub(crate) fn private() -> bool {
     unsafe {
         if IsClipboardFormatAvailable(RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing"))).is_ok() {
             return true;

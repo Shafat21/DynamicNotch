@@ -86,7 +86,12 @@ static BUSY: Mutex<()> = Mutex::new(());
 /// Download into `<app data>/models/<file>.part`, verify, then rename into place.
 pub fn download(app: &AppHandle, name: &str, progress: impl FnMut(u64, u64)) -> Result<PathBuf, String> {
     let m = info(name).ok_or_else(|| format!("Unknown model \"{name}\""))?;
-    let _busy = BUSY.try_lock().map_err(|_| "A model download is already running")?;
+    // a poisoned lock (earlier download panicked) is free again; only WouldBlock means busy
+    let _busy = match BUSY.try_lock() {
+        Ok(g) => g,
+        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return Err("A model download is already running".into()),
+    };
     let dest = path(app, name)?;
     std::fs::create_dir_all(dest.parent().unwrap()).map_err(|e| e.to_string())?;
     let tmp = dest.with_extension("part");

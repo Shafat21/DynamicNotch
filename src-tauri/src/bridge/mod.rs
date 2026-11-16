@@ -2,6 +2,7 @@ pub mod install;
 pub mod prompt;
 pub mod server;
 pub mod sessions;
+pub mod usage;
 
 use crate::AppState;
 use prompt::Answer;
@@ -126,6 +127,17 @@ pub fn is_connected_shown(app: &AppHandle) -> bool {
     last_bridge(app)["connected"] == true
 }
 
+/// Applies `f` to the account-wide usage and re-publishes sticky `usage` if it changed (lock held: keeps order).
+fn update_usage(app: &AppHandle, f: impl FnOnce(&mut usage::Usage) -> bool) {
+    let state = app.state::<AppState>();
+    let mut u = state.usage.lock().unwrap();
+    if f(&mut u) {
+        crate::publish(app, "usage", &*u);
+    }
+}
+
+const STATUSLINE_CHAIN: &str = "statusline_chain";
+
 fn publish_sessions(app: &AppHandle) {
     let list = app.state::<AppState>().sessions.lock().unwrap().list();
     crate::publish(app, "sessions", list);
@@ -148,16 +160,29 @@ pub fn spawn(app: AppHandle) {
     app.state::<AppState>().last.lock().unwrap().insert("bridge", base);
     publish_status(&app);
     publish_sessions(&app);
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(60));
-        app.state::<AppState>().sessions.lock().unwrap().prune(now());
-        publish_sessions(&app);
+    std::thread::spawn(move || {
+        upgrade_statusline(&app);
+        loop {
+            std::thread::sleep(Duration::from_secs(60));
+            app.state::<AppState>().sessions.lock().unwrap().prune(now());
+            publish_sessions(&app);
+            update_usage(&app, |u| u.expire(now() as i64));
+        }
     });
 }
 
 fn on_hook(app: &AppHandle, ev: Value) -> Value {
     if !is_interactive(&ev) {
         return json!({});
+    }
+    match ev["hook_event_name"].as_str() {
+        // statusLine forwarder (`--statusline`): account-wide usage only, never a session
+        Some("StatusLine") => {
+            update_usage(app, |u| u.apply_statusline(&ev, now() as i64));
+            return json!({});
+        }
+        Some("StopFailure") => update_usage(app, |u| u.apply_stop_failure(&ev)),
+        _ => {}
     }
     let state = app.state::<AppState>();
     let pop = state.sessions.lock().unwrap().apply(&ev, now());
@@ -214,7 +239,7 @@ pub fn set_connected(app: &AppHandle, on: bool) -> Result<(), String> {
         let ok = app
             .dialog()
             .message(format!(
-                "Add Dynamic Notch Island hooks to\n{}\n\nEvents: {events}\n\nThe current file is backed up to settings.json.dynamicnotch.bak.",
+                "Add Dynamic Notch Island hooks to\n{}\n\nEvents: {events}\n\nThe status line is also routed through the island to show plan usage; an existing status line keeps working and is restored on disconnect.\n\nThe current file is backed up to settings.json.dynamicnotch.bak.",
                 path.display()
             ))
             .title("Connect Claude Code")
@@ -223,15 +248,75 @@ pub fn set_connected(app: &AppHandle, on: bool) -> Result<(), String> {
         if !ok {
             return Ok(());
         }
-        install::write_settings(&path, |s| install::connect(s, &url, &token))?;
+        let command = our_statusline_command()?;
+        install::write_settings(&path, |s| {
+            install::connect(s, &url, &token);
+            if install::is_connected(s, &url, &token) {
+                connect_statusline(app, s, &command);
+            }
+        })?;
     } else if path.exists() {
-        install::write_settings(&path, |s| install::disconnect(s, &url))?;
+        let chain = app.state::<AppState>().db.lock().unwrap().get(STATUSLINE_CHAIN).ok().flatten();
+        // DB lost the saved original: the backup from our last write still has it (read before it is overwritten)
+        let chain = chain.and_then(|t| serde_json::from_str::<Value>(&t).ok()).or_else(|| install::bak_statusline(&path));
+        install::write_settings(&path, |s| {
+            install::disconnect(s, &url);
+            install::disconnect_statusline(s, chain.as_ref());
+        })?;
+        let _ = app.state::<AppState>().db.lock().unwrap().set(STATUSLINE_CHAIN, ""); // "" = no chain
     }
     publish_status(app);
     if on && !is_connected_shown(app) {
         return Err(format!("{} has an unexpected \"hooks\" layout; no hooks were added.", path.display()));
     }
     Ok(())
+}
+
+fn our_statusline_command() -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    Ok(crate::statusline::statusline_command(&exe.to_string_lossy(), cfg!(windows), crate::statusline::git_bash().is_some()))
+}
+
+/// The user's status line is saved to the DB before ours replaces it in the file.
+fn connect_statusline(app: &AppHandle, s: &mut Value, command: &str) {
+    let state = app.state::<AppState>();
+    let db = state.db.lock().unwrap();
+    install::connect_statusline(s, command, |orig| {
+        let saved = db.get(STATUSLINE_CHAIN).ok().flatten().is_some_and(|c| !c.is_empty());
+        if saved && crate::statusline::looks_like_forwarder(orig) {
+            return true; // keep the user's real original; a forwarder copy is never stored over it
+        }
+        db.set(STATUSLINE_CHAIN, &orig.to_string()).is_ok()
+    });
+}
+
+/// One-time upgrade for users connected before the statusLine forwarder existed: add it on app start.
+/// Marked done once seen connected, so a status line the user changes later is never overridden.
+fn upgrade_statusline(app: &AppHandle) {
+    const DONE: &str = "statusline_upgraded";
+    let db_get = |k: &str| app.state::<AppState>().db.lock().unwrap().get(k).ok().flatten();
+    if db_get(DONE).is_some() {
+        return;
+    }
+    let (Ok(path), Ok((url, token)), Ok(command)) = (settings_path(app), endpoint(app), our_statusline_command()) else { return };
+    let Some(settings) = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { return };
+    if !install::is_connected(&settings, &url, &token) {
+        return;
+    }
+    if !settings.get("statusLine").is_some_and(crate::statusline::is_ours) {
+        let mut applied = false;
+        let r = install::write_settings(&path, |s| {
+            connect_statusline(app, s, &command);
+            applied = s.get("statusLine").is_some_and(crate::statusline::is_ours);
+        });
+        if let Err(e) = &r {
+            eprintln!("statusLine upgrade: {e}");
+        }
+        if r.is_err() || !applied {
+            return; // retried on the next start
+        }
+    }
+    let _ = app.state::<AppState>().db.lock().unwrap().set(DONE, "1");
 }
 
 /// 32 random bytes from the OS CSPRNG as 64 lowercase hex chars.

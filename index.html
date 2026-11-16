@@ -19,7 +19,7 @@
         <div id="content"><div id="view">
           <!-- Header: idle clock / playing title, notifications -->
           <div class="header" id="header">
-            <span class="icon" id="status-pal"></span>
+            <span class="icon" id="status-pal"><span class="usage-dot" id="usage-dot" title="Claude Code usage" hidden></span></span>
             <span class="icon" id="status-pop" hidden></span>
             <span class="spinner" id="status-spin" hidden title="Claude Code is working"></span>
             <span class="icon" id="status-icon" hidden></span>
@@ -28,6 +28,9 @@
 
           <!-- Reminder banner (state "reminder", reminders.ts): stays until Snooze / Done -->
           <div class="reminder" id="reminder" role="alert" hidden></div>
+
+          <!-- Dictation pill (state "dictation", dictation.ts): listening → transcribing → pasted / error -->
+          <div class="dictation" id="dictation" role="status" aria-live="polite" hidden></div>
 
           <!-- Open island: tab bar + one page per tab (spec §22.1) -->
           <div id="open" hidden>
@@ -64,7 +67,7 @@
                     <div id="pal-card"><span class="pal-face" id="pal-card-face"></span></div>
                   </div>
                   <div class="card" id="card-music" data-goto="music" role="button" tabindex="0">
-                    <div class="card-head"><span class="card-ic badge-only" data-badge="music" data-icon="music"></span><span class="lbl">NOW PLAYING</span></div>
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="music" data-icon="music"></span><span class="lbl">Now playing</span></div>
                     <div class="now">
                       <span class="now-art"><img id="tile-media-art" alt="" hidden /></span>
                       <span class="col"><b class="ell" id="tile-media-title">Nothing playing</b><span class="muted ell" id="tile-media-artist"></span></span>
@@ -87,12 +90,12 @@
                     <div id="cal-body"></div>
                   </div>
                   <button class="card" id="card-system" data-goto="system">
-                    <div class="card-head"><span class="card-ic badge-only" data-badge="system" data-icon="cpu"></span><span class="lbl">SYSTEM</span></div>
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="system" data-icon="cpu"></span><span class="lbl">System</span></div>
                     <div class="mini"><span>CPU</span><b id="card-cpu">--%</b></div><div class="bar"><div id="card-cpu-bar"></div></div>
                     <div class="mini"><span>RAM</span><b id="card-ram">--%</b></div><div class="bar"><div id="card-ram-bar"></div></div>
                   </button>
                   <button class="card" id="card-tasks" data-goto="tasks">
-                    <div class="card-head"><span class="card-ic badge-only" data-badge="tasks" data-icon="tasks"></span><span class="lbl">TASKS</span></div>
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="tasks" data-icon="tasks"></span><span class="lbl">Tasks</span></div>
                     <div id="card-task-list"></div>
                   </button>
                   <!-- Sound & brightness card (sound.ts); the background opens the Sound tab -->
@@ -116,7 +119,7 @@
                   <div class="card bt-card" id="card-devices" data-goto="devices" role="button" tabindex="0" title="Bluetooth">
                     <div class="card-head">
                       <span class="card-ic badge-only" data-badge="devices" data-icon="bluetooth"></span>
-                      <span class="lbl">BLUETOOTH</span>
+                      <span class="lbl">Bluetooth</span>
                       <span class="spacer"></span>
                       <button class="bar-btn" id="bt-card-refresh" data-icon="restart" data-size="14" title="Refresh" aria-label="Refresh Bluetooth devices"></button>
                       <button class="bar-btn" data-action="bluetooth" data-icon="cog" data-size="14" title="Bluetooth settings" aria-label="Open Bluetooth settings"></button>
@@ -125,13 +128,19 @@
                     <div class="bt-list" id="bt-card-list"></div>
                     <div class="small bt-err" id="bt-card-err" hidden></div>
                   </div>
+                  <!-- Dictation card (dictation.ts): last transcripts, memory only -->
+                  <div class="card" id="card-dictation">
+                    <div class="card-head"><span class="card-ic badge-only" data-badge="dictation" data-icon="mic"></span><span class="lbl">Dictation</span></div>
+                    <div class="dict-list" id="dict-list"></div>
+                  </div>
                 </div>
                 <div class="home-strip" id="home-strip">
-                  <div class="strip-launcher" id="card-launcher">
+                  <div class="strip-launcher" id="card-launcher" role="group" aria-label="Launcher">
                     <span class="card-ic badge-only" data-badge="launcher" data-icon="launcher"></span>
-                    <span class="lbl">LAUNCHER</span>
                     <div class="launcher" id="launcher"></div>
-                    <button class="app add" data-add-app data-icon="plus" title="Add app"></button>
+                    <span class="dock-sep" aria-hidden="true"></span>
+                    <button class="app" id="launcher-more" data-goto="launcher" hidden></button>
+                    <button class="app add" data-add-app data-icon="plus" title="Add app" aria-label="Add app"></button>
                   </div>
                   <div class="strip-notes" id="card-notes" title="Notes: press Enter to add">
                     <span class="card-ic badge-only" data-badge="notes" data-icon="notes"></span>
@@ -309,7 +318,7 @@
                   </div>
                   <div class="rem-cols">
                     <div class="rem-list" id="rem-upcoming"></div>
-                    <div class="rem-list"><span class="lbl">DONE TODAY</span><div class="rem-list" id="rem-done"></div></div>
+                    <div class="rem-list"><span class="lbl">Done today</span><div class="rem-list" id="rem-done"></div></div>
                   </div>
                 </div>
                 <form class="rem-form" id="rem-form" hidden>
@@ -319,8 +328,8 @@
                     <span class="muted small ell">The island tells you when it's time.</span>
                   </div>
                   <input id="rem-text" placeholder="Remind me to…" maxlength="200" autocomplete="off" spellcheck="false" />
-                  <div class="rem-chips"><span class="lbl">WHEN</span><div class="opts" id="rem-when"></div></div>
-                  <div class="rem-chips"><span class="lbl">REPEAT</span><div class="opts" id="rem-repeat"></div></div>
+                  <div class="rem-chips"><span class="lbl">When</span><div class="opts" id="rem-when"></div></div>
+                  <div class="rem-chips"><span class="lbl">Repeat</span><div class="opts" id="rem-repeat"></div></div>
                   <div class="rem-foot">
                     <input type="datetime-local" id="rem-pick" aria-label="Reminder time" hidden />
                     <span class="muted ell" id="rem-summary"></span>
@@ -366,7 +375,7 @@
                 </div>
                 <div class="snd-tab">
                   <div class="snd-col">
-                    <span class="lbl">OUTPUT</span>
+                    <span class="lbl">Output</span>
                     <div class="snd-row">
                       <button class="snd-ic snd-mute" id="snd-tab-mute" title="Mute"></button>
                       <input type="range" class="slider" id="snd-tab-vol" min="0" max="100" step="1" aria-label="Volume" />
@@ -379,7 +388,7 @@
                     </div>
                   </div>
                   <div class="snd-col">
-                    <span class="lbl">BRIGHTNESS</span>
+                    <span class="lbl">Brightness</span>
                     <div class="snd-list" id="snd-displays"></div>
                   </div>
                 </div>

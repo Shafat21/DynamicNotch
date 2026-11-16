@@ -48,6 +48,11 @@ pub fn multipart(boundary: &str, fields: &[(&str, &str)], file_name: &str, file:
     out
 }
 
+/// Upload + transcription budget for `samples` at 16 kHz: 30 s + 1 s per 4 s of audio, at most 120 s.
+fn timeout(samples: usize) -> Duration {
+    Duration::from_secs((30 + samples as u64 / 16_000 / 4).min(120))
+}
+
 pub fn transcribe(provider: &str, model: &str, key: &str, samples: &[f32], language: Option<&str>) -> Result<String, String> {
     let url = endpoint(provider)?;
     let boundary = format!("----DynamicNotch{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
@@ -59,7 +64,7 @@ pub fn transcribe(provider: &str, model: &str, key: &str, samples: &[f32], langu
         .header("Authorization", &format!("Bearer {key}"))
         .header("Content-Type", &format!("multipart/form-data; boundary={boundary}"))
         .config()
-        .timeout_global(Some(Duration::from_secs(30)))
+        .timeout_global(Some(timeout(samples.len())))
         .build()
         .send(&body[..]);
     let mut resp = match resp {
@@ -131,6 +136,14 @@ mod tests {
                         --XYZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\nRIFFdata\r\n\
                         --XYZ--\r\n";
         assert_eq!(String::from_utf8(body).unwrap(), expected);
+    }
+
+    #[test]
+    fn timeout_scales_with_audio_length() {
+        assert_eq!(timeout(0), Duration::from_secs(30));
+        assert_eq!(timeout(16_000 * 4), Duration::from_secs(31));
+        assert_eq!(timeout(16_000 * 120), Duration::from_secs(60)); // max recording
+        assert_eq!(timeout(16_000 * 3600), Duration::from_secs(120)); // capped
     }
 
     #[test]

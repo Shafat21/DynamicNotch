@@ -6,7 +6,7 @@ export type Theme = { name: string; bgFrom: string; bgTo: string; card: string; 
 export type LayoutItem = { id: string; visible: boolean };
 export type Layout = { tabs: LayoutItem[]; home: LayoutItem[] };
 export type Appearance = {
-  theme: string; accent: string; bgMode: string; iconStyle: string; shape: string; density: string;
+  theme: string; accent: string; iconStyle: string; shape: string; density: string;
   radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string;
   collapsedW: number; collapsedH: number; openW: number; openH: number;
 };

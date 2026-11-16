@@ -2,7 +2,7 @@
 //! is write-only (never returned).
 
 use super::settings::{apply_patch, parse_hotkey, Settings};
-use super::{audio, bind, cloud, models, send, Msg};
+use super::{audio, bind, cloud, local, models, send, Msg};
 use crate::AppState;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
@@ -47,25 +47,32 @@ pub async fn download_model(app: AppHandle, name: String) -> Res<()> {
     .map_err(|e| e.to_string())?
 }
 
-/// {tiny: {installed, size}, base: …, small: …}
+/// {tiny: {installed, size}, base: …, small: …, localAvailable: bool (local Whisper built in)}
 #[tauri::command]
 pub fn model_status(app: AppHandle) -> Value {
-    models::MODELS.iter().map(|m| (m.name.to_string(), json!({"installed": models::installed(&app, m.name), "size": m.size}))).collect::<serde_json::Map<_, _>>().into()
+    let mut m: serde_json::Map<_, _> = models::MODELS.iter().map(|m| (m.name.to_string(), json!({"installed": models::installed(&app, m.name), "size": m.size}))).collect();
+    m.insert("localAvailable".into(), json!(local::AVAILABLE));
+    m.into()
+}
+
+/// Keyring calls may block (e.g. a Secret Service unlock prompt): run them off the main thread.
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Res<T> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn set_cloud_key(provider: String, key: String) -> Res<()> {
-    cloud::set_key(&provider, &key)
+pub async fn set_cloud_key(provider: String, key: String) -> Res<()> {
+    blocking(move || cloud::set_key(&provider, &key)).await?
 }
 
 #[tauri::command]
-pub fn clear_cloud_key(provider: String) -> Res<()> {
-    cloud::clear_key(&provider)
+pub async fn clear_cloud_key(provider: String) -> Res<()> {
+    blocking(move || cloud::clear_key(&provider)).await?
 }
 
 #[tauri::command]
-pub fn has_cloud_key(provider: String) -> bool {
-    cloud::has_key(&provider)
+pub async fn has_cloud_key(provider: String) -> Res<bool> {
+    blocking(move || cloud::has_key(&provider)).await
 }
 
 #[tauri::command]

@@ -24,38 +24,31 @@ or plug in the charger.
 
 ```
  ┌──────────────────────── Rust (src-tauri) ────────────────────────┐
- │  monitors/ (one OS thread each)          hit.rs (25 ms loop)     │
- │   perf    → "perf"   every 1 s            cursor inside island?  │
- │   media   → "media", "lyric"  100 ms      → toggle click-through │
- │   weather → "weather" every 30 min        → emit "hover"         │
- │   notify  → "notify"  every 1 s                                  │
- │   system  → "keylock", "charging", "accent"                      │
- │                                                                  │
- │  db.rs (SQLite)   commands.rs (invoke API)   menu.rs (right-click)│
+ │  monitors/  one OS thread each: system, perf, weather, calendar, │
+ │             media, notify                                        │
+ │  window*    placement + click-through/hover (cursor poll)        │
+ │  watchers   display, fullscreen, reminders scheduler, clipboard, │
+ │             sound                                                │
+ │  bridge/    Claude Code hooks server (127.0.0.1), sessions,      │
+ │             prompts, usage;  statusline.rs = `--statusline` CLI  │
+ │  dictation/ hotkey -> mic -> cloud|local Whisper -> paste        │
+ │  db.rs (SQLite)   commands.rs (invoke API)   menu.rs             │
  └───────────────▲──────────────────────────────┬───────────────────┘
           invoke │                        emit  │  events
  ┌───────────────┴──────── WebView (src) ───────▼───────────────────┐
- │  main.ts   state machine: idle | hover | notify                  │
- │            picks size per state/feature, animates, swaps panels  │
- │  panels.ts tasks list/editor, month dots, basics control balls   │
- │  styles.css all visuals (shape, backgrounds, media fx, shine)    │
+ │  main.ts   state machine, sizing, tabs, panels, event wiring     │
+ │  one module per page (see file map), styles.css                  │
  └──────────────────────────────────────────────────────────────────┘
 ```
 
-**The window trick.** The real window is a fixed 1200×700 transparent, frameless, always-on-top,
-no-taskbar window. Only the pill is visible. Rust polls the cursor every 25 ms; outside the pill
-the window ignores the mouse (`set_ignore_cursor_events(true)`) so clicks reach the desktop.
-The frontend tells Rust where the pill is with `set_hit_rect`.
+**The window trick.** The real window is a transparent, frameless, always-on-top, no-taskbar window
+(1200x700 nominal; `display::fit_window` scales it for the chosen monitor's work area). Only the pill is
+visible. On Windows the cursor is polled and outside the pill the window ignores the mouse so clicks reach the
+desktop; the frontend reports the pill with `set_hit_rect`. On Linux this is **not implemented** (`window_linux.rs`).
 
-**State machine** (`src/main.ts`):
-- `idle` → small pill: clock, or song title / lyric if the media feature is selected and music plays.
-- `hover` → the cursor is on the island. Scrolling cycles the features
-  `perf → media → weather → calendar → month → basics`.
-- `notify` → a notification or Caps/Num Lock change. Shown for 3.5 s / 2.5 s, then goes back.
-- `charging` overrides the size (850×40 + glowing beams) for about 3 s.
-
-`transition()` sets the target size, starts the CSS morph (850 ms), a shine sweep, and the
-content cross-fade, then swaps the visible panel at 250 ms (when the content is invisible).
+**State machine** (`src/main.ts`): `idle` (small pill: clock/Pal, song title or lyric), `hover` (dashboard with tab bar),
+`notify` (notification or Caps/Num Lock change, then back), `charging` (short beam animation). `transition()` sets the
+target size, runs the CSS morph and swaps the visible page while the content is faded out.
 
 ---
 
@@ -63,81 +56,123 @@ content cross-fade, then swaps the visible panel at 250 ms (when the content is 
 
 ```
 DynamicNotch/
-├─ plan.md                ← this file
-├─ index.html             ← all panel markup (static), filled in by TS
-├─ src/
-│  ├─ main.ts             ← state machine, event listeners, input wiring, boot
-│  ├─ panels.ts           ← tasks, month progress, basics control balls
-│  ├─ icons.ts            ← MDI icon table + SVG helper
-│  └─ styles.css          ← every visual: shape, notch ears, backgrounds, media fx, shine, charging
+├─ plan.md, README.md
+├─ index.html              <- static markup for the island and pages
+├─ src/                    <- vanilla TS + CSS (Vite)
+│  ├─ main.ts              <- state machine, event listeners, input wiring, boot
+│  ├─ panels.ts            <- tasks, month progress
+│  ├─ assistant.ts         <- Claude Code card: sessions, prompts
+│  ├─ usage.ts             <- usage-limit ring + reset text (5 h / weekly)
+│  ├─ dictation.ts         <- dictation HUD (recording / transcribing / pasted / error)
+│  ├─ pal.ts, pal-shapes.ts, mood.ts   <- Pal face and its 8 moods
+│  ├─ calendar.ts, focus.ts, notes.ts, reminders.ts, clipboard.ts, sound.ts, bluetooth.ts, shelf.ts
+│  ├─ idle-width.ts        <- idle pill width
+│  ├─ icons-line.ts        <- line icon set
+│  ├─ ui/                  <- home.ts (Home cards), tabs.ts (tab bar + More overflow), theme.ts (apply theme)
+│  ├─ settings/            <- separate Settings window: main.ts, store.ts, ui.ts, icons.ts, settings.css,
+│  │                          pages/ general, appearance, features, home, tabs, layout-list, about
+│  └─ styles.css
 ├─ src-tauri/
-│  ├─ Cargo.toml          ← Rust deps
-│  ├─ tauri.conf.json     ← window config (transparent, always-on-top, 1200×700), bundle
-│  ├─ capabilities/       ← frontend permissions (core only; app features go through our commands)
-│  ├─ icons/              ← generated from ../app-icon.svg (`npx tauri icon app-icon.svg`)
+│  ├─ Cargo.toml           <- feature `local-whisper` (optional, needs CMake + LLVM/libclang)
+│  ├─ tauri.conf.json, capabilities/, icons/
 │  └─ src/
-│     ├─ main.rs          ← entry point
-│     ├─ lib.rs           ← app setup, AppState, publish() helper, command registration
-│     ├─ db.rs            ← SQLite schema, migrations, settings + tasks (unit tested)
-│     ├─ commands.rs      ← #[tauri::command] API, validates all webview input
-│     ├─ hit.rs           ← click-through / hover detection loop
-│     ├─ menu.rs          ← native right-click menu
-│     ├─ actions.rs       ← allow-list of shell actions (shutdown, open apps…)
-│     └─ monitors/
-│        ├─ mod.rs        ← spawn_all(), shared HTTP client (10 s timeout)
-│        ├─ perf.rs       ← sysinfo: CPU, RAM, system drive, network speed
-│        ├─ media.rs      ← Windows media session, album-art colour, LRC lyrics
-│        ├─ weather.rs    ← Open-Meteo forecast + geocoding
-│        ├─ notify.rs     ← Windows toast notification listener
-│        └─ system.rs     ← accent colour, Caps/Num Lock, charger plug-in
-└─ app-icon.svg           ← source icon
+│     ├─ main.rs           <- entry; `--statusline` runs statusline.rs
+│     ├─ lib.rs            <- setup, AppState, publish(), generate_handler!
+│     ├─ db.rs             <- SQLite schema, migrations v1..v6, settings, tasks, apps, notes, reminders, clips, shelf
+│     ├─ commands.rs       <- #[tauri::command] API (validates webview input)
+│     ├─ menu.rs           <- right-click menu (Settings, Animation Style, Connect Claude, Quit)
+│     ├─ actions.rs        <- allow-list of shell actions
+│     ├─ appearance.rs     <- 7 themes, icon style, density, sizes, tab/home layout
+│     ├─ window.rs         <- placement, click-through, hit rect (+ window_windows / window_linux)
+│     ├─ display.rs        <- display choice, responsive scaling, display watcher
+│     ├─ fullscreen.rs     <- hide-in-fullscreen watcher (Linux impl always returns false)
+│     ├─ launcher.rs       <- app list, pick/launch, icons
+│     ├─ notes.rs, reminders.rs (scheduler thread, snooze/done, repeat)
+│     ├─ clipboard.rs      <- text history, memory-only by default, skips private copies (Windows)
+│     ├─ sound.rs, brightness.rs, bluetooth.rs, shelf.rs   <- each with _windows / _linux backends
+│     ├─ worker.rs         <- background job helper
+│     ├─ statusline.rs     <- `dynamic-notch.exe --statusline`: forwards Claude Code statusLine JSON to the bridge,
+│     │                       then runs the chained original statusLine
+│     ├─ bridge/           <- mod.rs (status, 15 s prompt wait), server.rs (loopback HTTP + token),
+│     │                       install.rs (settings.json hooks + statusLine, .dynamicnotch.bak),
+│     │                       sessions.rs, prompt.rs, usage.rs
+│     ├─ dictation/        <- mod.rs, settings.rs (hotkey parse), audio.rs (cpal), hotkey_*/paste_* (windows, linux),
+│     │                       cloud.rs (OpenAI/Groq + keyring), local.rs (whisper-rs, feature-gated),
+│     │                       models.rs (Hugging Face download + SHA-256), commands.rs
+│     └─ monitors/         <- mod.rs (spawn_all, HTTP client), perf.rs, weather.rs, calendar.rs (iCal),
+│                             media.rs, notify.rs, system.rs (media/notify/system have _windows/_linux)
+└─ scripts/usage.check.ts  <- usage helper check
 ```
 
 ---
 
-## 4. Backend ⇄ frontend contract
+## 4. Backend <-> frontend contract
 
-### Events (Rust → TS)
-| Event | Payload | Sticky¹ |
+### Events (Rust -> TS)
+Sticky events (via `publish()`) are cached in `AppState.last`; the page calls `get_snapshot` on load to catch up.
+
+| Event | Notes | Sticky |
 |---|---|---|
-| `perf` | `{cpu, ram, disk, down, up}` (percent, bytes/s) | yes |
-| `media` | `{state: "Playing"\|"Paused"\|"Idle", title, artist, accent}` | yes |
-| `lyric` | `string` (current line, `""` = none) | yes |
-| `weather` | `{city, temp, desc, icon, hourly: [{time, temp, icon}×5]}` | yes |
-| `accent` | `"#rrggbb"` Windows accent colour | yes |
-| `settings` | `{location, lat, lon, islandStyle, animationStyle, autostart}` | no |
-| `hover` | `bool` | no |
-| `keylock` | `{name: "Caps Lock"\|"Num Lock", on}` | no |
-| `notify` | `{app, title, text}` | no |
-| `charging` | `()` | no |
-| `edit-location` | `()` (menu → open the location input) | no |
+| `perf` | cpu, ram, disk, network speed | yes |
+| `weather`, `calendar` | forecast; agenda from the iCal link | yes |
+| `media`, `media-art`, `media-progress`, `lyric` | playback state, art, position, current lyric line | yes |
+| `accent` | OS accent colour | yes |
+| `sound` | volume / mute / device | yes |
+| `appearance` | theme, icons, density, layout | yes |
+| `fullscreen` | a fullscreen app is active | yes |
+| `bridge` | `{online, connected, error?}` | yes |
+| `sessions`, `usage` | Claude Code sessions; plan usage limits | yes |
+| `settings`, `apps`, `clips`, `shelf` | data changed | no |
+| `hover`, `keylock`, `notify`, `charging` | island input / notification events | no |
+| `prompt`, `prompt-closed` | Claude Code permission prompt / question shown, resolved | no |
+| `reminder-due` | `{id, text, ...}` | no |
+| `dictation`, `model-progress` | HUD state; local model download progress | no |
+| `shelf-drag` | drag phase (drop, ...) | no |
 
-¹ Sticky events are cached in `AppState.last`; the page calls `get_snapshot` on load to catch up.
-
-### Commands (TS → Rust, `invoke`)
-`get_settings`, `get_snapshot`, `list_tasks`, `add_task{name,category,time}`, `delete_task{id}`,
-`set_location{city}`, `media_control{action: toggle|next|prev}`, `run_action{id}`,
-`set_hit_rect{rect:{x,y,w,h}}`, `show_context_menu`.
+### Commands (TS -> Rust, `invoke`), from `generate_handler!` in lib.rs
+- **Settings/appearance:** `get_settings`, `open_settings`, `set_general`, `list_displays`, `open_link`, `get_appearance`, `set_appearance`, `apply_theme`, `reset_appearance`, `set_layout`, `get_snapshot`
+- **Tasks/notes:** `list_tasks`, `add_task`, `delete_task`, `list_notes`, `add_note`, `update_note`, `pin_note`, `delete_note`
+- **Reminders:** `list_reminders`, `quick_due`, `add_reminder`, `snooze_reminder`, `done_reminder`, `delete_reminder`
+- **Clipboard:** `list_clips`, `copy_clip`, `pin_clip`, `remove_clip`, `clear_clips`, `set_clip_paused`
+- **Shelf:** `list_shelf`, `open_shelf`, `reveal_shelf`, `copy_shelf_path`, `remove_shelf`, `clear_shelf`, `drag_out`
+- **Weather/calendar/media:** `set_location`, `set_calendar_url`, `open_join`, `media_control`, `media_seek`, `media_open_player`, `run_action`
+- **Devices:** `bt_state`, `bt_set_radio`, `bt_connect`, `bt_disconnect`, `sound_state`, `set_volume`, `set_mute`, `audio_devices`, `set_audio_device`, `brightness_displays`, `set_brightness`
+- **Launcher:** `list_apps`, `pick_app`, `remove_app`, `launch_app`
+- **Window/menu:** `set_hit_rect`, `show_context_menu`
+- **Claude Code:** `answer_prompt`, `connect_claude`, `disconnect_claude`
+- **Dictation:** `dictation_settings`, `set_dictation_settings`, `download_model`, `model_status`, `set_cloud_key`, `clear_cloud_key`, `has_cloud_key`, `list_mics`, `dictation_cancel`
 
 ---
 
 ## 5. Database (SQLite)
 
-File: `%APPDATA%\com.dynamicnotch.app\dynamic_notch.db`. Schema version is in `PRAGMA user_version`.
+File: `%APPDATA%\com.dynamicnotch.app\dynamic_notch.db` (Linux `~/.local/share/com.dynamicnotch.app/`). Schema version is in
+`PRAGMA user_version`; current version **6**. Dictation settings (`dictation_*`) and `bridge_port` are rows in `settings`.
 
 ```sql
+-- v1
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- keys: location, lat, lon, island_style, animation_style
-CREATE TABLE tasks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL, category TEXT NOT NULL, time TEXT NOT NULL, color TEXT NOT NULL
-);
+CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL,
+                    time TEXT NOT NULL, color TEXT NOT NULL);
+-- v2
+CREATE TABLE apps (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
+                   kind TEXT NOT NULL CHECK (kind IN ('path','action')), target TEXT NOT NULL,
+                   icon TEXT, position INTEGER NOT NULL);
+-- v3
+CREATE TABLE notes (id INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT NOT NULL,
+                    pinned INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
+-- v4
+CREATE TABLE reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, due_at INTEGER NOT NULL,
+                        repeat TEXT NOT NULL DEFAULT 'none' CHECK (repeat IN ('none','daily','weekdays','weekly')),
+                        done INTEGER NOT NULL DEFAULT 0, snooze_until INTEGER, done_at INTEGER);
+-- v5
+CREATE TABLE clip_history (id INTEGER PRIMARY KEY, text TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL);
+-- v6
+CREATE TABLE shelf (id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL UNIQUE, added_at INTEGER NOT NULL);
 ```
 
-Seeded with defaults on first run. "Start with Windows" is **not** in the
-DB; the registry (via `tauri-plugin-autostart`) is the source of truth.
-
-**To migrate:** add `if version < 2 { ...; PRAGMA user_version = 2; }` in `Db::migrate`.
+`clip_history` is only written when "remember across restarts" is on. Autostart is not in the DB (the OS is the source of truth).
+**To migrate:** add `if version < 7 { ...; PRAGMA user_version = 7; }` in `Db::migrate`.
 
 ---
 
@@ -148,12 +183,12 @@ Prereqs: Rust (MSVC toolchain), Node 20+, WebView2 (built into Windows 11).
 ```bash
 npm install
 npm run tauri dev          # dev mode with hot reload for TS/CSS
-cd src-tauri && cargo test # Rust unit tests (db, LRC parser, weather parser, colour, actions, hit-rect)
+cd src-tauri && cargo test # Rust unit tests
 npm run build              # typecheck + bundle the frontend only
 npm run tauri build        # release exe + NSIS installer in src-tauri/target/release/bundle/
 ```
 
-**Notifications:** Windows has to allow notification access for the app
+**Notifications (Windows):** Windows has to allow notification access for the app
 (Settings → Privacy & security → Notifications). If it is denied, the monitor logs this and stops;
 everything else keeps working.
 
@@ -161,35 +196,35 @@ everything else keeps working.
 
 ## 7. Status
 
-**Done and verified**
-- [x] Project scaffold (Tauri 2, Vite, TS, icons)
-- [x] SQLite layer + migrations + seed — 3 unit tests
-- [x] All monitors written: perf, media + lyrics, weather, notifications, keys, power, accent
-- [x] Commands, input validation, action allow-list, right-click menu, autostart toggle
-- [x] Frontend: state machine, all 6 panels, notify/keylock, charging, 3 media animations,
-      3 island styles, task editor, location editor, basics balls with confirm
-- [x] `cargo test`: 9/9 pass · `tsc` + `vite build`: clean · `cargo clippy`: 2 warnings fixed (clippy not re-run after the fix)
+**Done (Windows)**
+- [x] Scaffold, SQLite + migrations (v1-v6), monitors, commands with input validation
+- [x] Dashboard with tabs/More, Home cards, music + lyrics, calendar, timer, launcher, notes, reminders, clipboard, sound/brightness, Bluetooth, shelf
+- [x] Pal and 8 moods; Settings window; 7 themes; display choice + responsive scaling; hide in fullscreen
+- [x] Claude Code bridge: sessions, prompts/questions (15 s timeout), hooks + chained statusLine install/restore, usage limits
+- [x] Dictation: hotkey, mic capture, cloud OpenAI/Groq (keyring), paste; local Whisper behind `local-whisper`
 
-**Not yet verified (next session)**
-- [ ] Launch with `npm run tauri dev` and check the result on screen
-- [ ] Transparency, click-through and hover feel right on a real desktop, with DPI scaling
-- [ ] Media monitor with Spotify / browser / Windows media player (title, colour, lyrics sync)
-- [ ] Notification listener permission on an unpackaged (non-MSIX) build
-- [ ] Caps/Num Lock detection from a background thread (`GetKeyState`)
-- [ ] Release build + installer size
+**Not verified on hardware yet**
+- [ ] Notification listener permission on an unpackaged build
+- [ ] Local Whisper build (`--features local-whisper`) and model download end to end
+- [ ] Multi-monitor / mixed-DPI behaviour, fullscreen detection edge cases
+- [ ] Release installer size
+
+**Linux (all untested; pending)**
+- [ ] Click-through / hover (`window_linux.rs`; layer-shell on Wayland)
+- [ ] Media (MPRIS), notifications (D-Bus), accent, Caps/Num Lock, charging: `*_linux.rs` are stubs
+- [ ] Launcher (open + icons), fullscreen detection, shelf drag-out
+- [ ] Verify best-effort code: sound (`wpctl`/`pactl`), brightness, Bluetooth (`bluetoothctl`), clipboard (arboard)
+- [ ] Dictation: key-combo hotkey (modifier-only is Windows only); paste is copy-only
 
 ---
 
 ## 8. Roadmap / ideas
 
-1. **Polish pass after first run:** tune timings, blob motion and the shine size.
-2. Make the basics items configurable (store them in a new `basics` table).
-3. Retry the album-art colour if the thumbnail isn't ready when the track changes (currently falls back to black).
-4. Multi-monitor: choose which monitor; re-centre when the display changes.
-5. Tray icon with Quit / Settings, for when the island is hidden.
-6. Settings panel inside the island (style, animation, location, autostart), so the menu is optional.
-7. Notification filtering (mute apps) → new `muted_apps` table.
-8. Auto-update via `tauri-plugin-updater` + GitHub releases.
+1. Retry the album-art colour if the thumbnail isn't ready when the track changes.
+2. Tray icon with Quit / Settings, for when the island is hidden.
+3. Notification filtering (mute apps) -> new `muted_apps` table.
+4. Auto-update via `tauri-plugin-updater` + GitHub releases.
+5. Finish the Linux backends listed above.
 
 ---
 

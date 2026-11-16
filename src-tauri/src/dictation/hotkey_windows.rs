@@ -29,8 +29,6 @@ pub struct Hook {
     active: bool,
     /// Another key was pressed during the combo (e.g. Ctrl+Win+→): ignore it until a modifier is released.
     spoiled: bool,
-    /// The combo fired while Win was held: mask the Win key-up.
-    win_fired: bool,
 }
 
 impl Hook {
@@ -39,7 +37,9 @@ impl Hook {
         Mods { ctrl: d & 0b11 != 0, shift: d & 0b1100 != 0, alt: d & 0b11_0000 != 0, win: d & 0b1100_0000 != 0 }
     }
 
-    /// One physical key event → (dictation event, inject the mask key before this key-up passes on).
+    /// One physical key event → (dictation event, inject the mask key now).
+    /// The mask goes out when the combo fires while Win is held, so it lands between Win-down and Win-up
+    /// (injecting it while handling Win-up would queue it behind that key-up, too late for the shell).
     pub fn on_key(&mut self, vk: u32, down: bool, want: Option<Mods>) -> (Option<Msg>, bool) {
         match MODS.iter().position(|m| *m == vk) {
             Some(i) if down => self.down |= 1 << i,
@@ -53,24 +53,19 @@ impl Hook {
         }
         let m = self.mods();
         let matches = want == Some(m);
-        let mut out = None;
         if !matches {
             self.spoiled = false;
         }
         // arm only on a key press, so releasing Shift out of Ctrl+Shift+Win doesn't start a recording
         if matches && down && !self.active && !self.spoiled {
             self.active = true;
-            self.win_fired |= m.win;
-            out = Some(Msg::Press);
-        } else if self.active && !matches {
+            return (Some(Msg::Press), m.win);
+        }
+        if self.active && !matches {
             self.active = false;
-            out = Some(Msg::Release);
+            return (Some(Msg::Release), false);
         }
-        let inject = !down && (vk == 0x5B || vk == 0x5C) && self.win_fired;
-        if inject && !m.win {
-            self.win_fired = false;
-        }
-        (out, inject)
+        (None, false)
     }
 }
 
@@ -101,7 +96,7 @@ unsafe extern "system" fn hook_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESUL
         // injected events (our own mask key and Ctrl+V) must not change the tracked state
         if kb.flags.0 & LLKHF_INJECTED.0 == 0 {
             let down = matches!(wp.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN);
-            let want = *WANT.lock().unwrap();
+            let want = *WANT.lock().unwrap_or_else(|e| e.into_inner()); // a panic must never unwind out of the hook
             let (msg, inject) = HOOK.with(|h| h.borrow_mut().on_key(kb.vkCode, down, want));
             if inject {
                 let _ = send_keys(&[(MASK_KEY, false), (MASK_KEY, true)]);
@@ -130,7 +125,7 @@ pub fn spawn() {
 }
 
 pub fn set(mods: Option<Mods>) -> Result<(), String> {
-    *WANT.lock().unwrap() = mods;
+    *WANT.lock().unwrap_or_else(|e| e.into_inner()) = mods;
     Ok(())
 }
 
@@ -151,10 +146,13 @@ mod tests {
     fn ctrl_win_press_release_masks_start_menu() {
         let want = Mods { ctrl: true, win: true, ..Default::default() };
         let r = run(&mut Hook::default(), want, &[(LCTRL, true), (LWIN, true), (LWIN, true), (LWIN, false), (LCTRL, false)]);
-        assert_eq!(r, [(None, false), (Some(Msg::Press), false), (None, false), (Some(Msg::Release), true), (None, false)]);
-        // Win first, Ctrl released first: Win's later key-up is still masked
+        // mask injected when the combo fires (Win still down), never on the key-ups
+        assert_eq!(r, [(None, false), (Some(Msg::Press), true), (None, false), (Some(Msg::Release), false), (None, false)]);
         let r = run(&mut Hook::default(), want, &[(LWIN, true), (0xA3, true), (0xA3, false), (LWIN, false)]);
-        assert_eq!(r, [(None, false), (Some(Msg::Press), false), (Some(Msg::Release), false), (None, true)]);
+        assert_eq!(r, [(None, false), (Some(Msg::Press), true), (Some(Msg::Release), false), (None, false)]);
+        // a combo without Win needs no mask
+        let r = run(&mut Hook::default(), Mods { ctrl: true, alt: true, ..Default::default() }, &[(LCTRL, true), (0xA4, true)]);
+        assert_eq!(r, [(None, false), (Some(Msg::Press), false)]);
     }
 
     #[test]
@@ -162,7 +160,7 @@ mod tests {
         let want = Mods { ctrl: true, win: true, ..Default::default() };
         let mut h = Hook::default();
         let r = run(&mut h, want, &[(LCTRL, true), (LWIN, true), (D, true), (LWIN, true), (D, false), (LWIN, false), (LWIN, true)]);
-        assert_eq!(r, [(None, false), (Some(Msg::Press), false), (Some(Msg::Cancel), false), (None, false), (None, false), (None, true), (Some(Msg::Press), false)]);
+        assert_eq!(r, [(None, false), (Some(Msg::Press), true), (Some(Msg::Cancel), false), (None, false), (None, false), (None, false), (Some(Msg::Press), true)]);
     }
 
     #[test]

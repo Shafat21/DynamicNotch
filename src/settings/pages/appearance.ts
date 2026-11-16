@@ -68,7 +68,6 @@ export function renderAppearance(root: HTMLElement): void {
     section(
       "Style",
       seg("Icon style", "Thin line icons or coloured badges.", "iconStyle", [["line", "Line"], ["badges", "Colour badges"]]),
-      seg("Background", "Solid theme gradient or tinted glass over the desktop.", "bgMode", [["solid", "Solid"], ["glass", "Glass"]]),
       seg("Shape", "A floating pill or a notch joined to the top edge.", "shape", [["pill", "Pill"], ["notch", "Notch"]]),
       seg("Density", "Spacing inside cards.", "density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["airy", "Airy"]]),
       seg("Tab labels", "Text next to the tab icons.", "tabLabels", [["always", "Always"], ["active", "Active tab"], ["never", "Never"]]),

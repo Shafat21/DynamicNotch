@@ -32,6 +32,18 @@ when Claude Code needs you, Pal tells you and you can answer right from the isla
 
 ## Features
 
+**Dashboard (hover the island)** - a tab bar over these pages (tabs you can reorder or hide in Settings, extra ones go under **More**):
+- **Home:** configurable cards (clock, Pal, music, calendar, launcher, focus, notes, reminders, and optional system, tasks, sound, devices, dictation).
+- **Music player:** album art, title/artist, seek by click or drag, play/pause/next/prev, synced lyrics.
+- **Calendar:** today's agenda from your iCal link, with Join buttons for online meetings.
+- **Pal**, **Timer** (focus timer, 5 minute steps), **Weather**, **System stats** (CPU, RAM, storage, network), **Tasks**, **Month progress**.
+- **Launcher dock:** pin apps and start them with one click; extra apps collapse into a +N overflow.
+- **Notes** (pinnable) and **Reminders** with snooze / done and a chime.
+- **Clipboard history:** text only, kept in memory by default (optional "remember across restarts"); copies that password managers mark as private are skipped (Windows).
+- **Sound & brightness:** volume, mute, output device, per-display brightness.
+- **Bluetooth devices:** radio on/off, connect / disconnect paired devices.
+- **Shelf:** drop files on the island to park them; open, reveal, copy path, drag back out (Windows).
+
 **Pal**
 - An animated face with 8 moods: calm, happy, listening, thinking, needs-you, done, napping and broke.
 - Lives in the idle pill next to the clock and on the assistant card; moods follow what Claude Code is doing.
@@ -39,35 +51,35 @@ when Claude Code needs you, Pal tells you and you can answer right from the isla
 **Claude Code companion**
 - Live status of your Claude Code sessions (working, waiting for you, done, error).
 - Answer permission prompts (allow / deny) and questions from the island instead of the terminal.
+- **Usage limits ring:** your 5-hour and weekly plan usage with reset times, read from Claude Code's official `statusLine` `rate_limits`.
 
-**Dashboard (hover the island)**
-- **Music player:** album art, title/artist, seek by click or drag, play/pause/next/prev, synced lyrics.
-- **Calendar:** today's agenda from your iCal link, with Join buttons for online meetings.
-- **Focus timer:** 25 minutes by default, adjust in 5 minute steps.
-- **System stats:** CPU, RAM, storage, network up/down.
-- **Weather:** current conditions and the next hours.
-- **Tasks:** a "Next Up" list with an inline editor, saved locally.
-- **Month progress:** a dot grid of the current month.
+**Voice dictation**
+- Hold **Ctrl+Win**, speak, release: the text is typed into the focused app.
+- Cloud transcription via OpenAI or Groq (API key kept in the OS credential store). Local Whisper is an optional build feature, see [Dictation](#dictation).
 
-**Quick app launcher**
-- Pin your apps to the dashboard and start them with one click.
+**Settings window**
+- Themes: Graphite, Midnight, Aurora, Ember, Lime, Rose, Pure black; line or colour-badge icons; density, sizes, tabs and Home layout.
 
 **Fits your desktop**
-- **Liquid Glass** style with real background blur on Windows and KDE Plasma (CSS glass elsewhere).
-- **Hides in fullscreen** games, videos and apps, and comes back when you leave fullscreen.
+- **Hides in fullscreen** games, videos and apps (Windows), and comes back when you leave fullscreen.
 - **Choose the display** (primary or a specific screen) and **responsive scaling** that follows resolution,
   DPI and monitor changes (Island Size: Auto, Small, Medium, Large).
-- **Caps Lock / Num Lock** indicators, **charging** animation and **notifications** in the island.
-- **Click-through:** the desktop under the island stays usable; only the pill takes the mouse.
+- **Caps Lock / Num Lock** indicators, **charging** animation and **notifications** in the island (Windows).
+- **Click-through:** the desktop under the island stays usable; only the pill takes the mouse (Windows).
 
 ## Platform support
 
 | Platform | Status |
 |---|---|
 | Windows 10 / 11 | ✅ Supported |
-| Linux, GNOME (Wayland via XWayland) | ✅ Supported |
-| Linux, KDE Plasma (layer-shell) | 🧪 Untested |
+| Linux, GNOME | 🧪 Code present but untested; much is still stubbed (see below) |
+| Linux, KDE Plasma | 🧪 Untested |
 | macOS | ❌ Not supported |
+
+Linux today: the window is placed but click-through/hover detection, media (MPRIS), notifications,
+launcher, fullscreen detection, shelf drag-out and modifier-only dictation hotkeys are **not implemented**.
+Sound (`wpctl`/`pactl`), brightness, Bluetooth (`bluetoothctl`) and clipboard history have best-effort code that has not
+been compiled or run on real hardware. Dictation on Linux copies the text and you press Ctrl+V.
 
 ## Install
 
@@ -88,17 +100,15 @@ chmod +x *.AppImage
 ./*.AppImage
 ```
 
-On Linux, notifications are read by monitoring the D-Bus session bus (if your system refuses this,
-everything else still works). The NVIDIA rendering workaround is applied automatically.
+Linux builds are experimental, see [Platform support](#platform-support).
 
 ## Usage
 
 | Action | What happens |
 |---|---|
 | Hover the island | Opens the dashboard |
-| Click a tile | Opens its panel (music, calendar, timer, ...) |
-| ⌂ | Back to the dashboard |
-| Right-click | Menu: styles, Display, Island Size, Hide in fullscreen apps, Connect Claude Code, Start with Windows / Start at login, Quit |
+| Click a tab | Opens its page (music, calendar, timer, ...) |
+| Right-click | Menu: Settings…, Animation Style, Connect / Disconnect Claude Code, Quit (display, island size, autostart and fullscreen options live in Settings) |
 | ＋ in the launcher | Add an app |
 | Right-click an app twice | Remove it from the launcher |
 | ＋ on the calendar | Paste your iCal link |
@@ -107,11 +117,21 @@ everything else still works). The NVIDIA rendering workaround is applied automat
 
 Right-click the island and choose **Connect Claude Code**:
 
-- Adds Dynamic Notch Island's hooks to `~/.claude/settings.json`. A backup of the file is kept next to it.
-- **Disconnect** removes only the hooks it added; your other settings are untouched.
-- The hooks talk to a local endpoint on `127.0.0.1:47863`, protected by a random token. Nothing leaves your machine.
+- Adds Dynamic Notch Island's hooks to `~/.claude/settings.json` and sets `statusLine` to
+  `dynamic-notch.exe --statusline`, which feeds the usage ring and then runs your existing status line (chained), so yours keeps working.
+- The file is backed up first as `settings.json.dynamicnotch.bak`. **Disconnect** removes only what it added and restores your original `statusLine`.
+- The hooks talk to a local endpoint on `127.0.0.1`, default port **47863** (configurable), protected by a random token. Nothing leaves your machine.
 - Permission prompts and questions wait **15 seconds** in the island; if you don't answer, Claude Code falls
   back to asking in the terminal.
+- Usage limits need a Claude Pro/Max plan and an open Claude Code session (Claude Code only reports `rate_limits` then).
+
+## Dictation
+
+- **Setup:** Settings → Features → Dictation, choose OpenAI or Groq and add your API key. Then hold **Ctrl+Win** (changeable) and speak.
+- **Privacy:** audio stays in memory and is never written to disk. The API key is stored in Windows Credential Manager
+  (Secret Service on Linux), not in the database. With cloud dictation the audio is sent to the provider you chose.
+- **Local Whisper (optional):** not in the default build. Build with `cd src-tauri && cargo build --features local-whisper`
+  (needs [CMake](https://cmake.org) and LLVM/libclang). Models (tiny/base/small) are downloaded from Hugging Face on demand and SHA-256 verified.
 
 ## Build from source
 
@@ -150,11 +170,12 @@ git push origin v0.2.0
 
 ## Data & privacy
 
-- Settings, tasks and launcher apps are stored locally in SQLite:
+- Settings, tasks, notes, reminders, launcher apps, shelf entries and (only if you enable it) clipboard history are stored locally in SQLite:
   - Windows: `%APPDATA%\com.dynamicnotch.app\dynamic_notch.db`
   - Linux: `~/.local/share/com.dynamicnotch.app/dynamic_notch.db`
-- Network calls: **Open-Meteo** (weather and city search), **LRCLIB** (lyrics; sends artist and title only)
-  and **your calendar link**. The calendar link stays on your machine.
+- Network calls: **Open-Meteo** (weather and city search), **LRCLIB** (lyrics; sends artist and title only),
+  **your calendar link**, **your chosen dictation provider** (OpenAI or Groq, only when cloud dictation is used) and
+  **Hugging Face** (only when you download a local Whisper model). The calendar link stays on your machine.
 - No accounts, no telemetry.
 
 ## Star History

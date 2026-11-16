@@ -4,9 +4,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { idlePillWidth } from "./idle-width";
 import {
-  addPrompt, anyWorking, closePrompt, currentPrompt, dismissAll, dismissPrompt, initAssistant, popMood, promptHeight, setBridge, setSessions, setTyping,
+  addPrompt, anyWorking, closePrompt, currentPrompt, dismissAll, dismissPrompt, initAssistant, popMood, promptHeight, setBridge, setDictating, setSessions, setTyping, setUsage, usage,
   type Bridge, type Prompt, type Session,
 } from "./assistant";
+import { dictating, initDictation, onDictation, type DictEvent } from "./dictation";
+import { level, live, warnDot, type Usage } from "./usage";
 import { renderAgenda, renderCard, type CalPayload } from "./calendar";
 import { initFocus } from "./focus";
 import { initClipboard, showClipboard } from "./clipboard";
@@ -18,7 +20,7 @@ import { addDue, chime, currentDue, initReminders, overdue, showReminders, type 
 import { hydrateIcons, icon } from "./icons-line";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
-import { getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
+import { fitDock, getSelectedTask, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 import { renderHome } from "./ui/home";
 import { closeMore, fitTabs, initTabs, renderTabs, setActiveTab, visibleTabs } from "./ui/tabs";
 import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
@@ -29,7 +31,7 @@ type Perf = { cpu: number; ram: number; disk: number; down: number; up: number }
 type Weather = { city: string; temp: string; desc: string; icon: string; hourly: { time: string; temp: string; icon: string }[] };
 type Settings = { location: string; lat: number; lon: number; animationStyle: string; autostart: boolean; reminderSound: boolean };
 type Display = { uiScale: number; monitor: { index: number; name: string; width: number; height: number; scale: number } };
-type State = "idle" | "hover" | "notify" | "prompt" | "reminder";
+type State = "idle" | "hover" | "notify" | "prompt" | "reminder" | "dictation";
 
 const ANIM_KEYS: Record<string, string> = { "Glow Sweep": "glow", "Fluid Blobs": "blobs", "Neon Border": "neon" };
 
@@ -86,6 +88,7 @@ function targetSize(): [number, number] {
   if (ui.state === "notify") return [380, a.collapsedH];
   if (ui.state === "prompt") return [a.openW, promptHeight(a.openW, a.openH, a.textScale)];
   if (ui.state === "reminder") return [640, 76];
+  if (ui.state === "dictation") return [["done", "error"].includes($("dictation").dataset.phase ?? "") ? 400 : 300, a.collapsedH]; // room for the text
   return [a.openW, a.openH]; // every tab shares the open size; long pages scroll
 }
 
@@ -171,7 +174,7 @@ function setState(s: State): void {
 }
 
 function showEvent(title: string, text: string, ms: number, mood: PalMood | null = null): void {
-  if (ui.hidden || ui.state === "prompt" || ui.state === "reminder") return; // pops are dropped, not queued; a prompt / reminder wins
+  if (ui.hidden || ui.state === "prompt" || ui.state === "reminder" || ui.state === "dictation") return; // pops are dropped, not queued; a prompt / reminder / dictation wins
   ui.event = { title, text, mood };
   clearTimeout(revertTimer);
   if (ui.state === "notify") transition();
@@ -188,6 +191,20 @@ function setStatus(kind: string, text: string): void {
   if (!$("status-icon").hidden) $("status-icon").innerHTML = icon(kind, 18);
   $("status-spin").hidden = !spinning();
   $("status-text").textContent = text;
+}
+
+/** Idle pill: small dot on Pal when the 5-hour window is at 80 %+ or the limit was hit. */
+function renderUsageDot(): void {
+  const u = usage();
+  const now = Date.now() / 1000;
+  const dot = $("usage-dot");
+  dot.hidden = !warnDot(u, now);
+  if (u) dot.dataset.level = level(live(u.fiveHour, now)?.usedPercentage ?? 0, u.limitReached);
+}
+
+function onUsage(u: Usage): void {
+  setUsage(u);
+  renderUsageDot();
 }
 
 const clockTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -232,9 +249,11 @@ function renderView(): void {
   const hover = ui.state === "hover";
   const prompt = ui.state === "prompt";
   const reminder = ui.state === "reminder";
+  const dict = ui.state === "dictation";
   const t = ui.tab;
-  $("header").hidden = hover || prompt || reminder;
+  $("header").hidden = hover || prompt || reminder || dict;
   $("reminder").hidden = !reminder;
+  $("dictation").hidden = !dict;
   chime(reminder ? currentDue()?.id ?? null : null);
   $("open").hidden = !hover && !prompt;
   $("prompt").hidden = !prompt;
@@ -431,7 +450,7 @@ function onFullscreen(hidden: boolean): void {
   ui.hovering = false;
   setPinned(false);
   closeMore();
-  ui.state = !hidden && currentDue() ? "reminder" : "idle"; // reminders due meanwhile show once it's back
+  ui.state = hidden ? "idle" : currentDue() ? "reminder" : dictating() ? "dictation" : "idle"; // reminders due meanwhile show once it's back
   if (look().openOn === "home") ui.tab = "home";
   transition(); // also sends the (empty or normal) hit rect
 }
@@ -442,7 +461,7 @@ function onHover(inside: boolean): void {
   backendHover = inside;
   if (ui.hidden) return;
   ui.hovering = inside;
-  if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder") return;
+  if (ui.state === "notify" || ui.state === "prompt" || ui.state === "reminder" || ui.state === "dictation") return;
   clearTimeout(revertTimer);
   if (inside) setState("hover");
   else if (ui.state === "hover" && !ui.pinned) revertTimer = window.setTimeout(() => setState("idle"), 1200);
@@ -468,11 +487,28 @@ function onPromptClosed(id: number): void {
   settle();
 }
 
-/** After a prompt or reminder is answered: the next prompt, then the next reminder, then hover/idle. */
+/** After a prompt, reminder or dictation ends: the next prompt, then the next reminder, a running dictation, then hover/idle. */
 function settle(): void {
-  const next: State = currentPrompt() ? "prompt" : currentDue() ? "reminder" : ui.hovering || ui.pinned ? "hover" : "idle";
+  const next: State = currentPrompt() ? "prompt" : currentDue() ? "reminder" : dictating() ? "dictation" : ui.hovering || ui.pinned ? "hover" : "idle";
   if (next === ui.state) transition(); // the next queued one
   else setState(next);
+}
+
+// ---------- dictation ----------
+let dictTimer = 0;
+/** Recording / transcribing pill; a flash of the pasted text or the error, then back. Below prompt / reminder. */
+function onDictationEvent(e: DictEvent): void {
+  const stay = onDictation(e);
+  setDictating(e.state === "recording");
+  clearTimeout(dictTimer);
+  const showing = ui.state === "dictation";
+  if (stay < 0) return void (showing && settle());
+  if (ui.hidden || ui.state === "prompt" || ui.state === "reminder") return; // fullscreen / answer first: settle() brings it back
+  if (!showing) {
+    clearTimeout(revertTimer); // a notify pop gives way
+    setState("dictation");
+  } else if (e.state !== "recording") refresh(); // done / error widen the pill
+  if (stay > 0) dictTimer = window.setTimeout(() => ui.state === "dictation" && settle(), stay);
 }
 
 // ---------- reminders ----------
@@ -594,6 +630,7 @@ function wireInput(): void {
   document.querySelectorAll<HTMLElement>("[data-add-app]").forEach((b) => {
     b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
   });
+  new ResizeObserver(() => fitDock()).observe($("card-launcher")); // morph, openW, textScale, density gaps, Home shown
   initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500));
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
@@ -719,6 +756,7 @@ async function boot(): Promise<void> {
   $("pal-tab-face").append(createPal(60).el);
   applyLook(DEFAULT_LOOK);
   initAssistant();
+  initDictation();
   wireInput();
   renderLyric();
   updateApps(invoke<LauncherApp[]>("list_apps"));
@@ -746,6 +784,8 @@ async function boot(): Promise<void> {
     listen<{ id: number }>("prompt-closed", (e) => onPromptClosed(e.payload.id)),
     listen<boolean>("fullscreen", (e) => onFullscreen(e.payload)),
     listen<Due>("reminder-due", (e) => onReminderDue(e.payload)),
+    listen<DictEvent>("dictation", (e) => onDictationEvent(e.payload)),
+    listen<Usage>("usage", (e) => onUsage(e.payload)),
     listen("charging", onCharging),
     listen<LauncherApp[]>("apps", (e) => updateApps(Promise.resolve(e.payload))), // changed in the Settings window
   ]);
@@ -762,6 +802,7 @@ async function boot(): Promise<void> {
   if (snap.fullscreen) onFullscreen(true);
   if (snap.bridge) setBridge(snap.bridge as Bridge);
   if (snap.sessions) setSessions(snap.sessions as Session[]);
+  if (snap.usage) onUsage(snap.usage as Usage);
   if (snap.display) ui.scale = (snap.display as Display).uiScale; // applied by onSettings' transition below
   if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 
@@ -770,7 +811,10 @@ async function boot(): Promise<void> {
   for (const d of await overdue()) onReminderDue(d); // missed while closed, or emitted before this page listened
 
   window.setInterval(() => {
-    if (ui.state === "idle") renderHeader();
+    if (ui.state === "idle") {
+      renderHeader();
+      renderUsageDot(); // windows expire at their reset time
+    }
     if (ui.state === "hover") renderClock();
     // Advance locally between backend updates (they come at most once per second).
     if (ui.media.state === "Playing" && ui.seekPreview === null && ui.progress.duration > 0) {
