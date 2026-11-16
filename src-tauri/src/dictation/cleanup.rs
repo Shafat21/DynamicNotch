@@ -83,6 +83,17 @@ pub fn plausible(cleaned: &str, raw: &str) -> bool {
     after > 0.0 && after <= before * 1.4 + 4.0 && after >= before * 0.35
 }
 
+/// npm's `claude.cmd` runs node as a grandchild: killing cmd.exe alone would leave it running.
+fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill").args(["/T", "/F", "/PID", &pid.to_string()]).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(0x0800_0000).status();
+    }
+    #[cfg(not(windows))]
+    let _ = pid;
+}
+
 /// `prompt` (stdin) answered under `system` by `claude -p`, or an error after `timeout`. Also used by the notetaker.
 pub fn ask(system: &str, prompt: &str, timeout: Duration) -> Result<String, String> {
     let exe = exe().ok_or("Claude Code is not installed")?;
@@ -97,8 +108,10 @@ pub fn ask(system: &str, prompt: &str, timeout: Duration) -> Result<String, Stri
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     let mut child = cmd.spawn().map_err(|e| format!("Couldn't start Claude Code: {e}"))?;
+    // its own thread: a long prompt fills the pipe, and the timeout below must cover that too (dropping closes stdin)
     if let Some(mut stdin) = child.stdin.take() {
-        let _ = stdin.write_all(prompt.as_bytes());
+        let prompt = prompt.to_string();
+        std::thread::spawn(move || drop(stdin.write_all(prompt.as_bytes())));
     }
     let mut stdout = child.stdout.take().ok_or("no stdout")?;
     let reader = std::thread::spawn(move || {
@@ -112,6 +125,7 @@ pub fn ask(system: &str, prompt: &str, timeout: Duration) -> Result<String, Stri
             break;
         }
         if Instant::now() > until {
+            kill_tree(child.id());
             let _ = child.kill();
             let _ = child.wait();
             return Err("Claude Code took too long".into());

@@ -184,6 +184,15 @@ impl Machine {
     }
 }
 
+/// A voice note starts only from Idle: anything else (a hotkey dictation recording, between taps or
+/// transcribing) is reported so the page's mic buttons reset.
+pub fn page_start(m: &mut Machine, now: u64) -> Result<Step, &'static str> {
+    match m.start_locked(now) {
+        Step::None => Err("Dictation is busy, try again in a moment"),
+        step => Ok(step),
+    }
+}
+
 static TX: OnceLock<Sender<Msg>> = OnceLock::new();
 
 pub fn send(msg: Msg) {
@@ -311,11 +320,16 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
             Ok(Msg::Release) => m.release(now),
             Ok(Msg::Escape) => m.escape(),
             Ok(Msg::Cancel) => m.cancel(),
-            Ok(Msg::PageStart) => {
-                let step = m.start_locked(now);
-                page_next = step == Step::Start;
-                step
-            }
+            Ok(Msg::PageStart) => match page_start(&mut m, now) {
+                Ok(step) => {
+                    page_next = true;
+                    step
+                }
+                Err(e) => {
+                    emit(&app, json!({"state": "error", "error": e, "page": true})); // the mic buttons reset
+                    Step::None
+                }
+            },
             Ok(Msg::PageStop) if rec.as_ref().is_some_and(|r| r.page) => m.press(now),
             Ok(Msg::PageStop) => Step::None,
             Ok(Msg::Done(id, r)) => {
@@ -375,7 +389,11 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
                     let r = if samples.len() < 16_000 / 4 || peak < 0.004 {
                         Err("No speech detected".to_string())
                     } else {
-                        transcribe(&app, engine, &s, &samples).map(|raw| process(&raw, &load_words(&app), &s.cleanup, front.as_deref()))
+                        // a panic must still send Done, or the controller would wait in Transcribing for good
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            transcribe(&app, engine, &s, &samples).map(|raw| process(&raw, &load_words(&app), &s.cleanup, front.as_deref()))
+                        }))
+                        .unwrap_or_else(|_| Err("Transcription failed".to_string()))
                     };
                     send(Msg::Done(id, r));
                 });
@@ -513,6 +531,20 @@ mod tests {
         assert!(m.done(1));
         assert_eq!(m.start_locked(41_000), Step::Start);
         assert_eq!(m.escape(), Step::Discard);
+    }
+
+    #[test]
+    fn a_voice_note_while_dictation_is_busy_is_an_error() {
+        let mut m = Machine::default();
+        m.press(0); // hotkey dictation recording
+        assert!(page_start(&mut m, 10).is_err());
+        m.release(100); // between taps
+        assert!(page_start(&mut m, 150).is_err());
+        m.press(200);
+        m.press(60_000); // hands-free → transcribing
+        assert!(page_start(&mut m, 60_100).is_err());
+        assert!(m.done(1));
+        assert_eq!(page_start(&mut m, 61_000), Ok(Step::Start));
     }
 
     #[test]

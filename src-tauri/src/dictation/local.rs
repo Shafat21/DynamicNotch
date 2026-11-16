@@ -85,6 +85,9 @@ pub fn split_for_model(samples: &[f32], max_seconds: f64) -> Vec<(usize, &[f32])
 /// 16 kHz mono → text. `dir` = the model folder.
 pub fn transcribe(dir: &Path, samples: &[f32]) -> Result<String, String> {
     let rec = recognizer(dir)?;
+    // dictation and the notetaker share one recognizer: one decode at a time
+    static DECODE: Mutex<()> = Mutex::new(());
+    let _one = DECODE.lock().unwrap_or_else(|e| e.into_inner());
     let mut text = String::new();
     for (_, chunk) in split_for_model(samples, MAX_CHUNK_SECONDS) {
         if chunk.len() < RATE / 4 {
