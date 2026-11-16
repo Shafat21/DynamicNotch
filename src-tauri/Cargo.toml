@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-notch"
-version = "0.1.91"
+version = "0.1.92"
 description = "Dynamic Island for Windows, written in Rust (Tauri 2 + SQLite)"
 edition = "2021"
 publish = false

@@ -64,7 +64,12 @@ section[id] { scroll-margin-top: 72px; } /* anchors land below the fixed bar */
 .n-side { display: flex; align-items: center; gap: 8px; color: #eceff7; transition: opacity 0.2s; }
 .n-side.swap { opacity: 0; }
 .n-side small { font: inherit; color: #8c94a8; font-weight: 500; }
-@media (max-width: 560px) { .n-side small { display: none; } } /* keep the wide states clear of the brand */
+/* phones: the notch is centred, so the bar keeps only the logo and the GitHub mark either side of it */
+@media (max-width: 700px) {
+  .n-side small { display: none; }
+  .bar { padding-inline: 16px; }
+  .bar .brand span, .gh span { display: none; }
+}
 .n-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(236, 239, 247, 0.22); border-top-color: var(--cyan); animation: turn 0.9s linear infinite; }
 @keyframes turn { to { transform: rotate(360deg); } }
 .n-wave { display: flex; align-items: center; gap: 2px; height: 16px; }
@@ -263,7 +268,8 @@ footer { margin-top: 90px; padding: 40px 0 50px; border-top: 1px solid var(--lin
 }
 
 /* ----- live screenshots: site.js lays animated parts over the real screenshot, in its own pixel coordinates ----- */
-.live { position: relative; container-type: inline-size; overflow: hidden; }
+.live { position: relative; container-type: inline-size; overflow: hidden; aspect-ratio: var(--W) / var(--H); background: rgba(236, 239, 247, 0.04); } /* reserves the box before the lazy image arrives */
+.live img { width: 100%; height: 100%; font-size: 0; color: transparent; } /* no alt-text flash while loading */
 .card .live { border-radius: 14px; margin-bottom: 16px; }
 .card .live img { margin: 0; }
 .frame .live { border-radius: 17px; }
