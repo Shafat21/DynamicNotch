@@ -252,13 +252,12 @@ fn preflight(app: &AppHandle, s: &Settings) -> Result<&'static str, String> {
 
 fn transcribe(app: &AppHandle, engine: &str, s: &Settings, samples: &[f32]) -> Result<String, String> {
     if engine == "cloud" {
-        // no language = whisper-1 / Groq Whisper detect it ("auto", or a list like "bn,en")
-        let codes = local::codes(&s.language);
-        let lang = (codes.len() == 1).then(|| codes[0]);
+        // no language = whisper-1 / Groq Whisper detect it
+        let lang = (s.language != "auto").then_some(s.language.as_str());
         cloud::transcribe(&s.cloud_provider, &s.cloud_model, &cloud::get_key(&s.cloud_provider)?, samples, lang)
     } else {
-        let m = if engine == models::WHISPER.id { &models::WHISPER } else { &models::PARAKEET };
-        local::transcribe(&models::dir(app, m)?, &s.language, samples)
+        let m = if engine == models::MULTILINGUAL.id { &models::MULTILINGUAL } else { &models::PARAKEET };
+        local::transcribe(&models::dir(app, m)?, samples)
     }
 }
 
@@ -366,7 +365,16 @@ fn run(app: AppHandle, rx: std::sync::mpsc::Receiver<Msg>) {
                     Ok(Rec { r, engine, front, s, page })
                 });
                 match started {
-                    Ok(r) => rec = Some(r),
+                    Ok(r) => {
+                        if r.engine != "cloud" {
+                            // load the model while the user speaks (no-op when it's already loaded)
+                            let model = if r.engine == models::MULTILINGUAL.id { &models::MULTILINGUAL } else { &models::PARAKEET };
+                            if let Ok(d) = models::dir(&app, model) {
+                                local::preload(d);
+                            }
+                        }
+                        rec = Some(r);
+                    }
                     Err(e) => {
                         m.cancel();
                         emit(&app, json!({"state": "error", "error": e, "page": page}));
@@ -427,10 +435,7 @@ pub fn spawn(app: AppHandle) {
     if let Err(e) = bind(&app, &hk) {
         eprintln!("dictation: hotkey {}: {e}", hk.canonical());
     }
-    let s = load(&app);
-    if let Some(d) = models::chosen(&app, &s.speech).and_then(|m| models::dir(&app, m).ok()) {
-        local::preload(d);
-    }
+    // no model preload here: it takes about 1 GB, so it loads when a dictation starts (see Step::Start)
     std::thread::spawn(move || run(app, rx));
 }
 

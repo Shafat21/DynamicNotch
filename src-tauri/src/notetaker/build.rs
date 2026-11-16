@@ -63,7 +63,7 @@ pub fn transcribe_call(model: &Path, mic: &[i16], system: &[i16], progress: &mut
     for (you, a, b) in parts {
         // only this stretch as f32: a 3 h call stays i16 in memory (~345 MB per track)
         let chunk: Vec<f32> = (if you { mic } else { system })[a..b].iter().map(|&v| v as f32 / 32768.0).collect();
-        let text = local::transcribe(model, "auto", &chunk)?;
+        let text = local::transcribe(model, &chunk)?;
         done += b - a;
         progress(done as f32 / total as f32);
         if text.trim().is_empty() {

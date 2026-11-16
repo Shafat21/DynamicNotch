@@ -5,8 +5,9 @@ import { setGeneral, store } from "../store";
 import { button, h, page, report, row, section, segmented, select, toggle } from "../ui";
 
 type Calendar = { configured: boolean; desktop?: boolean; error: string | null };
-type Dictation = { engine: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string; cleanup: string };
-type Models = { installed: boolean; size: number; claude: boolean };
+type Dictation = { engine: string; language: string; hotkey: string; mic: string; cloudProvider: string; cloudModel: string; output: string; cleanup: string; speech: string };
+type Model = { installed: boolean; size: number; id: string };
+type Models = Model & { multilingual: Model; claude: boolean };
 type Words = { words: string[]; replacements: { from: string; to: string }[]; snippets: { trigger: string; text: string }[] };
 
 const LANGS: [string, string][] = [
@@ -57,31 +58,45 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
     }
   };
   const saveOrReport = (patch: Partial<Dictation>) => save(patch).then((err) => err && report(err));
-  const dlState = h("span", { className: "row-desc" });
   const mb = (n: number) => `${Math.round(n / 1e6)} MB`;
+  const progress = new Map<string, HTMLElement>(); // model id → its state line, for `model-progress`
 
   const build = (s: Dictation, models: Models, mics: string[], words: Words) => {
     cur = s;
     const engine = segmented("Engine", [["auto", "Auto"], ["local", "Offline"], ["cloud", "Cloud"]], s.engine, (v) => saveOrReport({ engine: v }));
 
-    // offline model: downloaded on click, progress from `model-progress`
-    const dl = button(models.installed ? "Installed" : "Download", () => {
-      dl.disabled = true;
-      dlState.textContent = "Starting download…";
-      invoke("download_model").then(
-        () => {
-          dlState.textContent = `Installed · ${mb(models.size)}`;
-          dl.textContent = "Installed";
-          report("Offline model installed");
-        },
-        (e) => {
-          dlState.textContent = String(e);
-          dl.disabled = false;
-        },
-      );
+    // offline models: each downloaded on click, progress from `model-progress`
+    const hint = h("span", { className: "row-desc" });
+    const showHint = () =>
+      (hint.textContent = cur.speech === "multilingual" && !models.multilingual.installed ? (models.installed ? "Download the multilingual model for Bangla and other languages. Until then English/European is used." : "Download the multilingual model for Bangla and other languages.") : "");
+    const download = (m: Model, kind: string) => {
+      const state = h("span", { className: "row-desc" }, m.installed ? `Installed · ${mb(m.size)}` : `Not downloaded · ${mb(m.size)}`);
+      progress.set(m.id, state);
+      const dl = button(m.installed ? "Installed" : "Download", () => {
+        dl.disabled = true;
+        state.textContent = "Starting download…";
+        invoke("download_model", { model: kind }).then(
+          () => {
+            m.installed = true;
+            state.textContent = `Installed · ${mb(m.size)}`;
+            dl.textContent = "Installed";
+            showHint();
+            report("Offline model installed");
+          },
+          (e) => {
+            state.textContent = String(e);
+            dl.disabled = false;
+          },
+        );
+      });
+      dl.disabled = m.installed;
+      return h("div", { className: "stack" }, dl, state);
+    };
+    const speech = segmented("Offline model", [["multilingual", "Auto (multilingual)"], ["european", "English/European (faster)"]], s.speech, async (v) => {
+      await saveOrReport({ speech: v });
+      showHint();
     });
-    dl.disabled = models.installed;
-    dlState.textContent = models.installed ? `Installed · ${mb(models.size)}` : `Not downloaded · ${mb(models.size)}`;
+    showHint();
 
     // cloud: provider, model, write-only key
     const keyState = h("span", { className: "row-desc" });
@@ -135,13 +150,15 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
     el.replaceChildren(
       el.firstElementChild!,
       row("Engine", "Auto uses the offline model once it's downloaded, else Cloud when an API key is saved.", engine),
-      row("Offline model", "NVIDIA Parakeet (25 languages) runs on this PC. Downloaded from Hugging Face and checked with SHA-256.", h("div", { className: "stack" }, dl, dlState)),
+      row("Offline model", "Auto understands Bangla, Hindi, English and 1600+ other languages (no punctuation). English/European is faster, with punctuation. Falls back to whichever is downloaded.", h("div", { className: "stack" }, speech, hint)),
+      row("Multilingual model", "Meta Omnilingual ASR runs on this PC. Downloaded from Hugging Face and checked with SHA-256.", download(models.multilingual, "multilingual")),
+      row("English/European model", "NVIDIA Parakeet (25 European languages) runs on this PC. Downloaded from Hugging Face and checked with SHA-256.", download(models, "european")),
       row("Cloud provider", "OpenAI-compatible transcription endpoint. Audio is sent to the provider.", provider),
       row("Cloud model", "Transcription model name at the provider.", model),
       row("API key", "Kept in the system credential store and never shown again.", h("div", { className: "stack" }, keyForm, keyState)),
       row("Hotkey", "Hold to record, release to paste. Double-tap for hands-free, press again to finish. Esc cancels.", h("div", { className: "stack" }, hotkey, hotErr)),
       row("Microphone", "Input device used while recording.", select("Microphone", [["", "System default"], ...mics.map((m): [string, string] => [m, m])], s.mic, (v) => saveOrReport({ mic: v }))),
-      row("Language", "For Cloud. The offline model detects the language itself.", select("Language", langs, s.language, (v) => saveOrReport({ language: v }))),
+      row("Language", "For Cloud: Auto-detect, or always this language (e.g. Bengali). The offline models find the language themselves.", select("Language", langs, s.language, (v) => saveOrReport({ language: v }))),
       row("Output", "Paste the text at the cursor, or only copy it to the clipboard.", segmented("Output", [["paste", "Paste at cursor"], ["copy", "Copy only"]], s.output, (v) => saveOrReport({ output: v }))),
       row(
         "Clean-up",
@@ -167,7 +184,8 @@ function dictationSection(): { el: HTMLElement; dispose: () => void } {
     (e) => (loading.textContent = `Couldn't load dictation settings: ${e}`),
   );
   const unlisten = listen<{ name: string; received: number; total: number }>("model-progress", (e) => {
-    dlState.textContent = `Downloading… ${Math.floor((e.payload.received * 100) / Math.max(1, e.payload.total))}% of ${mb(e.payload.total)}`;
+    const state = progress.get(e.payload.name);
+    if (state) state.textContent = `Downloading… ${Math.floor((e.payload.received * 100) / Math.max(1, e.payload.total))}% of ${mb(e.payload.total)}`;
   });
   return { el, dispose: () => void unlisten.then((f) => f()) };
 }

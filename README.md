@@ -92,7 +92,8 @@ when a coding agent needs you, Pal tells you and you can answer right from the i
 
 **Voice dictation**
 - Hold **Ctrl+Win**, speak, release: the text is pasted into the focused app. Double-tap for hands-free, Esc cancels.
-- Offline transcription with NVIDIA Parakeet (sherpa-onnx, 25 languages), or cloud via OpenAI or Groq. Dictionary, replacements,
+- Offline transcription with Meta Omnilingual ASR (1600+ languages, Bangla included, detected by itself) or NVIDIA
+  Parakeet (25 European languages, faster), both via sherpa-onnx; or cloud via OpenAI or Groq. Dictionary, replacements,
   snippets and optional Claude clean-up; local history with words/min and streak. See [Dictation](#dictation).
 
 **Settings window** (right-click the island → Settings…, or the ⚙ button)
@@ -269,7 +270,8 @@ git push origin v0.2.0
 
 Weather by [Open-Meteo](https://open-meteo.com), lyrics by [LRCLIB](https://lrclib.net).
 Offline speech recognition by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) with NVIDIA's
-[Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0).
+[Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (CC BY 4.0) and Meta's
+[Omnilingual ASR](https://github.com/facebookresearch/omnilingual-asr) 1B CTC (Apache-2.0).
 Portions of the dictation and notetaker code adapted from Coucou (https://github.com/Louis-CFM/coucou), © 2026 Louis Raillé, MIT License.
 Full license texts: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

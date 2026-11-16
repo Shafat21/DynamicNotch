@@ -180,13 +180,15 @@ mod tests {
     fn paste_into_an_edit_box() {
         use windows::core::w;
         use windows::Win32::UI::WindowsAndMessaging::*;
+        // Bangla (with virama/nukta) + English + a symbol: all must survive CF_UNICODETEXT
+        const TEXT: &str = "Pasted by dictation ✓ 123 আমি বাংলায় কথা বলছি, ক্ষমা করবেন";
         let before = super::read();
         unsafe {
             let hwnd = CreateWindowExW(Default::default(), w!("EDIT"), w!(""), WS_OVERLAPPEDWINDOW | WS_VISIBLE, 200, 200, 400, 120, None, None, None, None).unwrap();
             let _ = SetForegroundWindow(hwnd);
             let _ = windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(Some(hwnd));
             let front = super::GetForegroundWindow() == hwnd;
-            let worker = std::thread::spawn(|| super::paste("Pasted by dictation ✓ 123"));
+            let worker = std::thread::spawn(|| super::paste(TEXT));
             let until = std::time::Instant::now() + std::time::Duration::from_millis(1500);
             let mut msg = MSG::default();
             while std::time::Instant::now() < until {
@@ -203,7 +205,7 @@ mod tests {
             let _ = DestroyWindow(hwnd);
             println!("foreground={front} paste={pasted:?} box={text:?} clipboard before={:?} after={:?}", before.as_deref().map(|s| s.chars().take(20).collect::<String>()), super::read().map(|s| s.chars().take(20).collect::<String>()));
             assert_eq!(pasted, Ok(true));
-            assert_eq!(text, "Pasted by dictation ✓ 123");
+            assert_eq!(text, TEXT);
             if before.is_some() {
                 assert_eq!(super::read(), before, "the previous clipboard text is put back");
             }

@@ -36,11 +36,11 @@ pub async fn set_dictation_settings(app: AppHandle, patch: Value) -> Res<Setting
 }
 
 /// Resolves when the offline model is installed; progress goes out as `model-progress` {name, received, total}.
-/// `model`: "multilingual" (Whisper) or anything else / none = Parakeet.
+/// `model`: "multilingual" (Omnilingual) or anything else / none = Parakeet.
 /// A successful download switches a stored "cloud" engine to "auto", so the offline model is used.
 #[tauri::command]
 pub async fn download_model(app: AppHandle, model: Option<String>) -> Res<()> {
-    let m = if model.as_deref() == Some("multilingual") { &models::WHISPER } else { &models::PARAKEET };
+    let m = if model.as_deref() == Some("multilingual") { &models::MULTILINGUAL } else { &models::PARAKEET };
     let a = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut last = u64::MAX;
@@ -68,12 +68,12 @@ pub async fn download_model(app: AppHandle, model: Option<String>) -> Res<()> {
 }
 
 /// {installed, size (bytes of the whole download), id} for Parakeet, the same under `multilingual` for
-/// Whisper, and claude (Claude Code found, for the clean-up).
+/// Omnilingual, and claude (Claude Code found, for the clean-up).
 #[tauri::command]
 pub async fn model_status(app: AppHandle) -> Value {
     let one = |m: &models::Model| json!({"installed": models::installed(&app, m), "size": models::total_size(m), "id": m.id});
     let mut v = one(&models::PARAKEET);
-    v["multilingual"] = one(&models::WHISPER);
+    v["multilingual"] = one(&models::MULTILINGUAL);
     v["claude"] = json!(cleanup::exe().is_some());
     v
 }

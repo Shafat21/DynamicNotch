@@ -1,6 +1,8 @@
 //! The offline speech models (sherpa-onnx exports):
 //! - NVIDIA Parakeet TDT 0.6B v3 int8, about 670 MB: English + 24 European languages, fastest.
-//! - OpenAI Whisper large-v3-turbo int8, about 1.04 GB: 99 languages (Bangla, Hindi, …), detected by itself.
+//! - Meta Omnilingual ASR 1B CTC int8, about 1.03 GB: 1600+ languages (Bangla, Hindi, English, …) with no
+//!   language to pick; no punctuation or capitals. English said right after Bangla may come out in Bangla script.
+//!
 //! Nothing is downloaded until the user clicks Download; the files come from Hugging Face at a pinned
 //! revision and are checked against their size and SHA-256 before they are renamed into place in
 //! `<app data>/models/<id>`. From then on everything runs offline.
@@ -29,37 +31,32 @@ pub struct Model {
 }
 
 pub const PARAKEET: Model = Model { id: "parakeet-tdt-0.6b-v3-int8", files: &FILES };
-pub const WHISPER: Model = Model { id: "whisper-large-v3-turbo-int8", files: &WHISPER_FILES };
+pub const MULTILINGUAL: Model = Model { id: "omnilingual-asr-1b-ctc-int8", files: &MULTILINGUAL_FILES };
+#[cfg(test)]
 pub const ID: &str = PARAKEET.id;
 
 impl Model {
-    pub fn is_whisper(&self) -> bool {
-        self.id == WHISPER.id
+    pub fn is_multilingual(&self) -> bool {
+        self.id == MULTILINGUAL.id
     }
 }
 
-// csukuangfj/sherpa-onnx-whisper-turbo at revision 2ca6ff69… (sizes and LFS SHA-256 from the HF API;
-// the tokens file is not in LFS, its hash was computed from the download).
+// csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-int8-2025-11-12 at revision 17db76ea…
+// (Meta, Apache-2.0). Size and LFS SHA-256 from the HF API; tokens.txt isn't in LFS, hashed from the download.
 #[cfg(test)]
-const WHISPER_BASE: &str = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/";
-pub const WHISPER_FILES: [ModelFile; 3] = [
+const MULTILINGUAL_BASE: &str = "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-int8-2025-11-12/resolve/17db76eab583b0b868ffb0df104ab879145087e5/";
+pub const MULTILINGUAL_FILES: [ModelFile; 2] = [
     ModelFile {
-        name: "turbo-encoder.int8.onnx",
-        url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-encoder.int8.onnx",
-        size: 674_716_297,
-        sha256: "b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b",
+        name: "model.int8.onnx",
+        url: "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-int8-2025-11-12/resolve/17db76eab583b0b868ffb0df104ab879145087e5/model.int8.onnx",
+        size: 1_031_628_252,
+        sha256: "f7b74c964039162423b83e3fa950ce24810c9a635d9ff8468b5f4d142b7c1e8c",
     },
     ModelFile {
-        name: "turbo-decoder.int8.onnx",
-        url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-decoder.int8.onnx",
-        size: 361_080_764,
-        sha256: "20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547",
-    },
-    ModelFile {
-        name: "turbo-tokens.txt",
-        url: "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-tokens.txt",
-        size: 816_730,
-        sha256: "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+        name: "tokens.txt",
+        url: "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-int8-2025-11-12/resolve/17db76eab583b0b868ffb0df104ab879145087e5/tokens.txt",
+        size: 86_423,
+        sha256: "a7a044c52cb29cbe8b0dc1953e92cefd4ca16b0ed968177b6beab21f9a7d0b31",
     },
 ];
 
@@ -101,8 +98,8 @@ pub fn dir(app: &AppHandle, m: &Model) -> Result<PathBuf, String> {
 
 /// The model a folder holds, by its name (`dir` puts each model in `models/<id>`).
 pub fn of(dir: &Path) -> &'static Model {
-    if dir.ends_with(WHISPER.id) {
-        &WHISPER
+    if dir.ends_with(MULTILINGUAL.id) {
+        &MULTILINGUAL
     } else {
         &PARAKEET
     }
@@ -117,16 +114,16 @@ pub fn installed(app: &AppHandle, m: &Model) -> bool {
     dir(app, m).is_ok_and(|d| present(&d))
 }
 
-/// The offline model to use: the preferred one ("multilingual" = Whisper, "european" = Parakeet) if
+/// The offline model to use: the preferred one ("multilingual" = Omnilingual, "european" = Parakeet) if
 /// installed, else the other one if that is installed.
-pub fn pick(pref: &str, whisper: bool, parakeet: bool) -> Option<&'static Model> {
-    let (first, second) = if pref == "european" { ((parakeet, &PARAKEET), (whisper, &WHISPER)) } else { ((whisper, &WHISPER), (parakeet, &PARAKEET)) };
+pub fn pick(pref: &str, multi: bool, parakeet: bool) -> Option<&'static Model> {
+    let (first, second) = if pref == "european" { ((parakeet, &PARAKEET), (multi, &MULTILINGUAL)) } else { ((multi, &MULTILINGUAL), (parakeet, &PARAKEET)) };
     [first, second].into_iter().find(|(ok, _)| *ok).map(|(_, m)| m)
 }
 
 /// `pick` with what is installed for this app.
 pub fn chosen(app: &AppHandle, pref: &str) -> Option<&'static Model> {
-    pick(pref, installed(app, &WHISPER), installed(app, &PARAKEET))
+    pick(pref, installed(app, &MULTILINGUAL), installed(app, &PARAKEET))
 }
 
 /// Stream `r` into `w`, hashing on the way; Err unless exactly `total` bytes with the expected SHA-256 arrived.
@@ -216,27 +213,27 @@ mod tests {
     #[test]
     fn model_files_are_pinned_and_add_up() {
         assert_eq!(total_size(&PARAKEET), 652_184_281 + 11_845_275 + 6_355_277 + 93_939);
-        assert_eq!(total_size(&WHISPER), 674_716_297 + 361_080_764 + 816_730);
+        assert_eq!(total_size(&MULTILINGUAL), 1_031_628_252 + 86_423);
         for f in &FILES {
             assert_eq!(f.url, format!("{BASE}{}", f.name));
             assert_eq!(f.sha256.len(), 64);
             assert!(f.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
         }
-        for f in &WHISPER_FILES {
-            assert_eq!(f.url, format!("{WHISPER_BASE}{}", f.name));
-            assert!(f.sha256.len() == 64 && !f.url.contains(".en"), "multilingual, not English-only");
+        for f in &MULTILINGUAL_FILES {
+            assert_eq!(f.url, format!("{MULTILINGUAL_BASE}{}", f.name));
+            assert_eq!(f.sha256.len(), 64);
         }
         assert!(!present(Path::new("Z:/definitely/not/here")));
-        assert!(of(Path::new("Z:/m/whisper-large-v3-turbo-int8")).is_whisper() && !of(Path::new("Z:/m/parakeet-tdt-0.6b-v3-int8")).is_whisper());
+        assert!(of(Path::new("Z:/m/omnilingual-asr-1b-ctc-int8")).is_multilingual() && !of(Path::new("Z:/m/parakeet-tdt-0.6b-v3-int8")).is_multilingual());
     }
 
     #[test]
     fn the_preferred_model_is_used_if_installed_else_the_other() {
         let id = |m: Option<&Model>| m.map(|m| m.id);
-        assert_eq!(id(pick("multilingual", true, true)), Some(WHISPER.id));
+        assert_eq!(id(pick("multilingual", true, true)), Some(MULTILINGUAL.id));
         assert_eq!(id(pick("european", true, true)), Some(PARAKEET.id));
         assert_eq!(id(pick("multilingual", false, true)), Some(PARAKEET.id)); // only Parakeet: keep it
-        assert_eq!(id(pick("european", true, false)), Some(WHISPER.id));
+        assert_eq!(id(pick("european", true, false)), Some(MULTILINGUAL.id));
         assert_eq!(id(pick("multilingual", false, false)), None);
     }
 

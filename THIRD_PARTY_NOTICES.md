@@ -8,6 +8,7 @@ reproduced in full below. (The app's own license is in LICENSE.)
 | sherpa-onnx (https://github.com/k2-fsa/sherpa-onnx) | Offline speech recognition, linked statically into the app | Apache-2.0 |
 | ONNX Runtime (https://github.com/microsoft/onnxruntime), © Microsoft Corporation | Neural-network runtime inside sherpa-onnx, linked statically | MIT |
 | NVIDIA Parakeet TDT 0.6B v3 (https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), int8 conversion by the sherpa-onnx project (https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8) | Speech recognition model; not shipped with the app, downloaded on the user's click | CC-BY-4.0 |
+| Meta Omnilingual ASR 1B CTC (https://github.com/facebookresearch/omnilingual-asr), © 2025 Meta Platforms, Inc. and affiliates, int8 conversion by the sherpa-onnx project (https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-int8-2025-11-12) | Multilingual speech recognition model; not shipped with the app, downloaded on the user's click | Apache-2.0 (same text as sherpa-onnx's above) |
 
 Only the speech-recognition parts of the sherpa-onnx static libraries end up in the app; its text-to-speech
 dependencies (espeak-ng, piper-phonemize) are not linked (checked: no espeak/piper code in the built binary).
