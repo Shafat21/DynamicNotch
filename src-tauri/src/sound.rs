@@ -216,10 +216,44 @@ pub mod parse {
     }
 }
 
+/// Is `exe` ("spotify.exe") the process behind media session `app`? The session names the app by its
+/// AppUserModelID ("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "Chrome", "MSEdge") or its exe path.
+/// shortcut: name matching; players whose id is opaque (Firefox's is a hash) fall back to the system volume.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn matches_app(app: &str, exe: &str) -> bool {
+    let stem = exe.trim_end_matches(".exe").to_lowercase();
+    let app = app.to_lowercase();
+    let app_stem = app.rsplit(['\\', '/']).next().unwrap_or(&app).trim_end_matches(".exe");
+    !stem.is_empty() && (app_stem == stem || (stem.len() >= 4 && app.contains(&stem)))
+}
+
+/// Volume 0..1 of the app playing media (`app`: its media session id), or None when no audio session matches.
+pub fn app_volume(app: String) -> Result<Option<f32>, String> {
+    run(move || os::app_volume(&app))
+}
+
+/// Set the playing app's volume; false when no audio session of that app was found.
+pub fn set_app_volume(app: String, value: f64) -> Result<bool, String> {
+    let v = volume_arg(value)?;
+    run(move || os::set_app_volume(&app, v))
+}
+
 #[cfg(test)]
 mod tests {
     use super::parse::*;
     use super::*;
+
+    #[test]
+    fn media_apps_match_their_process() {
+        assert!(matches_app("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "spotify.exe"));
+        assert!(matches_app("Spotify.exe", "spotify.exe"));
+        assert!(matches_app("Chrome", "chrome.exe"));
+        assert!(matches_app("MSEdge", "msedge.exe"));
+        assert!(matches_app(r"C:\Program Files\VideoLAN\vlc.exe", "vlc.exe"));
+        assert!(!matches_app("Chrome", "spotify.exe"));
+        assert!(!matches_app("308046B0AF4A39CB", "firefox.exe")); // opaque id: no match, system volume instead
+        assert!(!matches_app("Spotify", "")); // unknown process
+    }
 
     fn dev(id: &str, name: &str, default: bool) -> AudioDevice {
         AudioDevice { id: id.into(), name: name.into(), default }

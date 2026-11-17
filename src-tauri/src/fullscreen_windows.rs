@@ -60,16 +60,21 @@ pub fn fullscreen_state(app: &AppHandle, per_monitor: bool) -> Fs {
 
 /// File name of the process that owns `hwnd`, lower-case ("chrome.exe").
 fn exe_of(hwnd: HWND) -> Option<String> {
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    exe_of_pid(pid)
+}
+
+/// File name of process `pid`, lower-case ("spotify.exe"); None for pid 0 or a process we may not inspect.
+pub fn exe_of_pid(pid: u32) -> Option<String> {
     use windows::{
         core::PWSTR,
         Win32::{
             Foundation::CloseHandle,
             System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION},
-            UI::WindowsAndMessaging::GetWindowThreadProcessId,
         },
     };
-    let mut pid = 0u32;
-    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
     if pid == 0 {
         return None;
     }

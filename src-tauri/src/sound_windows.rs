@@ -8,7 +8,8 @@ use windows::core::{Interface, Result as WinResult, GUID, HRESULT, IUnknown, PCW
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
-    eCommunications, eConsole, eMultimedia, eRender, ERole, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
+    eCommunications, eConsole, eMultimedia, eRender, ERole, IAudioSessionControl2, IAudioSessionManager2, IMMDevice, IMMDeviceEnumerator,
+    ISimpleAudioVolume, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToStringAlloc};
 use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED, STGM_READ};
@@ -48,6 +49,39 @@ unsafe fn friendly_name(d: &IMMDevice) -> WinResult<String> {
     let name = PropVariantToStringAlloc(&pv).map(|p| take(p));
     let _ = PropVariantClear(&mut pv);
     name
+}
+
+/// Volume controls of the default output's audio sessions that belong to media app `app`.
+unsafe fn app_sessions(app: &str) -> WinResult<Vec<ISimpleAudioVolume>> {
+    let dev = enumerator()?.GetDefaultAudioEndpoint(eRender, eConsole)?;
+    let mgr = dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)?;
+    let list = mgr.GetSessionEnumerator()?;
+    let mut out = Vec::new();
+    for i in 0..list.GetCount()? {
+        let Ok(ctl) = list.GetSession(i).and_then(|s| s.cast::<IAudioSessionControl2>()) else { continue };
+        let exe = ctl.GetProcessId().ok().and_then(crate::fullscreen::exe_of_pid);
+        if exe.is_some_and(|e| super::matches_app(app, &e)) {
+            out.push(ctl.cast::<ISimpleAudioVolume>()?);
+        }
+    }
+    Ok(out)
+}
+
+pub fn app_volume(app: &str) -> Result<Option<f32>, String> {
+    unsafe {
+        let s = app_sessions(app).map_err(err)?;
+        Ok(s.first().and_then(|v| v.GetMasterVolume().ok()))
+    }
+}
+
+pub fn set_app_volume(app: &str, v: f32) -> Result<bool, String> {
+    unsafe {
+        let s = app_sessions(app).map_err(err)?;
+        for vol in &s {
+            vol.SetMasterVolume(v, std::ptr::null()).map_err(err)?;
+        }
+        Ok(!s.is_empty())
+    }
 }
 
 unsafe fn endpoint_volume() -> WinResult<(IMMDevice, IAudioEndpointVolume)> {

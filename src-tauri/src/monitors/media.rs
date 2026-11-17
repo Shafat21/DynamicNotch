@@ -12,7 +12,7 @@ mod os;
 #[cfg(target_os = "linux")]
 #[path = "media_linux.rs"]
 mod os;
-pub use os::{control, open_player, seek, spawn};
+pub use os::{control, current_app, open_player, seek, spawn};
 
 /// Lyrics are shown slightly early so the line appears as it is sung (the card animates in over ~0.35 s).
 pub(super) const LYRIC_LEAD_SECS: f64 = 0.5;
@@ -25,11 +25,15 @@ pub(super) struct Media {
     accent: String, // album art itself goes out separately as `media-art`, only on track change
     duration: f64,  // seconds, 0 if unknown
     seekable: bool,
+    /// None when the player doesn't offer it (the button is hidden)
+    shuffle: Option<bool>,
+    /// "none" | "track" | "list"; None when the player doesn't offer repeat
+    repeat: Option<&'static str>,
 }
 
 impl Media {
     pub(super) fn idle() -> Self {
-        Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into(), duration: 0.0, seekable: true }
+        Self { state: "Idle", title: String::new(), artist: String::new(), accent: "#000000".into(), duration: 0.0, seekable: true, shuffle: None, repeat: None }
     }
 }
 

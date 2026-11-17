@@ -177,11 +177,19 @@
                       <div class="player-controls">
                         <button class="media-btn" id="btn-lyrics" data-icon="lyrics" title="Lyrics" aria-pressed="true"></button>
                         <span class="spacer"></span>
+                        <button class="media-btn" data-media="shuffle" id="btn-shuffle" data-icon="shuffle" title="Shuffle" aria-pressed="false" hidden></button>
                         <button class="media-btn big" data-media="prev" data-icon="prev" data-size="22" title="Previous"></button>
                         <button class="media-btn big" data-media="toggle" data-icon="play" data-size="28" title="Play/Pause"></button>
                         <button class="media-btn big" data-media="next" data-icon="next" data-size="22" title="Next"></button>
+                        <button class="media-btn" data-media="repeat" id="btn-repeat" data-icon="repeat" title="Repeat" aria-pressed="false" hidden></button>
                         <span class="spacer"></span>
                         <button class="media-btn" id="btn-open-player" data-icon="dots" title="Open player"></button>
+                      </div>
+                      <!-- the playing app's own volume (Spotify, Chrome...), else the system volume -->
+                      <div class="player-volume">
+                        <span class="pv-ic" data-icon="volume" data-size="14" aria-hidden="true"></span>
+                        <input type="range" class="slider" id="player-volume" min="0" max="100" step="1" aria-label="Player volume" />
+                        <span class="pv-val small muted" id="player-volume-val"></span>
                       </div>
                     </div>
                   </div>
@@ -420,6 +428,9 @@
                 </div>
                 <div class="bt-list" id="bt-tab-list"></div>
                 <div class="small bt-err" id="bt-tab-err" hidden></div>
+                <!-- USB and 2.4 GHz devices (peripherals.ts): battery where the device reports it (Logitech) -->
+                <div class="panel-head per-head"><span class="panel-title">Wired &amp; wireless</span></div>
+                <div class="bt-list" id="per-list"></div>
               </section>
 
               <!-- Month progress -->

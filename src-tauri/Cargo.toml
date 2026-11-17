@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-notch"
-version = "0.2.3"
+version = "0.2.4"
 description = "Dynamic Island for Windows, written in Rust (Tauri 2 + SQLite)"
 edition = "2021"
 publish = false
@@ -40,6 +40,7 @@ tauri-plugin-updater = "2"
 
 [target.'cfg(windows)'.dependencies]
 drag = "2.1" # native drag-out of shelf files
+hidapi = { version = "2.6", default-features = false, features = ["windows-native"] } # wired / wireless peripherals and their battery
 keyring = { version = "3", features = ["windows-native"] }
 windows = { version = "0.61", features = [
   "Foundation",

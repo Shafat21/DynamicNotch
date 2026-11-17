@@ -12,6 +12,7 @@ mod fullscreen;
 pub mod hook;
 mod launcher;
 mod quicklinks;
+mod peripherals;
 mod menu;
 mod monitors;
 mod notes;
@@ -205,6 +206,9 @@ pub fn run() {
             commands::media_open_player,
             commands::run_action,
             commands::bt_state,
+            commands::media_volume,
+            commands::set_media_volume,
+            commands::peripherals,
             commands::bt_set_radio,
             commands::bt_connect,
             commands::bt_disconnect,

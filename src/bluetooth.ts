@@ -3,6 +3,7 @@
 // (Windows) each row opens the system Bluetooth settings instead.
 import { invoke } from "@tauri-apps/api/core";
 import { icon } from "./icons-line";
+import { showPeripherals } from "./peripherals";
 
 type BtDevice = { id: string; name: string; kind: "audio" | "input" | "phone" | "other"; connected: boolean };
 type BtState = { radio: boolean | null; devices: BtDevice[]; canConnect: boolean };
@@ -96,6 +97,7 @@ function draw(): void {
 
 /** Called when the Home card or the Devices tab is visible (and by the 10 s poll). */
 export async function showBluetooth(): Promise<void> {
+  if (!document.getElementById("tab-devices")!.hidden) void showPeripherals(); // the USB / dongle list lives in the tab only
   if (fetching) return;
   fetching = true;
   try {

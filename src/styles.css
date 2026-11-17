@@ -1021,3 +1021,15 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .lq-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-full); border: 1px solid var(--line); background: var(--inset); font-size: var(--t12); }
 .lq-chip:hover { background: var(--hover); }
 .lq-chip kbd { font: inherit; font-size: var(--t11); color: var(--muted); }
+
+/* Devices tab: USB / 2.4 GHz peripherals (peripherals.ts) */
+.per-head { margin: 14px 0 8px; }
+.per-batt { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px 7px; border-radius: var(--radius-full); font-size: var(--t11); font-weight: 600; font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--success) 28%, transparent) var(--pct), var(--inset) var(--pct)); color: var(--text); }
+.per-batt.low { background: linear-gradient(90deg, color-mix(in srgb, var(--destructive-text) 30%, transparent) var(--pct), var(--inset) var(--pct)); }
+
+/* music: shuffle / repeat state and the player volume row */
+.media-btn[data-media="shuffle"].on, .media-btn[data-media="repeat"].on { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.player-volume { display: flex; align-items: center; gap: 8px; margin-top: 2px; color: var(--muted); }
+.player-volume .slider { flex: 1; min-width: 0; }
+.pv-val { width: 32px; text-align: right; font-variant-numeric: tabular-nums; }

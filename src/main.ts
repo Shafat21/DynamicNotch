@@ -39,7 +39,7 @@ import { renderHome } from "./ui/home";
 import { closeMore, fitTabs, initTabs, renderTabs, setActiveTab, visibleTabs } from "./ui/tabs";
 import { applyTheme, DEFAULT_LOOK, type Look } from "./ui/theme";
 
-type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean };
+type Media = { state: "Playing" | "Paused" | "Idle"; title: string; artist: string; accent: string; duration: number; seekable: boolean; shuffle?: boolean | null; repeat?: "none" | "track" | "list" | null };
 type Progress = { position: number; duration: number };
 type Perf = { cpu: number; ram: number; disk: number; gpu: number | null; down: number; up: number };
 type LyricLine = { t: number; text: string };
@@ -372,7 +372,7 @@ function renderView(): void {
   if (hover && t === "month") renderMonth();
   if (hover && t === "notes") showNotes();
   if (hover && t === "reminders") showReminders();
-  if (hover && t === "music") renderLyric(); // centre the line now that the panel has a size
+  if (hover && t === "music") (renderLyric(), void loadVolume()); // centre the line now that the panel has a size; volume may have changed elsewhere
   if (hover && t === "clipboard") void showClipboard();
   if (hover && t === "shelf") void showShelf();
   if (hover && (t === "devices" || (t === "home" && !$("card-devices").hidden))) void showBluetooth();
@@ -430,6 +430,27 @@ function onArt({ art }: { art: string }): void {
   }
 }
 
+let prevTitle = "";
+let volTimer = 0;
+/** The player volume slider: the playing app's volume, else the system's (the label says which). */
+async function loadVolume(): Promise<void> {
+  const s = $<HTMLInputElement>("player-volume");
+  if (document.activeElement === s) return; // the user is dragging it
+  try {
+    const v = await invoke<{ volume: number; app: boolean }>("media_volume");
+    showVolume(Math.round(v.volume * 100), v.app);
+  } catch (e) {
+    console.error(e);
+  }
+}
+function showVolume(pct: number, app?: boolean): void {
+  const s = $<HTMLInputElement>("player-volume");
+  s.value = String(pct);
+  s.style.setProperty("--fill", `${pct}%`);
+  $("player-volume-val").textContent = `${pct}%`;
+  if (app !== undefined) s.title = app ? "Player volume" : "System volume (this player has no volume of its own we can reach)";
+}
+
 function onMedia(m: Media): void {
   const idle = m.state === "Idle";
   if (m.title !== ui.media.title || m.artist !== ui.media.artist) ui.progress.position = 0;
@@ -444,6 +465,17 @@ function onMedia(m: Media): void {
   $("player-artist").textContent = idle ? "" : m.artist;
   $("player-state").textContent = idle ? "" : m.state;
   $("player-eq").classList.toggle("on", m.state === "Playing");
+  // shuffle / repeat only where the player offers them (Spotify does; most browsers don't)
+  const shuf = $("btn-shuffle"), rep = $("btn-repeat");
+  shuf.hidden = idle || m.shuffle == null;
+  shuf.classList.toggle("on", !!m.shuffle);
+  shuf.setAttribute("aria-pressed", String(!!m.shuffle));
+  rep.hidden = idle || m.repeat == null;
+  rep.classList.toggle("on", m.repeat === "list" || m.repeat === "track");
+  rep.setAttribute("aria-pressed", String(m.repeat !== "none"));
+  rep.title = m.repeat === "track" ? "Repeat: this song" : m.repeat === "list" ? "Repeat: on" : "Repeat: off";
+  rep.innerHTML = icon(m.repeat === "track" ? "repeat1" : "repeat", 18); // static SVG
+  if (m.title !== prevTitle) ((prevTitle = m.title), void loadVolume()); // a new song may be another app
   $("tile-media-title").textContent = idle ? "Nothing playing" : m.title;
   $("tile-media-artist").textContent = idle ? "" : m.artist;
   renderProgress();
@@ -759,6 +791,12 @@ function updateApps(apps: Promise<LauncherApp[]>): void {
 
 // ---------- user input ----------
 function wirePlayer(): void {
+  const vol = $<HTMLInputElement>("player-volume");
+  vol.oninput = () => {
+    showVolume(Number(vol.value));
+    clearTimeout(volTimer);
+    volTimer = window.setTimeout(() => invoke("set_media_volume", { value: Number(vol.value) / 100 }).catch(console.error), 60);
+  };
   $("btn-lyrics").onclick = () => {
     ui.showLyric = !ui.showLyric;
     renderLyric();

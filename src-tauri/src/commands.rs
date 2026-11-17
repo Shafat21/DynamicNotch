@@ -362,6 +362,32 @@ pub async fn media_control(action: String) -> Res<()> {
     tauri::async_runtime::spawn_blocking(move || monitors::media::control(&action)).await.map_err(err)?
 }
 
+/// Volume of the app playing music (`app: true`), or the system volume when that app has no audio session we
+/// can match (`app: false`).
+#[tauri::command]
+pub async fn media_volume() -> Res<Value> {
+    blocking(|| {
+        if let Some(v) = monitors::media::current_app().map(sound::app_volume).transpose()?.flatten() {
+            return Ok(json!({ "volume": v, "app": true }));
+        }
+        Ok(json!({ "volume": sound::state()?.volume, "app": false }))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn set_media_volume(value: f64) -> Res<()> {
+    blocking(move || {
+        if let Some(app) = monitors::media::current_app() {
+            if sound::set_app_volume(app, value)? {
+                return Ok(());
+            }
+        }
+        sound::set_volume(value)
+    })
+    .await
+}
+
 /// Seek the current track; bounds come from the last published `media-progress` duration.
 #[tauri::command]
 pub async fn media_seek(app: AppHandle, seconds: f64) -> Res<()> {
@@ -381,6 +407,12 @@ pub async fn media_open_player() -> Res<()> {
 /// Sound & brightness: OS calls are slow or COM-bound, so they run off the main thread.
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Res<T> + Send + 'static) -> Res<T> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(err)?
+}
+
+/// USB and 2.4 GHz dongle devices, with battery where they report it (Devices tab).
+#[tauri::command]
+pub async fn peripherals() -> Res<Vec<crate::peripherals::Peripheral>> {
+    blocking(|| Ok(crate::peripherals::list())).await
 }
 
 #[tauri::command]

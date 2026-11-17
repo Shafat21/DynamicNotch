@@ -14,6 +14,10 @@ pub fn seek(_seconds: f64) -> Result<(), String> {
     Err("not implemented on Linux yet".into())
 }
 
+pub fn current_app() -> Option<String> {
+    None
+}
+
 pub fn open_player() -> Result<(), String> {
     Err("not implemented on Linux yet".into())
 }

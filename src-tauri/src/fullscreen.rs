@@ -12,6 +12,8 @@ mod os;
 #[cfg(target_os = "linux")]
 #[path = "fullscreen_linux.rs"]
 mod os;
+#[cfg(windows)]
+pub use os::exe_of_pid;
 
 /// (left, top, right, bottom). A window covers a monitor when it reaches past every edge.
 pub fn covers(win: (i32, i32, i32, i32), mon: (i32, i32, i32, i32)) -> bool {

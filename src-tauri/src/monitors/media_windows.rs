@@ -15,6 +15,7 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionManager as Manager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
 };
+use windows::Media::MediaPlaybackAutoRepeatMode as Repeat;
 use windows::Storage::Streams::DataReader;
 
 pub fn spawn(app: AppHandle) {
@@ -134,8 +135,16 @@ fn read_state(s: &Session) -> Result<Media> {
         .GetTimelineProperties()
         .and_then(|tl| Ok((tl.EndTime()?.Duration - tl.StartTime()?.Duration) as f64 / 1e7))
         .map_or(0.0, |d| d.max(0.0));
-    let seekable = info.Controls().and_then(|c| c.IsPlaybackPositionEnabled()).unwrap_or(true);
-    Ok(Media { state, title, artist: props.Artist()?.to_string(), accent: String::new(), duration, seekable })
+    let controls = info.Controls().ok();
+    let seekable = controls.as_ref().and_then(|c| c.IsPlaybackPositionEnabled().ok()).unwrap_or(true);
+    let can = |f: fn(&windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackControls) -> Result<bool>| controls.as_ref().and_then(|c| f(c).ok()).unwrap_or(false);
+    let shuffle = can(|c| c.IsShuffleEnabled()).then(|| info.IsShuffleActive().and_then(|v| v.Value()).unwrap_or(false));
+    let repeat = can(|c| c.IsRepeatEnabled()).then(|| match info.AutoRepeatMode().and_then(|v| v.Value()) {
+        Ok(Repeat::Track) => "track",
+        Ok(Repeat::List) => "list",
+        _ => "none",
+    });
+    Ok(Media { state, title, artist: props.Artist()?.to_string(), accent: String::new(), duration, seekable, shuffle, repeat })
 }
 
 /// Current playback position; while playing, extrapolated from the last timeline update.
@@ -182,6 +191,19 @@ pub fn control(action: &str) -> std::result::Result<(), String> {
             "toggle" => s.TryTogglePlayPauseAsync()?.get()?,
             "next" => s.TrySkipNextAsync()?.get()? || (media_key(VK_MEDIA_NEXT_TRACK), true).1,
             "prev" => s.TrySkipPreviousAsync()?.get()? || (media_key(VK_MEDIA_PREV_TRACK), true).1,
+            "shuffle" => {
+                let on = s.GetPlaybackInfo()?.IsShuffleActive().and_then(|v| v.Value()).unwrap_or(false);
+                s.TryChangeShuffleActiveAsync(!on)?.get()?
+            }
+            // off -> whole list -> this track -> off, like Spotify's button
+            "repeat" => {
+                let next = match s.GetPlaybackInfo()?.AutoRepeatMode().and_then(|v| v.Value()) {
+                    Ok(Repeat::List) => Repeat::Track,
+                    Ok(Repeat::Track) => Repeat::None,
+                    _ => Repeat::List,
+                };
+                s.TryChangeAutoRepeatModeAsync(next)?.get()?
+            }
             _ => false,
         };
         Ok(())
@@ -196,6 +218,12 @@ pub fn seek(seconds: f64) -> std::result::Result<(), String> {
         Ok(false) => Err("The player refused to seek".into()),
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// The id of the app behind the current media session ("Spotify.exe", "SpotifyAB.SpotifyMusic_..!Spotify").
+pub fn current_app() -> Option<String> {
+    let s = Manager::RequestAsync().ok()?.get().ok()?.GetCurrentSession().ok()?;
+    s.SourceAppUserModelId().ok().map(|h| h.to_string()).filter(|a| !a.is_empty())
 }
 
 /// Bring the current session's app forward: packaged apps via their AUMID, others via their exe's window.
