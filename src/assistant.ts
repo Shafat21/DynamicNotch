@@ -2,6 +2,7 @@
 // blocking prompts (permission / AskUserQuestion) answered in the island, Pal's mood from all of it.
 // Agents and their labels come from the bridge (`bridge.agents`); nothing here names one.
 // Session messages, tool summaries and questions come from the agents: textContent only.
+import { renderReply } from "./pal-reply";
 import { invoke } from "@tauri-apps/api/core";
 import type { PalMood } from "./mood";
 import { createPal, updateMood, type Pal } from "./pal";
@@ -25,6 +26,7 @@ const st = {
   bridge: { online: true, connected: false } as Bridge,
   queue: [] as { p: Prompt; at: number }[], // FIFO; [0] is on screen
   cardId: null as string | null, // session picked on the card (wheel / ‹ ›); null = newest
+  replyTo: null as string | null, // session the Pal tab's message box sends to; null = newest
   note: "", // set_agent error
   usage: null as Usage | null, // sticky `usage`; null until a statusLine ever arrived (hide the widget)
 };
@@ -284,6 +286,7 @@ function renderTab(): void {
   const n = st.sessions.length;
   state.replaceChildren(el("b", "", "Coding agents"), el("span", "muted small", text ?? `${n} session${n === 1 ? "" : "s"}`));
   if (st.bridge.online && !st.bridge.connected) state.append(button("btn primary", "Connect an agent", connect));
+  const target = st.sessions.find((s) => s.id === st.replyTo) ?? st.sessions[0] ?? null; // sessions come newest first
   $("pal-sessions").replaceChildren(
     ...usageBlock(),
     ...st.sessions.map((s) => {
@@ -294,10 +297,17 @@ function renderTab(): void {
       head.append(dot(s.status), el("b", "ell", s.project || agentLabel(s.agent)), el("span", "muted small", agentLabel(s.agent)), el("span", "muted small sess-status", STATUS_TEXT[s.status]), el("span", "spacer"), when);
       row.append(head);
       if (s.message) row.append(Object.assign(el("div", "sess-msg muted", s.message), { title: s.message }));
-      row.title = s.cwd;
+      row.title = `${s.cwd}
+Click to message this session`;
+      row.classList.toggle("picked", s.id === target?.id && st.sessions.length > 1);
+      row.onclick = () => {
+        st.replyTo = s.id;
+        renderTab();
+      };
       return row;
     }),
   );
+  renderReply(target);
 }
 
 // ---------- prompts ----------

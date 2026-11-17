@@ -221,7 +221,19 @@
                     <span id="pal-tab-face"></span>
                     <div class="pal-state" id="pal-state"></div>
                   </div>
-                  <div class="sess-list" id="pal-sessions"></div>
+                  <div class="pal-main">
+                    <div class="sess-list" id="pal-sessions"></div>
+                    <!-- reply to the picked session (pal-reply.ts): pasted into the agent's window with Enter -->
+                    <form class="pal-reply" id="pal-reply" hidden>
+                      <div class="pr-row">
+                        <img class="pr-img" id="pr-img" alt="Attached image" hidden />
+                        <input id="pr-text" type="text" autocomplete="off" placeholder="Message the agent… (paste an image too)" aria-label="Message to the coding agent" />
+                        <button type="button" class="action-btn" id="pr-clear-img" title="Remove the image" hidden>×</button>
+                        <button type="submit" class="btn primary small" id="pr-send">Send</button>
+                      </div>
+                      <div class="pr-hint small muted" id="pr-hint"></div>
+                    </form>
+                  </div>
                 </div>
               </section>
 

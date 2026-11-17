@@ -110,6 +110,26 @@ pub fn list_displays(app: AppHandle) -> Res<Vec<Value>> {
         .collect())
 }
 
+/// The roadmap for Settings → Roadmap: roadmap.json from the repo, so it can change without an app update; this
+/// build's copy when offline or when the download isn't a valid roadmap.
+#[tauri::command]
+pub async fn roadmap() -> Value {
+    const URL: &str = "https://raw.githubusercontent.com/Shafat21/DynamicNotch/main/roadmap.json";
+    let live = tauri::async_runtime::spawn_blocking(|| -> Option<Value> {
+        let v: Value = monitors::http().get(URL).call().ok()?.body_mut().read_json().ok()?;
+        v["sections"].is_array().then_some(v)
+    })
+    .await
+    .ok()
+    .flatten();
+    let (mut v, is_live) = match live {
+        Some(v) => (v, true),
+        None => (serde_json::from_str(include_str!("../../roadmap.json")).unwrap_or_default(), false),
+    };
+    v["live"] = json!(is_live);
+    v
+}
+
 /// About-page links by id (the webview never sends a URL).
 #[tauri::command]
 pub fn open_link(id: String) -> Res<()> {
@@ -118,6 +138,7 @@ pub fn open_link(id: String) -> Res<()> {
         "issues" => "https://github.com/Shafat21/DynamicNotch/issues",
         "releases" => "https://github.com/Shafat21/DynamicNotch/releases",
         "site" => "https://shafat21.online",
+        "request" => "https://www.shafat21.online/#contact",
         _ => return Err(format!("unknown link {id}")),
     };
     launcher::os::shell_open(url)
@@ -409,6 +430,41 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Res<T> + Send + 'static
     tauri::async_runtime::spawn_blocking(f).await.map_err(err)?
 }
 
+/// Pal tab reply: paste `text` (and a pasted PNG, base64) into the window of session `id`'s agent, with Enter.
+#[tauri::command]
+pub async fn reply_to_agent(app: AppHandle, id: String, text: String, image: Option<String>) -> Res<()> {
+    if !cfg!(windows) {
+        return Err("Replying from the island works on Windows only for now".into());
+    }
+    let s = app.state::<AppState>().sessions.lock().unwrap().list().into_iter().find(|s| s.id == id).ok_or("That session has ended")?;
+    blocking(move || {
+        #[cfg(windows)]
+        {
+            let path = match image {
+                Some(b64) => {
+                    let png = bridge::reply::decode_base64(&b64).ok_or("That image couldn't be read")?;
+                    if png.len() > 20 * 1024 * 1024 {
+                        return Err("That image is too big (20 MB at most)".into());
+                    }
+                    Some(bridge::reply::save_image(&png)?)
+                }
+                None => None,
+            };
+            let msg = bridge::reply::message(&text, path.as_deref());
+            if msg.is_empty() {
+                return Err("Type a message first".into());
+            }
+            bridge::reply::send(&s.agent, &s.cwd, &s.project, &msg)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (s, text, image);
+            Ok(())
+        }
+    })
+    .await
+}
+
 /// USB and 2.4 GHz dongle devices, with battery where they report it (Devices tab).
 #[tauri::command]
 pub async fn peripherals() -> Res<Vec<crate::peripherals::Peripheral>> {
@@ -694,6 +750,17 @@ pub async fn set_agent(app: AppHandle, id: String, on: bool) -> Res<()> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn bundled_roadmap_is_valid() {
+        // the offline fallback: a broken roadmap.json would show an empty page
+        let v: Value = serde_json::from_str(include_str!("../../roadmap.json")).unwrap();
+        assert!(v["updated"].is_string());
+        for s in v["sections"].as_array().unwrap() {
+            assert!(s["title"].is_string());
+            assert!(s["items"].as_array().unwrap().iter().all(|i| i["title"].is_string() && i["text"].is_string()));
+        }
+    }
 
     #[test]
     fn general_keys_are_allow_listed_and_typed() {

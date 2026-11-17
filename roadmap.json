@@ -1,0 +1,31 @@
+{
+  "updated": "2026-11-18",
+  "sections": [
+    {
+      "title": "Next up",
+      "items": [
+        { "title": "More device batteries", "text": "Razer headsets and mice, Bluetooth devices that report a battery level, and other brands with a known protocol. Today only Logitech wireless devices show a battery." },
+        { "title": "Spotify extras", "text": "Like a song, see and change the queue, pick playlists and switch the playback device. Needs a Spotify login; today the island uses Windows' media controls only." },
+        { "title": "Pal shows what your coding agent is doing", "text": "The current step (reading, editing, running a command) and a live view of the code it changes, with a setting to keep code off the screen." }
+      ]
+    },
+    {
+      "title": "Planned",
+      "items": [
+        { "title": "Both displays, polished", "text": "One focus timer shared by both islands, and an island on every monitor (today: two)." },
+        { "title": "Launcher", "text": "A calculator and file search in the search box." },
+        { "title": "Linux", "text": "Wired and wireless devices with battery, and drag-to-any-edge placement." },
+        { "title": "Signed installer", "text": "So Windows SmartScreen no longer warns on first install." }
+      ]
+    },
+    {
+      "title": "Recently shipped",
+      "items": [
+        { "title": "0.2.5", "text": "Message your coding agent (text and images) from the Pal tab, and this roadmap in Settings." },
+        { "title": "0.2.4", "text": "Wired and wireless devices (Logitech battery), per-app player volume, shuffle and repeat." },
+        { "title": "0.2.3", "text": "Island on both displays, launcher search and quick links, apps the island stays visible over in fullscreen." },
+        { "title": "0.2.2", "text": "Custom Windows installer, silent updates." }
+      ]
+    }
+  ]
+}

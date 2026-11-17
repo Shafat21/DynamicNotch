@@ -33,6 +33,7 @@ import { CARDS, type CardId } from "./compact/pager";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
 import { initQuickLinks } from "./quicklinks";
+import { initPalReply } from "./pal-reply";
 import { sfx } from "./island-window";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 import { renderHome } from "./ui/home";
@@ -909,6 +910,7 @@ function wireInput(): void {
       else setState("hover");
     },
   });
+  initPalReply((err) => showEvent("Pal", String(err), 4500));
   initBluetooth({ visible: () => ui.state === "hover" && (ui.tab === "devices" || (ui.tab === "home" && !$("card-devices").hidden)) });
   initSound({ switchFailed: () => openTab("sound") });
   initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });

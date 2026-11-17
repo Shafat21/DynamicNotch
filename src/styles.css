@@ -1033,3 +1033,14 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .player-volume { display: flex; align-items: center; gap: 8px; margin-top: 2px; color: var(--muted); }
 .player-volume .slider { flex: 1; min-width: 0; }
 .pv-val { width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Pal tab: message box for the picked session (pal-reply.ts) */
+.pal-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sess { cursor: pointer; }
+.sess.picked { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+.pal-reply { display: flex; flex-direction: column; gap: 4px; }
+.pr-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: var(--radius-lg); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); }
+.pr-row:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+.pr-row input { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; }
+.pr-img { flex: none; width: 28px; height: 28px; object-fit: cover; border-radius: 6px; }
+.pr-hint { padding: 0 6px; }

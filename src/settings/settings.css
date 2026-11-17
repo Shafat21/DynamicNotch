@@ -242,3 +242,14 @@ input[type="search"] { width: 100%; height: 32px; margin-bottom: 8px; }
 .chip-x { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; padding: 0 5px; border-radius: 50%; }
 .chip-x:hover { background: rgb(255 255 255 / 0.12); }
 .exempt .txt { width: 150px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
+
+/* sidebar footer: roadmap / feature request / bug links */
+.nav-foot { margin-top: auto; display: flex; flex-direction: column; gap: 0; padding-top: 10px; border-top: 1px solid var(--line); }
+#nav .nav-link { justify-content: space-between; padding: 6px 12px; font-size: 12.5px; }
+.nav-ext { opacity: 0.6; }
+
+/* Settings → Roadmap */
+.rm-item { padding: 12px 14px; margin-top: 8px; border-radius: 12px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.rm-title { font-weight: 600; }
+.rm-text { margin-top: 3px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.rm-actions { margin-top: 22px; }

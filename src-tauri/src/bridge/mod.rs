@@ -1,6 +1,9 @@
 pub mod agents;
 pub mod install;
 pub mod prompt;
+#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub mod reply;
 pub mod server;
 pub mod sessions;
 pub mod usage;

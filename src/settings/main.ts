@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { icon } from "./icons";
 import { initTooltips } from "../tooltip";
 import { acceptLook, store, type Look, type Settings } from "./store";
-import { h } from "./ui";
+import { h, report } from "./ui";
 import { renderGeneral } from "./pages/general";
 import { renderAppearance } from "./pages/appearance";
 import { renderTabs } from "./pages/tabs";
@@ -14,6 +14,7 @@ import { renderAgents } from "./pages/agents";
 import { renderFeatures } from "./pages/features";
 import { renderDictation } from "./pages/dictation";
 import { renderAbout } from "./pages/about";
+import { renderRoadmap } from "./pages/roadmap";
 
 /** A page draws into `root`; it may return a cleanup (e.g. event listeners) run when leaving it. */
 type Render = (root: HTMLElement) => (() => void) | void;
@@ -27,6 +28,7 @@ const PAGES: [id: string, label: string, render: Render][] = [
   ["features", "Integrations", renderFeatures],
   ["dictation", "Dictation", renderDictation],
   ["about", "About", renderAbout],
+  ["roadmap", "Roadmap", renderRoadmap],
 ];
 
 const nav = document.getElementById("nav")!;
@@ -59,6 +61,14 @@ async function boot(): Promise<void> {
       b.dataset.page = id;
       return b;
     }),
+    // bottom of the sidebar: where the app is going, and how to ask for something
+    h(
+      "div",
+      { className: "nav-foot" },
+      ...[["request", "Request a feature"], ["issues", "Report a bug"]].map(([id, label]) =>
+        h("button", { type: "button", className: "nav-link", onclick: () => invoke("open_link", { id }).catch((e) => report(String(e))) }, label, h("span", { className: "nav-ext", ariaHidden: "true" }, "↗")),
+      ),
+    ),
   );
   show("general");
 }
