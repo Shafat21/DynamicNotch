@@ -5,6 +5,7 @@ use crate::placement::{self, Edge};
 use crate::{display, publish};
 use serde::Deserialize;
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition};
 
 #[cfg(windows)]
@@ -14,6 +15,21 @@ mod os;
 #[path = "window_linux.rs"]
 mod os;
 pub use os::{set_hit_rect, setup};
+
+/// The first island, and the second one that "Both displays" adds on another monitor (Windows).
+pub const MAIN: &str = "main";
+pub const SECOND: &str = "island2";
+pub const ISLANDS: [&str; 2] = [MAIN, SECOND];
+
+/// Event name for one island window: "hover" for the first, "hover:island2" for the second (each page listens for its own).
+pub fn evt(label: &str, base: &'static str) -> &'static str {
+    match (label, base) {
+        (SECOND, "hover") => "hover:island2",
+        (SECOND, "display") => "display:island2",
+        (SECOND, "fullscreen") => "fullscreen:island2",
+        (_, b) => b,
+    }
+}
 
 #[derive(Deserialize, Clone, Copy, Default, Debug)]
 pub struct Rect {
@@ -29,13 +45,57 @@ impl Rect {
     }
 }
 
-/// Put the window top-centre on the chosen monitor, sized and scaled for its work area, and
-/// publish `display`. Safe to call again on any monitor/setting change.
+/// Put the island(s) on their monitors, sized and scaled for each work area, and publish `display`. With "Both
+/// displays" on (Windows) a second island window is created on the other monitor, or closed when it isn't wanted.
+/// Safe to call again on any monitor/setting change.
 pub fn place(app: &AppHandle) -> tauri::Result<()> {
     let s = crate::current_settings(app).map_err(|e| tauri::Error::Io(std::io::Error::other(e)))?;
-    let win = app.get_webview_window("main").ok_or(tauri::Error::WindowNotFound)?;
     let (mons, infos) = display::monitors(app)?;
     let Some(i) = display::choose_monitor(&infos, &s.display) else { return Ok(()) };
+    place_on(app, MAIN, i, &s, &mons, &infos)?;
+    let second = if cfg!(windows) && s.dual_notch { display::second_monitor(&infos, i) } else { None };
+    match (second, app.get_webview_window(SECOND)) {
+        (Some(j), Some(_)) => place_on(app, SECOND, j, &s, &mons, &infos)?,
+        (Some(_), None) => create_second(app.clone()),
+        (None, Some(w)) => {
+            let _ = w.destroy();
+            crate::fullscreen::island_closed(app, SECOND);
+        }
+        (None, None) => {}
+    }
+    Ok(())
+}
+
+static CREATING: AtomicBool = AtomicBool::new(false);
+
+/// Builds the second island on a worker thread (creating a window from a command's own thread can deadlock on
+/// Windows), then places it. The page is the same one the first island runs.
+fn create_second(app: AppHandle) {
+    if CREATING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(move || {
+        let made = (|| -> tauri::Result<()> {
+            let mut cfg = app.config().app.windows.first().cloned().ok_or(tauri::Error::WindowNotFound)?;
+            cfg.label = SECOND.into();
+            let win = tauri::WebviewWindowBuilder::from_config(&app, &cfg)?.build()?;
+            win.set_ignore_cursor_events(true)?; // clicks pass through until the cursor reaches the island
+            win.show()
+        })();
+        CREATING.store(false, Ordering::SeqCst);
+        match made {
+            Ok(()) => {
+                if let Err(e) = place(&app) {
+                    eprintln!("display: placing the second island failed: {e}");
+                }
+            }
+            Err(e) => eprintln!("display: could not create the second island: {e}"),
+        }
+    });
+}
+
+fn place_on(app: &AppHandle, label: &str, i: usize, s: &crate::db::Settings, mons: &[tauri::Monitor], infos: &[display::MonitorInfo]) -> tauri::Result<()> {
+    let win = app.get_webview_window(label).ok_or(tauri::Error::WindowNotFound)?;
     let m = &mons[i];
     let sf = m.scale_factor();
     let wa = m.work_area();
@@ -57,7 +117,7 @@ pub fn place(app: &AppHandle) -> tauri::Result<()> {
     let mon = &infos[i];
     publish(
         app,
-        "display",
+        evt(label, "display"),
         json!({ "uiScale": ui, "edge": p.edge, "anchor": anchor / sf, "monitor": { "index": i, "name": mon.name, "width": mon.width, "height": mon.height, "scale": sf } }),
     );
     Ok(())

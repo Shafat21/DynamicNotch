@@ -1,8 +1,8 @@
 //! Windows: top-centre placement, and a 25 ms cursor poll that toggles click-through and emits `hover`.
 
-use super::Rect;
+use super::{evt, Rect, ISLANDS};
 use crate::AppState;
-use std::{thread, time::Duration};
+use std::{collections::HashMap, thread, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, Monitor, WebviewWindow};
 
 /// Top-centre of the chosen monitor; clicks pass through until the cursor reaches the island.
@@ -19,8 +19,9 @@ pub fn top_y(m: &Monitor) -> i32 {
     m.position().y
 }
 
-pub fn set_hit_rect(app: &AppHandle, rect: Rect) {
-    *app.state::<AppState>().hit.lock().unwrap() = rect;
+/// `label`: which island window the rect belongs to (each page reports its own).
+pub fn set_hit_rect(app: &AppHandle, label: &str, rect: Rect) {
+    app.state::<AppState>().hit.lock().unwrap().insert(label.to_string(), rect);
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,39 +42,50 @@ fn hover_action(hidden: bool, forced: bool, prev: Option<bool>, now: bool) -> Ac
     }
 }
 
+/// Per island window: whether the cursor was over it last tick, and whether click-through was forced while hidden.
+#[derive(Default)]
+struct Track {
+    inside: Option<bool>,
+    forced: bool,
+}
+
 fn spawn(app: AppHandle) {
     thread::spawn(move || {
-        let mut inside: Option<bool> = None;
-        let mut forced = false;
+        let mut tracks: HashMap<&str, Track> = HashMap::new();
         loop {
             thread::sleep(Duration::from_millis(25));
-            let Some(win) = app.get_webview_window("main") else { continue };
-            let (Ok(cursor), Ok(pos), Ok(scale)) = (app.cursor_position(), win.outer_position(), win.scale_factor())
-            else {
-                continue;
-            };
-            let rect = *app.state::<AppState>().hit.lock().unwrap();
-            let now = rect.contains((cursor.x - pos.x as f64) / scale, (cursor.y - pos.y as f64) / scale);
-            let hidden = crate::fullscreen::is_hidden(&app);
-            match hover_action(hidden, forced, inside, now) {
-                Action::ForceIgnore => {
-                    let _ = win.set_ignore_cursor_events(true);
-                    forced = true;
-                    inside = None; // re-evaluate once visible again
-                }
-                Action::Set(v) => {
-                    // the watcher may have hidden us since the read above: never undo its click-through
-                    if crate::fullscreen::is_hidden(&app) {
-                        continue;
+            for label in ISLANDS {
+                let Some(win) = app.get_webview_window(label) else {
+                    tracks.remove(label);
+                    continue;
+                };
+                let t = tracks.entry(label).or_default();
+                let (Ok(cursor), Ok(pos), Ok(scale)) = (app.cursor_position(), win.outer_position(), win.scale_factor()) else {
+                    continue;
+                };
+                let rect = app.state::<AppState>().hit.lock().unwrap().get(label).copied().unwrap_or_default();
+                let now = rect.contains((cursor.x - pos.x as f64) / scale, (cursor.y - pos.y as f64) / scale);
+                let hidden = crate::fullscreen::is_hidden_for(&app, label);
+                match hover_action(hidden, t.forced, t.inside, now) {
+                    Action::ForceIgnore => {
+                        let _ = win.set_ignore_cursor_events(true);
+                        t.forced = true;
+                        t.inside = None; // re-evaluate once visible again
                     }
-                    inside = Some(v);
-                    let _ = win.set_ignore_cursor_events(!v);
-                    let _ = app.emit("hover", v);
+                    Action::Set(v) => {
+                        // the watcher may have hidden us since the read above: never undo its click-through
+                        if crate::fullscreen::is_hidden_for(&app, label) {
+                            continue;
+                        }
+                        t.inside = Some(v);
+                        let _ = win.set_ignore_cursor_events(!v);
+                        let _ = app.emit(evt(label, "hover"), v);
+                    }
+                    Action::None => {}
                 }
-                Action::None => {}
-            }
-            if !hidden {
-                forced = false;
+                if !hidden {
+                    t.forced = false;
+                }
             }
         }
     });

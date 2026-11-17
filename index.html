@@ -229,8 +229,21 @@
                   <span class="panel-title">Launcher</span>
                   <span class="muted small">Right-click twice to remove</span>
                 </div>
+                <!-- search: filters the apps below; "yt lofi", "standup" or an address opens a quick link (quicklinks.ts) -->
+                <div class="lq-search">
+                  <input id="launcher-search" type="text" placeholder="Search apps, links, or the web…" autocomplete="off" spellcheck="false" aria-label="Search the launcher" />
+                  <div class="lq-hint" id="launcher-hint" hidden><span id="launcher-hint-text"></span><button class="lq-save" id="launcher-hint-save" hidden>Save as link</button></div>
+                </div>
                 <!-- #launcher-add stays last: renderApps re-appends it after the apps -->
                 <div class="launcher launcher-grid" id="launcher-grid"><button class="app app-add" id="launcher-add" data-add-app title="Add an app"><span class="app-ic" data-icon="plus" data-size="18"></span><span class="app-name">Add app</span></button></div>
+                <div class="panel-head lq-head"><span class="panel-title">Quick links</span><button class="lq-add" id="ql-add">+ Add link</button></div>
+                <form class="lq-form" id="ql-form" hidden>
+                  <input id="ql-name" type="text" placeholder="Name (Standup)" autocomplete="off" aria-label="Link name" />
+                  <input id="ql-key" type="text" placeholder="Keyword (optional)" autocomplete="off" aria-label="Keyword" />
+                  <input id="ql-url" type="text" placeholder="https://…  ({query} for the search text)" autocomplete="off" spellcheck="false" aria-label="Address" />
+                  <div class="lq-form-actions"><span class="lq-err" id="ql-err"></span><button type="button" class="lq-add" id="ql-cancel">Cancel</button><button type="submit" class="lq-save">Save</button></div>
+                </form>
+                <div class="lq-chips" id="ql-chips"></div>
               </section>
 
               <!-- Weather -->

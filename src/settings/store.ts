@@ -11,7 +11,7 @@ export type Appearance = {
   collapsedW: number; collapsedH: number; openW: number; openH: number;
 };
 export type Look = { appearance: Appearance; layout: Layout; theme: Theme; themes: Theme[] };
-export type Settings = { location: string; autostart: boolean; display: string; islandSize: string; hideFullscreen: boolean; reminderSound: boolean; clipRemember: boolean; clipPaused: boolean };
+export type Settings = { location: string; autostart: boolean; display: string; islandSize: string; hideFullscreen: boolean; dualNotch: boolean; reminderSound: boolean; clipRemember: boolean; clipPaused: boolean };
 
 export const store = { look: null as unknown as Look, settings: null as unknown as Settings };
 

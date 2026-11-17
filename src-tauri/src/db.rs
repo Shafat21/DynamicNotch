@@ -34,6 +34,8 @@ pub struct Settings {
     pub display: String,
     pub island_size: String,
     pub hide_fullscreen: bool,
+    /// An island on a second monitor as well (Windows).
+    pub dual_notch: bool,
     pub reminder_sound: bool,
     pub clip_remember: bool,
     pub clip_paused: bool,
@@ -202,6 +204,46 @@ impl Db {
             let add = if has == 0 { "ALTER TABLE notes ADD COLUMN is_call INTEGER NOT NULL DEFAULT 0;" } else { "" };
             self.conn.execute_batch(&format!("BEGIN; {add} PRAGMA user_version = 8; COMMIT;"))?;
         }
+        if version < 9 {
+            let seed: String = crate::quicklinks::DEFAULTS
+                .iter()
+                .enumerate()
+                .map(|(i, (n, k, u))| format!("('{n}', '{k}', '{u}', {}),", i + 1))
+                .collect();
+            self.conn.execute_batch(&format!(
+                "BEGIN;
+                 CREATE TABLE IF NOT EXISTS quick_links (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     name TEXT NOT NULL,
+                     keyword TEXT NOT NULL DEFAULT '',
+                     url TEXT NOT NULL,
+                     position INTEGER NOT NULL
+                 );
+                 INSERT INTO quick_links (name, keyword, url, position) VALUES {};
+                 PRAGMA user_version = 9;
+                 COMMIT;",
+                seed.trim_end_matches(',')
+            ))?;
+        }
+        Ok(())
+    }
+
+    pub fn quick_links(&self) -> Result<Vec<crate::quicklinks::Link>> {
+        let mut stmt = self.conn.prepare("SELECT id, name, keyword, url FROM quick_links ORDER BY position, id")?;
+        let rows = stmt.query_map([], |r| Ok(crate::quicklinks::Link { id: r.get(0)?, name: r.get(1)?, keyword: r.get(2)?, url: r.get(3)? }))?;
+        rows.collect()
+    }
+
+    pub fn add_quick_link(&self, name: &str, keyword: &str, url: &str) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO quick_links (name, keyword, url, position) VALUES (?1, ?2, ?3, (SELECT COALESCE(MAX(position), 0) + 1 FROM quick_links))",
+            params![name, keyword, url],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn remove_quick_link(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM quick_links WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -454,6 +496,7 @@ impl Db {
             display: text("display", "primary")?,
             island_size: text("island_size", "Auto")?,
             hide_fullscreen: text("hide_fullscreen", "true")? != "false",
+            dual_notch: text("dual_notch", "false")? == "true",
             reminder_sound: text("reminder_sound", "true")? != "false",
             clip_remember: text("clip_remember", "false")? == "true",
             clip_paused: text("clip_paused", "false")? == "true",
@@ -534,6 +577,17 @@ mod tests {
         assert!(apps.iter().all(|a| a.kind == "action"));
         db.migrate().unwrap();
         assert_eq!(db.apps().unwrap().len(), 9); // idempotent
+    }
+
+    #[test]
+    fn quick_links_start_with_defaults_and_keep_added_ones_in_order() {
+        let db = Db::open_in_memory().unwrap();
+        let start = db.quick_links().unwrap();
+        assert_eq!(start.iter().map(|l| l.keyword.as_str()).collect::<Vec<_>>(), ["g", "yt", "gh", "maps"]);
+        let id = db.add_quick_link("Standup", "standup", "https://zoom.us/j/1?pwd=a#x").unwrap();
+        assert_eq!(db.quick_links().unwrap().last().unwrap().id, id);
+        db.remove_quick_link(id).unwrap();
+        assert_eq!(db.quick_links().unwrap().len(), 4);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 // Reminders (spec §23.2): the due banner + chime, the Reminders tab (upcoming, done today, new-reminder form)
 // and the Home strip chip. Reminder text is user text: textContent / .value only.
+import { primary } from "./island-window";
 import { invoke } from "@tauri-apps/api/core";
 import { icon } from "./icons-line";
 import { updateMood } from "./pal";
@@ -142,7 +143,7 @@ export function chime(id: number | null): void {
   if (id === chimeId) return;
   chimeId = id;
   clearInterval(chimeTimer);
-  if (id === null || !hooks.sound()) return;
+  if (id === null || !hooks.sound() || !primary) return; // the second island stays quiet: one chime, not two
   let n = 1;
   beep();
   chimeTimer = window.setInterval(() => {

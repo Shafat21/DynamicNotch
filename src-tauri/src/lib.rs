@@ -11,6 +11,7 @@ mod display;
 mod fullscreen;
 pub mod hook;
 mod launcher;
+mod quicklinks;
 mod menu;
 mod monitors;
 mod notes;
@@ -37,7 +38,7 @@ pub struct AppState {
     /// Last payload of each "sticky" event, so a freshly loaded page can catch up (see `get_snapshot`).
     pub last: Mutex<HashMap<&'static str, Value>>,
     /// Interactive area of the island, in logical px relative to the window.
-    pub hit: Mutex<window::Rect>,
+    pub hit: Mutex<HashMap<String, window::Rect>>,
     /// While the island is dragged: cursor minus window position at the start (physical px).
     pub drag: Mutex<Option<(f64, f64)>>,
     /// Coding agent sessions seen by the hook bridge (memory only).
@@ -48,6 +49,8 @@ pub struct AppState {
     pub usage: Mutex<bridge::usage::Usage>,
     /// True while a fullscreen app hides the island (spec §18).
     pub hidden: AtomicBool,
+    /// The same for the second island (monitor-specific: only a fullscreen app on its own monitor hides it).
+    pub hidden2: AtomicBool,
     /// Clipboard history (memory; mirrored to the DB only with "Remember across restarts").
     pub clips: Mutex<clipboard::ClipStore>,
 }
@@ -99,10 +102,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .on_window_event(|win, event| {
-            if let (tauri::WindowEvent::DragDrop(d), "main") = (event, win.label()) {
+            if let (tauri::WindowEvent::DragDrop(d), "main" | "island2") = (event, win.label()) {
                 shelf::on_drag_drop(win.app_handle(), d);
             }
-            if let (tauri::WindowEvent::ScaleFactorChanged { .. }, "main") = (event, win.label()) {
+            if let (tauri::WindowEvent::ScaleFactorChanged { .. }, "main" | "island2") = (event, win.label()) {
                 // off the event thread: the OS applies its own DPI resize after this handler returns
                 let app = win.app_handle().clone();
                 std::thread::spawn(move || {
@@ -121,12 +124,13 @@ pub fn run() {
                 db: Mutex::new(db),
                 clips: Mutex::new(clips),
                 last: Mutex::new(HashMap::new()),
-                hit: Mutex::new(window::Rect::default()),
+                hit: Mutex::new(HashMap::new()),
                 drag: Mutex::new(None),
                 sessions: Mutex::default(),
                 prompts: bridge::Prompts::default(),
                 usage: Mutex::default(),
                 hidden: AtomicBool::new(false),
+                hidden2: AtomicBool::new(false),
             });
 
             let (a, l) = appearance::load(&app.state::<AppState>().db.lock().unwrap());
@@ -212,6 +216,14 @@ pub fn run() {
             commands::brightness_displays,
             commands::set_brightness,
             commands::list_apps,
+            commands::list_quick_links,
+            commands::add_quick_link,
+            commands::remove_quick_link,
+            commands::quick_resolve,
+            commands::open_quick,
+            commands::fullscreen_exempt,
+            commands::set_fullscreen_exempt,
+            commands::running_apps,
             commands::pick_app,
             commands::remove_app,
             commands::launch_app,

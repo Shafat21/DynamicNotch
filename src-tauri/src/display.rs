@@ -41,6 +41,12 @@ pub fn choose_monitor(mons: &[MonitorInfo], setting: &str) -> Option<usize> {
         .or((!mons.is_empty()).then_some(0))
 }
 
+/// Where the second island goes when "Both displays" is on: the primary monitor if the first island is not on it,
+/// else the first other monitor. None with a single monitor.
+pub fn second_monitor(mons: &[MonitorInfo], main: usize) -> Option<usize> {
+    mons.iter().position(|m| m.primary).filter(|&p| p != main).or_else(|| (0..mons.len()).find(|&i| i != main))
+}
+
 /// `Monitor::name()` can be missing; fall back to its 1-based order.
 pub fn monitor_name(m: &Monitor, index: usize) -> String {
     m.name().cloned().unwrap_or_else(|| format!("Display {}", index + 1))
@@ -74,6 +80,11 @@ pub fn set_display(app: &AppHandle, name: &str) -> Result<(), String> {
 /// `"primary"` or a monitor that is plugged in right now.
 fn valid_display(choice: &str, mons: &[MonitorInfo]) -> bool {
     choice == "primary" || mons.iter().any(|m| m.name == choice)
+}
+
+/// "Both displays" on/off: saved, then the second island is created or closed and everything re-placed.
+pub fn set_dual(app: &AppHandle, on: bool) -> Result<(), String> {
+    save_and_place(app, "dual_notch", if on { "true" } else { "false" })
 }
 
 /// Save the island size (`db::ISLAND_SIZES`) and re-scale.
@@ -154,6 +165,17 @@ mod tests {
         assert_eq!(choose_monitor(&mons, r"\\.\DISPLAY9"), Some(1)); // unplugged → primary
         assert_eq!(choose_monitor(&[m("a", false)], "primary"), Some(0)); // no primary flag → first
         assert_eq!(choose_monitor(&[], "primary"), None);
+    }
+
+    #[test]
+    fn second_island_goes_to_the_other_monitor() {
+        let m = |p: bool| MonitorInfo { name: "x".into(), primary: p, width: 1920.0, height: 1080.0 };
+        assert_eq!(second_monitor(&[m(true), m(false)], 0), Some(1));
+        assert_eq!(second_monitor(&[m(true), m(false)], 1), Some(0)); // first island on the second screen: primary gets it
+        assert_eq!(second_monitor(&[m(false), m(false), m(true)], 0), Some(2)); // three screens: the primary
+        assert_eq!(second_monitor(&[m(false), m(false), m(true)], 2), Some(0));
+        assert_eq!(second_monitor(&[m(true)], 0), None); // one screen: no second island
+        assert_eq!(second_monitor(&[], 0), None);
     }
 
     #[test]

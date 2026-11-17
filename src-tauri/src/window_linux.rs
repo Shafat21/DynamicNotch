@@ -22,9 +22,9 @@ pub fn top_y(m: &Monitor) -> i32 {
     m.work_area().position.y
 }
 
-pub fn set_hit_rect(app: &AppHandle, rect: Rect) {
-    *app.state::<AppState>().hit.lock().unwrap() = rect;
-    let Some(win) = app.get_webview_window("main") else { return };
+pub fn set_hit_rect(app: &AppHandle, label: &str, rect: Rect) {
+    app.state::<AppState>().hit.lock().unwrap().insert(label.to_string(), rect);
+    let Some(win) = app.get_webview_window(label) else { return };
     // GTK is main-thread only; commands run on a worker
     let _ = app.run_on_main_thread(move || input_region(&win, Some(rect)));
 }

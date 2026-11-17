@@ -32,6 +32,8 @@ import { initCompact, ring } from "./compact/compact";
 import { CARDS, type CardId } from "./compact/pager";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
+import { initQuickLinks } from "./quicklinks";
+import { sfx } from "./island-window";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 import { renderHome } from "./ui/home";
 import { closeMore, fitTabs, initTabs, renderTabs, setActiveTab, visibleTabs } from "./ui/tabs";
@@ -137,6 +139,9 @@ function geometry(): void {
   shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25 * k)}px`);
   shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
   shell.dataset.shape = ui.edge === "top" ? look().shape : "pill";
+  // the notch's top edge sits on the screen edge, out of sight: the glow lap skips it (its share of the border-box path)
+  const skip = shell.dataset.shape === "notch" ? w / (2 * (w + h) - (4 - Math.PI) * r) : 0;
+  shell.style.setProperty("--skip", `${(skip * 100).toFixed(1)}%`);
   shell.dataset.edge = ui.edge;
   shell.dataset.view = look().view;
   shell.style.setProperty("--ax", ui.anchor === undefined ? "50%" : `${ui.anchor}px`); // styles.css clamps #shell inside the window
@@ -739,11 +744,12 @@ function openCalendarEditor(): void {
 const launcherError = (err: unknown) => showEvent("Launcher", String(err), 3500);
 
 /** Render the app list a launcher command returns. */
+let launcherApps: LauncherApp[] = [];
 function updateApps(apps: Promise<LauncherApp[]>): void {
   apps
     .then((list) =>
       renderApps(
-        list,
+        (launcherApps = list),
         (a) => invoke("launch_app", { id: a.id }).catch(launcherError),
         (a) => updateApps(invoke<LauncherApp[]>("remove_app", { id: a.id })),
       ),
@@ -822,6 +828,7 @@ function wireInput(): void {
   document.querySelectorAll<HTMLElement>("[data-add-app]").forEach((b) => {
     b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
   });
+  initQuickLinks((a) => invoke("launch_app", { id: a.id }).catch(launcherError), () => launcherApps, launcherError);
   new ResizeObserver(() => fitDock()).observe($("card-launcher")); // morph, openW, textScale, density gaps, Home shown
   focus = initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500), () => compact.refresh("pomodoro"));
 
@@ -984,7 +991,7 @@ async function boot(): Promise<void> {
   updateApps(invoke<LauncherApp[]>("list_apps"));
 
   await Promise.all([
-    listen<boolean>("hover", (e) => onHover(e.payload)),
+    listen<boolean>(`hover${sfx}`, (e) => onHover(e.payload)),
     listen<{ version: string }>("update", (e) => showToast({ icon: "download", title: `Update ${e.payload.version} available`, text: "Install it in Settings → About", ms: 6000 })),
     listen<{ name: string; kind: string }>("bt-connected", (e) =>
       showToast({ icon: e.payload.kind === "audio" ? "headphones" : e.payload.kind === "input" ? "keyboard" : e.payload.kind === "phone" ? "phone" : "bluetooth", title: e.payload.name, text: "Connected" }),
@@ -1001,7 +1008,7 @@ async function boot(): Promise<void> {
     listen<Weather>("weather", (e) => onWeather(e.payload)),
     listen<CalPayload>("calendar", (e) => onCalendar(e.payload)),
     listen<Settings>("settings", (e) => onSettings(e.payload)),
-    listen<Display>("display", (e) => onDisplay(e.payload)),
+    listen<Display>(`display${sfx}`, (e) => onDisplay(e.payload)),
     listen<Look>("appearance", (e) => onAppearance(e.payload)),
     listen<{ name: string; on: boolean }>("keylock", (e) => showEvent(e.payload.name, e.payload.on ? "ENABLED" : "DISABLED", 2500)),
     listen<{ app: string; title: string; text: string }>("notify", (e) => {
@@ -1012,7 +1019,7 @@ async function boot(): Promise<void> {
     listen<Bridge>("bridge", (e) => setBridge(e.payload)),
     listen<Prompt>("prompt", (e) => onPrompt(e.payload)),
     listen<{ id: number }>("prompt-closed", (e) => onPromptClosed(e.payload.id)),
-    listen<boolean>("fullscreen", (e) => onFullscreen(e.payload)),
+    listen<boolean>(`fullscreen${sfx}`, (e) => onFullscreen(e.payload)),
     listen<Due>("reminder-due", (e) => onReminderDue(e.payload)),
     listen<DictEvent>("dictation", (e) => onDictationEvent(e.payload)),
     listen<Usage>("usage", (e) => onUsage(e.payload)),
@@ -1031,13 +1038,14 @@ async function boot(): Promise<void> {
   if (snap.lyric) onLyric(snap.lyric as string);
   if (snap["media-progress"]) onProgress(snap["media-progress"] as Progress);
   if (snap["media-art"]) onArt(snap["media-art"] as { art: string });
-  if (snap.fullscreen) onFullscreen(true);
+  if (snap[`fullscreen${sfx}`]) onFullscreen(true);
   if (snap.bridge) setBridge(snap.bridge as Bridge);
   if (snap.sessions) setSessions(snap.sessions as Session[]);
   if (snap.usage) onUsage(snap.usage as Usage);
   const call = snap.notetaker as CallEvent | undefined;
   if (call && (call.state === "recording" || call.state === "processing")) setCall(call);
-  if (snap.display) [ui.scale, ui.edge, ui.anchor] = [(snap.display as Display).uiScale, (snap.display as Display).edge ?? "top", (snap.display as Display).anchor]; // edge too: a saved side placement survives restarts // applied by onSettings' transition below
+  const disp = snap[`display${sfx}`] as Display | undefined;
+  if (disp) [ui.scale, ui.edge, ui.anchor] = [disp.uiScale, disp.edge ?? "top", disp.anchor]; // edge too: a saved side placement survives restarts // applied by onSettings' transition below
   if (snap.appearance) applyLook(snap.appearance as Look); // likewise
 
   ui.tasks = await invoke<Task[]>("list_tasks");

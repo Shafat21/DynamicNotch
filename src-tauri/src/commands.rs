@@ -1,7 +1,7 @@
 //! Everything the frontend can call via `invoke(...)`. Inputs from the webview are validated here.
 
 use crate::monitors::calendar;
-use crate::{actions, bluetooth, clipboard, appearance, bridge, brightness, db, display, emit_settings, fullscreen, launcher, menu, monitors, notes, reminders, shelf, sound, window, AppState};
+use crate::{actions, bluetooth, clipboard, appearance, bridge, brightness, db, display, emit_settings, fullscreen, launcher, menu, quicklinks, monitors, notes, reminders, shelf, sound, window, AppState};
 use crate::brightness::BrightDisplay;
 use crate::sound::{AudioDevice, SoundState};
 use crate::clipboard::Clip;
@@ -53,6 +53,7 @@ pub enum General {
     Display(String),
     IslandSize(String),
     HideFullscreen(bool),
+    DualNotch(bool),
     Autostart(bool),
     ReminderSound(bool),
     ClipRemember(bool),
@@ -63,10 +64,11 @@ pub fn parse_general(key: &str, value: &Value) -> Res<General> {
         ("display", Value::String(s)) => Ok(General::Display(s.clone())),
         ("island_size", Value::String(s)) => Ok(General::IslandSize(s.clone())),
         ("hide_fullscreen", Value::Bool(b)) => Ok(General::HideFullscreen(*b)),
+        ("dual_notch", Value::Bool(b)) => Ok(General::DualNotch(*b)),
         ("autostart", Value::Bool(b)) => Ok(General::Autostart(*b)),
         ("reminder_sound", Value::Bool(b)) => Ok(General::ReminderSound(*b)),
         ("clip_remember", Value::Bool(b)) => Ok(General::ClipRemember(*b)),
-        ("display" | "island_size" | "hide_fullscreen" | "autostart" | "reminder_sound" | "clip_remember", _) => Err(format!("invalid value for {key}")),
+        ("display" | "island_size" | "hide_fullscreen" | "dual_notch" | "autostart" | "reminder_sound" | "clip_remember", _) => Err(format!("invalid value for {key}")),
         _ => Err(format!("unknown setting {key}")),
     }
 }
@@ -78,6 +80,7 @@ pub fn set_general(app: AppHandle, key: String, value: Value) -> Res<db::Setting
         General::Display(name) => display::set_display(&app, &name),
         General::IslandSize(size) => display::set_island_size(&app, &size),
         General::HideFullscreen(on) => fullscreen::set_hide_fullscreen(&app, on),
+        General::DualNotch(on) => display::set_dual(&app, on),
         General::Autostart(on) => {
             let al = app.autolaunch();
             if on { al.enable() } else { al.disable() }.map_err(err)
@@ -445,8 +448,8 @@ pub fn run_action(id: String) -> Res<()> {
 }
 
 #[tauri::command]
-pub fn set_hit_rect(app: AppHandle, rect: window::Rect) {
-    window::set_hit_rect(&app, rect);
+pub fn set_hit_rect(app: AppHandle, win: WebviewWindow, rect: window::Rect) {
+    window::set_hit_rect(&app, win.label(), rect);
 }
 
 const NO_DRAG: &str = "Moving the island isn't available on Linux yet";
@@ -487,9 +490,8 @@ pub fn island_drag_start(state: State<AppState>, x: f64, y: f64) -> Res<()> {
 
 /// Hold-and-drag, move: the window follows the pointer.
 #[tauri::command]
-pub fn island_drag_move(app: AppHandle, state: State<AppState>) -> Res<()> {
+pub fn island_drag_move(app: AppHandle, win: WebviewWindow, state: State<AppState>) -> Res<()> {
     let Some(anchor) = *state.drag.lock().unwrap() else { return Ok(()) };
-    let win = app.get_webview_window("main").ok_or("no island window")?;
     let c = app.cursor_position().map_err(err)?;
     let (x, y) = crate::placement::drag_window_pos((c.x, c.y), anchor, win.scale_factor().map_err(err)?);
     win.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)
@@ -514,9 +516,10 @@ pub fn island_drag_end(app: AppHandle, state: State<AppState>) -> Res<String> {
     {
         let db = state.db.lock().unwrap();
         db.set("placement", &text).map_err(err)?;
-        let cur = db.settings().map_err(err)?.display;
-        let keep_primary = cur == "primary" && infos[i].primary; // still "the primary", even if it changes later
-        if !keep_primary && cur != infos[i].name {
+        let s = db.settings().map_err(err)?;
+        let keep_primary = s.display == "primary" && infos[i].primary; // still "the primary", even if it changes later
+        // with an island on each display, dropping one elsewhere only changes the edge and position they share
+        if !s.dual_notch && !keep_primary && s.display != infos[i].name {
             db.set("display", &infos[i].name).map_err(err)?;
         }
     }
@@ -528,6 +531,72 @@ pub fn island_drag_end(app: AppHandle, state: State<AppState>) -> Res<String> {
 #[tauri::command]
 pub fn show_context_menu(app: AppHandle, window: WebviewWindow) -> Res<()> {
     menu::popup(&app, &window).map_err(err)
+}
+
+/// Apps the island keeps showing over while they are fullscreen (Settings → General).
+#[tauri::command]
+pub fn fullscreen_exempt(app: AppHandle) -> Vec<String> {
+    fullscreen::exempt_apps(&app)
+}
+
+#[tauri::command]
+pub fn set_fullscreen_exempt(app: AppHandle, name: String, on: bool) -> Res<Vec<String>> {
+    fullscreen::set_exempt(&app, &name, on)
+}
+
+/// Apps with a window open now: the picker next to the exempt list.
+#[tauri::command]
+pub fn running_apps() -> Vec<String> {
+    fullscreen::running_apps()
+}
+
+// ---------- quick links (launcher search box) ----------
+
+#[tauri::command]
+pub fn list_quick_links(state: State<AppState>) -> Res<Vec<quicklinks::Link>> {
+    state.db.lock().unwrap().quick_links().map_err(err)
+}
+
+#[tauri::command]
+pub fn add_quick_link(app: AppHandle, name: String, keyword: String, url: String) -> Res<Vec<quicklinks::Link>> {
+    let (name, keyword, url) = (name.trim(), keyword.trim().to_lowercase(), url.trim());
+    if name.is_empty() {
+        return Err("Give the link a name".into());
+    }
+    if keyword.chars().any(char::is_whitespace) {
+        return Err("The keyword is one word, with no spaces".into());
+    }
+    quicklinks::check_url(url)?;
+    let state = app.state::<AppState>();
+    let db = state.db.lock().unwrap();
+    db.add_quick_link(name, &keyword, url).map_err(err)?;
+    let links = db.quick_links().map_err(err)?;
+    let _ = app.emit("quick-links", &links);
+    Ok(links)
+}
+
+#[tauri::command]
+pub fn remove_quick_link(app: AppHandle, id: i64) -> Res<Vec<quicklinks::Link>> {
+    let state = app.state::<AppState>();
+    let db = state.db.lock().unwrap();
+    db.remove_quick_link(id).map_err(err)?;
+    let links = db.quick_links().map_err(err)?;
+    let _ = app.emit("quick-links", &links);
+    Ok(links)
+}
+
+/// What Enter would do for the typed text (None when empty): shown as a hint under the search box.
+#[tauri::command]
+pub fn quick_resolve(state: State<AppState>, input: String) -> Res<Option<quicklinks::Resolved>> {
+    let links = state.db.lock().unwrap().quick_links().map_err(err)?;
+    Ok(quicklinks::resolve(&input, &links))
+}
+
+/// Opens a resolved address in the default browser. Only http(s): the webview sends back what `quick_resolve` gave it.
+#[tauri::command]
+pub fn open_quick(url: String) -> Res<()> {
+    quicklinks::check_url(&url)?;
+    launcher::os::shell_open(&url)
 }
 
 #[tauri::command]

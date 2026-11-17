@@ -153,6 +153,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------- media animations (tinted by album art) ---------- */
 .fx { position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity 0.6s; pointer-events: none; }
 #island:not([data-anim=""]) .fx { opacity: 1; }
+/* notch shape: the island is wider by one ear per side (masked away), so the ring must sit on the visible body or its sides are cut off */
+#shell[data-shape="notch"] .fx { inset: 0 var(--scoop); border-radius: 0 0 var(--rr) var(--rr); }
 
 /* Border trail: a 5px ring; a glow rides the island's border box from the start point all the way round and
    back to it (offset-path), then repeats */
@@ -167,13 +169,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: absolute;
   width: 140px;
   height: 70px;
-  background: radial-gradient(100% 100% at right, color-mix(in srgb, var(--media) 85%, #fff 15%), transparent 50%);
+  /* --media is the art's dominant colour and is often near-black (or #000 with no art): lift it so the glow always shows */
+  background: radial-gradient(100% 100% at right, #fff 0, color-mix(in srgb, var(--media) 40%, #8fbaff) 14%, transparent 55%);
   offset-path: border-box;
   offset-anchor: 100% 50%;
   offset-distance: 0%;
-  animation: border-trail 4s linear infinite;
+  animation: border-trail 3.2s linear infinite;
 }
-@keyframes border-trail { to { offset-distance: 100%; } }
+/* top-right corner → down the right side → along the bottom → up the left side, then again (--skip: the hidden top edge, set by geometry()) */
+@keyframes border-trail {
+  from { offset-distance: var(--skip, 0%); opacity: 0; }
+  6%, 94% { opacity: 1; }
+  to { offset-distance: 100%; opacity: 0; }
+}
 
 /* ---------- shine sweep on every transition ---------- */
 .shine {
@@ -996,3 +1004,20 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 /* ---------- responsive: other pages ---------- */
 @container pages (max-width: 640px) { .music.lyrics { grid-template-columns: 1fr; } .music .lyrics-panel { display: none; } }
 @container pages (max-height: 140px) { .timer-big .focus-time { font-size: calc(40px * var(--text-scale)); } }
+
+/* launcher search + quick links (quicklinks.ts) */
+.lq-search { margin-bottom: 10px; }
+.lq-search input { width: 100%; height: var(--control); padding: 0 12px; border-radius: var(--radius-full); }
+.lq-hint { display: flex; align-items: center; gap: 8px; margin: 6px 4px 0; font-size: var(--t12); color: var(--muted); }
+.lq-hint span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lq-add, .lq-save { border: 0; background: none; color: var(--accent); font-size: var(--t12); font-weight: 600; padding: 3px 8px; border-radius: var(--radius-full); }
+.lq-add:hover, .lq-save:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.lq-head { margin: 14px 0 8px; }
+.lq-form { display: grid; gap: 6px; margin-bottom: 10px; }
+.lq-form input { width: 100%; height: var(--control-sm); font-size: var(--t12); }
+.lq-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.lq-err { flex: 1; color: var(--destructive-text); font-size: var(--t11); }
+.lq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lq-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--radius-full); border: 1px solid var(--line); background: var(--inset); font-size: var(--t12); }
+.lq-chip:hover { background: var(--hover); }
+.lq-chip kbd { font: inherit; font-size: var(--t11); color: var(--muted); }

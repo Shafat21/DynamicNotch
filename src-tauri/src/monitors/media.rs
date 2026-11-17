@@ -132,6 +132,11 @@ fn first_artist(a: &str) -> String {
     a[..cut].trim().to_string()
 }
 
+/// Players send typographic quotes ("You’re"); lrclib stores plain ones and finds nothing for the curly spelling.
+fn plain_quotes(s: &str) -> String {
+    s.replace(['\u{2018}', '\u{2019}', '\u{02bc}', '\u{2032}'], "'")
+}
+
 /// What to ask lrclib, most specific first: the names as the player gives them, then without features and
 /// decorations, and for YouTube ("Artist - Song (Official Video)" by a channel) the artist and song from the title.
 fn lyric_queries(artist: &str, title: &str) -> Vec<(String, String)> {
@@ -140,6 +145,8 @@ fn lyric_queries(artist: &str, title: &str) -> Vec<(String, String)> {
             out.push((a, t));
         }
     }
+    let (artist, title) = (plain_quotes(artist), plain_quotes(title));
+    let (artist, title) = (artist.as_str(), title.as_str());
     let mut out = Vec::new();
     push(&mut out, artist.to_string(), title.to_string());
     match title.split_once(" - ") {
@@ -150,7 +157,7 @@ fn lyric_queries(artist: &str, title: &str) -> Vec<(String, String)> {
 }
 
 fn same_title(a: &str, b: &str) -> bool {
-    clean_title(a).to_lowercase() == clean_title(b).to_lowercase()
+    clean_title(&plain_quotes(a)).to_lowercase() == clean_title(&plain_quotes(b)).to_lowercase()
 }
 
 fn search(params: &[(&str, &str)], title: &str, duration: f64) -> Option<Lyrics> {
@@ -181,8 +188,8 @@ pub(super) fn fetch_lyrics(artist: &str, title: &str, duration: f64) -> Lyrics {
         }
     }
     // last resort: free text, for names the field search misses
-    let t = clean_title(title);
-    search(&[("q", &format!("{} {t}", first_artist(artist)))], &t, duration).unwrap_or_default()
+    let t = clean_title(&plain_quotes(title));
+    search(&[("q", &format!("{} {t}", first_artist(&plain_quotes(artist))))], &t, duration).unwrap_or_default()
 }
 
 /// Parse LRC text: "[mm:ss.xx]line", including several timestamps on one line.
@@ -257,6 +264,15 @@ mod tests {
         assert!(q.contains(&("Bassbaba Sumon".to_string(), "Gaibona".to_string())));
         // nothing to clean: one query
         assert_eq!(lyric_queries("Queen", "Bohemian Rhapsody").len(), 1);
+    }
+
+    #[test]
+    fn curly_quotes_from_the_player_match_lrclibs_plain_ones() {
+        // Spotify sends "You’re The One"; lrclib stores "You're The One" and finds nothing for the curly spelling
+        let q = lyric_queries("Abhijeet Srivastava, Aanchal Tyagi", "You’re The One");
+        assert!(q.iter().all(|(_, t)| t == "You're The One"), "{q:?}");
+        assert!(q.contains(&("Abhijeet Srivastava".to_string(), "You're The One".to_string())));
+        assert!(same_title("You’re The One", "You're The One"));
     }
 
     #[test]
