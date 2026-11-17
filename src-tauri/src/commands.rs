@@ -81,6 +81,8 @@ pub fn set_general(app: AppHandle, key: String, value: Value) -> Res<db::Setting
         General::IslandSize(size) => display::set_island_size(&app, &size),
         General::HideFullscreen(on) => fullscreen::set_hide_fullscreen(&app, on),
         General::DualNotch(on) => display::set_dual(&app, on),
+        // a dev build would register target\debug\dynamic-notch.exe to start with Windows next to the installed app
+        General::Autostart(true) if cfg!(debug_assertions) => Err("Start at login is off in dev builds: use the installed app".into()),
         General::Autostart(on) => {
             let al = app.autolaunch();
             if on { al.enable() } else { al.disable() }.map_err(err)
