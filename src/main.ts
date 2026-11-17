@@ -275,7 +275,7 @@ const compact = initCompact(
   {
     ...(Object.fromEntries(CARDS.map((id) => [id, (el: HTMLElement) => placeholder(el, id)])) as Record<CardId, (el: HTMLElement) => void>),
     music: (el) =>
-      renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, next: ui.lyricLines.lines[ui.lyricAt + 1]?.text ?? "", art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
+      renderMusic(el, { media: ui.media, progress: ui.progress, lyric: ui.lyric, lines: ui.lyricLines.state === "ready" ? ui.lyricLines.lines.map((l) => l.text) : [], at: ui.lyricAt, art: artUri || null, showLyrics: cmpLyrics, onFlip: () => ((cmpLyrics = !cmpLyrics), compact.refresh()) }),
     widgets: (el) => renderWidgets(el, { calendar: ui.calendar, taskCount: ui.tasks.length }),
     shelf: (el) => renderShelf(el, { mode: cmpShelf, onMode: (m) => ((cmpShelf = m), compact.refresh()) }),
     todo: (el) => renderTodo(el, { tasks: ui.tasks, onAdded: (t) => ((ui.tasks = t), renderTasks(t), compact.refresh("todo")) }),

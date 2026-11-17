@@ -55,10 +55,11 @@
 .cm-ctrl::after { content: ""; width: 30px; margin-left: auto; } /* balances the lyrics button so play stays centred */
 .cm-music.lyrics { flex-direction: row; align-items: stretch; gap: 14px; }
 .cm-side { width: 52%; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; }
-.cm-lyrics { flex: 1; min-width: 0; display: grid; align-content: center; gap: 6px; padding-left: 14px; border-left: 1px solid var(--line); }
-.cm-line { font-weight: 800; font-size: var(--t15); line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-.cm-line.in { animation: cmp-in 0.3s var(--ease); }
-.cm-next { color: var(--muted); font-size: var(--t12); font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; opacity: 0.7; }
+.cm-lyrics { flex: 1; min-width: 0; position: relative; overflow: hidden; padding-left: 14px; border-left: 1px solid var(--line);
+  -webkit-mask: linear-gradient(transparent, #000 22%, #000 78%, transparent); mask: linear-gradient(transparent, #000 22%, #000 78%, transparent); }
+.cm-l { padding: 4px 0; font-weight: 800; font-size: var(--t15); line-height: 1.25; color: var(--muted); opacity: 0.55; transition: color 0.3s, opacity 0.3s; }
+.cm-l.near { opacity: 0.8; }
+.cm-l.cur { color: var(--text); opacity: 1; }
 .cp { height: 100%; display: flex; align-items: center; gap: 18px; }
 .cp-left { flex: 1; min-width: 0; }
 .cp-time { font-size: 34px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }

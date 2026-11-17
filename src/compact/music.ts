@@ -1,11 +1,11 @@
-// Compact notch: Music card, and its Lyrics side (the current line large; the backend sends no other lines).
+// Compact notch: Music card, and its Lyrics side (the whole song, the sung line highlighted).
 // Song text comes from the player: textContent only.
 import { invoke } from "@tauri-apps/api/core";
 import { icon } from "../icons-line";
 
 type Media = { state: string; title: string; artist: string; duration: number; seekable: boolean };
 type Progress = { position: number; duration: number };
-export type MusicState = { media: Media; progress: Progress; lyric: string; next: string; art: string | null; showLyrics: boolean; onFlip(): void };
+export type MusicState = { media: Media; progress: Progress; lyric: string; lines: string[]; at: number; art: string | null; showLyrics: boolean; onFlip(): void };
 
 const mmss = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
 const node = (tag: string, cls: string, text = "") => Object.assign(document.createElement(tag), { className: cls, textContent: text });
@@ -46,15 +46,24 @@ export function renderMusic(el: HTMLElement, s: MusicState): void {
     q(".cm-elapsed").textContent = mmss(s.progress.position);
     q(".cm-left").textContent = `-${mmss(dur - s.progress.position)}`;
   } else {
-    q(".cm-next").textContent = s.next;
-    const line = q<HTMLElement>(".cm-line");
-    if (line.textContent !== (s.lyric || "♪")) {
-      line.textContent = s.lyric || "♪";
-      line.classList.remove("in");
-      void line.offsetWidth;
-      line.classList.add("in");
-    }
+    lyricList(q<HTMLElement>(".cm-lyrics"), s.lines.length ? s.lines : [s.lyric || "♪"], s.lines.length ? s.at : 0);
   }
+}
+
+/** The whole song, the sung line bold and centred, neighbours dimmed (song text: textContent only). */
+function lyricList(box: HTMLElement, lines: string[], at: number): void {
+  const key = lines.join("\n");
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    box.replaceChildren(...lines.map((t) => node("div", "cm-l", t || "♪")));
+  }
+  const rows = [...box.children] as HTMLElement[];
+  rows.forEach((el, i) => {
+    el.classList.toggle("cur", i === at);
+    el.classList.toggle("near", Math.abs(i - at) === 1);
+  });
+  const cur = rows[Math.max(at, 0)];
+  if (cur) box.scrollTo({ top: cur.offsetTop - (box.clientHeight - cur.offsetHeight) / 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
 function build(el: HTMLElement, view: "player" | "lyrics", s: MusicState): void {
@@ -82,7 +91,6 @@ function build(el: HTMLElement, view: "player" | "lyrics", s: MusicState): void 
     head.append(art, meta);
     left.append(head, bar, ctrl);
     const lyrics = node("div", "cm-lyrics");
-    lyrics.append(node("div", "cm-line"), node("div", "cm-next"));
     wrap.append(left, lyrics);
   }
   el.replaceChildren(wrap);
