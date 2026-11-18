@@ -35,6 +35,7 @@ import { createPal, greet } from "./pal";
 import { notchOutline } from "./notch-outline";
 import { initQuickLinks } from "./quicklinks";
 import { initPalReply } from "./pal-reply";
+import { initMusicBrowse, refreshLike } from "./music-browse";
 import { sfx } from "./island-window";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
 import { renderHome } from "./ui/home";
@@ -94,13 +95,19 @@ let measureCtx: CanvasRenderingContext2D | null = null;
 const popPal = createPal(22, "calm"); // coding agent pops: fixed mood per pop
 const spinning = () => ui.state === "idle" && anyWorking();
 
+const timerBadgeWidth = (): number => {
+  const f = focus?.state();
+  return f && (f.running || f.left < f.total) ? 72 : 0;
+};
+
 /** Idle pill: clock width, or wide enough for the playing song title (never lyrics); + the working spinner. */
 function idleWidth(): number {
   const title = playingTitle();
-  if (!title) return idlePillWidth(null, look().collapsedW, anyWorking(), recWidth());
+  const extra = recWidth() + timerBadgeWidth();
+  if (!title) return idlePillWidth(null, look().collapsedW, anyWorking(), extra);
   measureCtx ??= document.createElement("canvas").getContext("2d")!;
   measureCtx.font = getComputedStyle($("status-text")).font;
-  return idlePillWidth(measureCtx.measureText(title).width, look().collapsedW, anyWorking(), recWidth());
+  return idlePillWidth(measureCtx.measureText(title).width, look().collapsedW, anyWorking(), extra);
 }
 
 /** Base px at 1080p (appearance sizes); geometry() multiplies by the display scale. */
@@ -310,7 +317,21 @@ const compact = initCompact(
   { ring: ringFraction },
 );
 
+function renderTimerBadge(): void {
+  const badge = $<HTMLButtonElement>("timer-badge");
+  if (!badge) return;
+  const f = focus?.state();
+  const active = !!f && (f.running || f.left < f.total);
+  badge.hidden = !active;
+  if (!active) return;
+  badge.dataset.running = String(f.running);
+  badge.dataset.paused = String(!f.running && f.left < f.total);
+  badge.innerHTML = `<span class="timer-badge-dot"></span><span class="timer-badge-txt">${mmss(f.left)}</span>`;
+  badge.title = f.running ? `Timer: ${mmss(f.left)} remaining (Click to open)` : `Timer paused: ${mmss(f.left)} (Click to open)`;
+}
+
 function renderHeader(): void {
+  renderTimerBadge();
   idleRing.set(ringFraction());
   idleEq.classList.toggle("on", ui.media.state === "Playing");
   if (ui.state === "notify") {
@@ -484,7 +505,7 @@ function onMedia(m: Media): void {
   rep.setAttribute("aria-pressed", String(m.repeat !== "none"));
   rep.title = m.repeat === "track" ? "Repeat: this song" : m.repeat === "list" ? "Repeat: on" : "Repeat: off";
   rep.innerHTML = icon(m.repeat === "track" ? "repeat1" : "repeat", 18); // static SVG
-  if (m.title !== prevTitle) ((prevTitle = m.title), void loadVolume()); // a new song may be another app
+  if (m.title !== prevTitle) ((prevTitle = m.title), void loadVolume(), void refreshLike(idle ? "" : m.title)); // a new song may be another app
   $("tile-media-title").textContent = idle ? "Nothing playing" : m.title;
   $("tile-media-artist").textContent = idle ? "" : m.artist;
   renderProgress();
@@ -798,6 +819,7 @@ function updateApps(apps: Promise<LauncherApp[]>): void {
     .catch(launcherError);
 }
 
+
 // ---------- user input ----------
 function wirePlayer(): void {
   const vol = $<HTMLInputElement>("player-volume");
@@ -877,7 +899,20 @@ function wireInput(): void {
   });
   initQuickLinks((a) => invoke("launch_app", { id: a.id }).catch(launcherError), () => launcherApps, launcherError);
   new ResizeObserver(() => fitDock()).observe($("card-launcher")); // morph, openW, textScale, density gaps, Home shown
-  focus = initFocus([$("card-focus"), $("timer-big")], () => showEvent("Focus", "Time's up", 3500), () => compact.refresh("pomodoro"));
+  focus = initFocus(
+    [$("card-focus"), $("timer-big")],
+    () => showEvent("Focus", "Time's up", 3500),
+    () => {
+      compact.refresh("pomodoro");
+      renderHeader();
+      if (ui.state === "idle") refresh();
+    },
+  );
+  $("timer-badge").onclick = (e) => {
+    e.stopPropagation();
+    openTab("timer");
+    if (ui.state !== "hover") setState("hover");
+  };
 
   document.querySelectorAll<HTMLElement>("[data-action]").forEach((b) => {
     b.onclick = () => invoke("run_action", { id: b.dataset.action }).catch(console.error);
@@ -919,6 +954,7 @@ function wireInput(): void {
     },
   });
   initPalReply((err) => showEvent("Pal", String(err), 4500));
+  initMusicBrowse();
   initBluetooth({ visible: () => ui.state === "hover" && (ui.tab === "devices" || (ui.tab === "home" && !$("card-devices").hidden)) });
   initSound({ switchFailed: () => openTab("sound") });
   initReminders({ changed: () => ui.state === "reminder" && settle(), sound: () => ui.settings.reminderSound !== false });

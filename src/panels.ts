@@ -1,5 +1,6 @@
 // Panels whose DOM is rebuilt from data: tasks, month progress, launcher row.
 // User/third-party text always goes through textContent, never innerHTML.
+import { daysUntil, spans, untilLabel } from "./progress-math";
 import { icon } from "./icons-line";
 
 export type Task = { id: number; name: string; category: string; time: string; color: string };
@@ -88,15 +89,79 @@ export function renderTasks(tasks: Task[]): void {
 }
 
 // ---------- month progress (rebuilt on every show, so it never goes stale) ----------
+// ---------- Progress tab (id "month"): time spans + countdowns ----------
+// shortcut: countdowns live in this webview's localStorage (one PC, both islands share it); move to the DB if
+// they ever need to sync or survive a WebView2 profile reset.
+type Countdown = { id: number; name: string; date: string };
+const CD_KEY = "dn.countdowns";
+const loadCountdowns = (): Countdown[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(CD_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((c) => c && typeof c.name === "string" && typeof c.date === "string") : [];
+  } catch {
+    return [];
+  }
+};
+const saveCountdowns = (list: Countdown[]) => localStorage.setItem(CD_KEY, JSON.stringify(list.slice(0, 20)));
+let progressWired = false;
+
+function wireProgress(): void {
+  if (progressWired) return;
+  progressWired = true;
+  const form = $("pg-form") as HTMLFormElement;
+  const name = $("pg-name") as HTMLInputElement, date = $("pg-date") as HTMLInputElement;
+  $("pg-add").onclick = () => {
+    form.hidden = !form.hidden;
+    if (!form.hidden) name.focus();
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const n = name.value.trim();
+    if (!n) return name.focus();
+    if (Number.isNaN(daysUntil(date.value))) return date.focus();
+    saveCountdowns([...loadCountdowns(), { id: Date.now(), name: n, date: date.value }]);
+    name.value = date.value = "";
+    form.hidden = true;
+    renderMonth();
+  };
+}
+
 export function renderMonth(now = new Date()): void {
-  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  $("month-title").textContent = `${now.toLocaleDateString("en-US", { month: "long" })} Progress`;
-  $("month-pct").textContent = `${Math.floor((now.getDate() / days) * 100)}%`;
-  $("month-dots").replaceChildren(
-    ...Array.from({ length: days }, (_, i) => el("div", i + 1 === now.getDate() ? "dot on today" : i < now.getDate() ? "dot on" : "dot")),
+  wireProgress();
+  $("pg-spans").replaceChildren(
+    ...spans(now).map((sp) => {
+      const r = el("div", "pg-row");
+      const top = el("div", "pg-top");
+      top.append(el("span", "pg-label", sp.label), el("span", "pg-pct", `${Math.floor(sp.frac * 100)}%`), el("span", "pg-left", sp.left));
+      const bar = el("div", "pg-bar");
+      const fill = el("i", "");
+      fill.style.width = `${(sp.frac * 100).toFixed(1)}%`;
+      bar.append(fill);
+      r.append(top, bar);
+      return r;
+    }),
   );
-  const left = days - now.getDate();
-  $("month-left").textContent = left ? `${left} day${left === 1 ? "" : "s"} left · day ${now.getDate()} of ${days}` : `Last day of the month · day ${days} of ${days}`;
+  const list = loadCountdowns()
+    .map((c) => ({ ...c, n: daysUntil(c.date, now) }))
+    .filter((c) => !Number.isNaN(c.n) && c.n >= -1) // a day after, it goes away by itself
+    .sort((a, b) => a.n - b.n);
+  $("pg-list").replaceChildren(
+    ...(list.length
+      ? list.map((c) => {
+          const r = el("div", `pg-cd${c.n <= 0 ? " now" : c.n <= 7 ? " soon" : ""}`);
+          r.title = new Date(`${c.date}T00:00`).toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+          const days = el("span", "pg-days", c.n > 1 ? String(c.n) : c.n === 1 ? "1" : "★");
+          const text = el("span", "pg-cd-text");
+          text.append(el("span", "pg-cd-name ell", c.name), el("span", "pg-cd-when", untilLabel(c.n)));
+          const rm = el("button", "pg-rm", "×") as HTMLButtonElement;
+          rm.type = "button";
+          rm.title = `Remove ${c.name}`;
+          rm.onclick = () => (saveCountdowns(loadCountdowns().filter((x) => x.id !== c.id)), renderMonth());
+          r.append(days, text, rm);
+          return r;
+        })
+      : [el("div", "muted small pg-empty", "Add a date you're counting down to: a deadline, a trip, an exam.")]),
+  );
 }
 
 // ---------- launcher (Home strip + Launcher tab) ----------

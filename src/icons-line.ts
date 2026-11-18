@@ -3,7 +3,7 @@ import {
   Activity, Bell, Bluetooth, Headphones, Keyboard, Smartphone, CalendarRange, Check, Clipboard, Calendar, ChevronDown, ChevronUp, Circle, CirclePlay, Cloud, CloudDrizzle, CloudFog, CloudLightning,
   CloudRain, CloudSun, Cpu, Ellipsis, MonitorPlay, ExternalLink, Folder, Globe, HardDrive, House, LayoutGrid, ListTodo, Lock, Volume2, VolumeX, Mail, StickyNote, Trash2, MemoryStick,
   MessageSquareQuote, Mic, Moon, Music, Pause, Pencil, PhoneCall, Pin, Play, Plus, Power, Repeat, RotateCw, Settings, SkipBack, SkipForward, Smile,
-  Snowflake, Square, SquareTerminal, Sun, Timer, Zap, Droplets, Wind, Umbrella, Thermometer, Download, Mouse, Gamepad2, Usb, Shuffle, Repeat1, type IconNode,
+  Snowflake, Square, SquareTerminal, Sun, Timer, Zap, Droplets, Wind, Umbrella, Thermometer, Download, Mouse, Gamepad2, Usb, Shuffle, Repeat1, Search, Heart, type IconNode,
 } from "lucide";
 
 const ICONS: Record<string, IconNode> = {
@@ -11,7 +11,7 @@ const ICONS: Record<string, IconNode> = {
   bolt: Zap, email: Mail, cpu: Cpu, memory: MemoryStick, disk: HardDrive, gpu: MonitorPlay, web: Globe, open: ExternalLink, pencil: Pencil,
   home: House, plus: Plus, chevronUp: ChevronUp, chevronDown: ChevronDown, timer: Timer, lyrics: MessageSquareQuote, dots: Ellipsis,
   calendar: Calendar, month: CalendarRange, tasks: ListTodo, launcher: LayoutGrid, pal: Smile, pin: Pin, cog: Settings, notes: StickyNote, trash: Trash2,
-  bell: Bell, clipboard: Clipboard, check: Check, repeat: Repeat, repeat1: Repeat1, shuffle: Shuffle, volume: Volume2, mute: VolumeX, lock: Lock,
+  bell: Bell, clipboard: Clipboard, check: Check, repeat: Repeat, repeat1: Repeat1, shuffle: Shuffle, search: Search, heart: Heart, volume: Volume2, mute: VolumeX, lock: Lock,
   bluetooth: Bluetooth, headphones: Headphones, keyboard: Keyboard, mouse: Mouse, gamepad: Gamepad2, usb: Usb, phone: Smartphone, mic: Mic, phoneCall: PhoneCall, stop: Square,
   humidity: Droplets, wind: Wind, umbrella: Umbrella, feels: Thermometer, download: Download,
   // weather keys come from the Rust weather monitor

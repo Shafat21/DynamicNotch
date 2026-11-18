@@ -5,7 +5,7 @@ import type { LayoutItem } from "./theme";
 
 const TABS: Record<string, [label: string, icon: string]> = {
   home: ["Home", "home"], music: ["Music", "music"], calendar: ["Calendar", "calendar"], pal: ["Pal", "pal"], timer: ["Timer", "timer"],
-  launcher: ["Launcher", "launcher"], weather: ["Weather", "partly"], system: ["System", "cpu"], tasks: ["Tasks", "tasks"], month: ["Month", "month"], notes: ["Notes", "notes"], reminders: ["Reminders", "bell"], clipboard: ["Clipboard", "clipboard"], sound: ["Sound", "volume"], devices: ["Devices", "bluetooth"], shelf: ["Shelf", "folder"],
+  launcher: ["Launcher", "launcher"], weather: ["Weather", "partly"], system: ["System", "cpu"], tasks: ["Tasks", "tasks"], month: ["Progress", "month"], notes: ["Notes", "notes"], reminders: ["Reminders", "bell"], clipboard: ["Clipboard", "clipboard"], sound: ["Sound", "volume"], devices: ["Devices", "bluetooth"], shelf: ["Shelf", "folder"],
 };
 // Shown in More ▾ by default when everything would fit (spec §22.1); the rest only when space runs out.
 const OVERFLOW_FIRST = new Set(["weather", "system", "tasks", "month"]);

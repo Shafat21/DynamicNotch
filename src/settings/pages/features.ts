@@ -253,6 +253,49 @@ export function renderFeatures(root: HTMLElement): () => void {
     );
   const addApp = button("Add app…", () => invoke<LauncherApp[]>("pick_app").then(drawApps, (e) => report(String(e))));
 
+  // Spotify (Music tab: search, playlists, queue, like). The sign-in token stays in the OS credential store.
+  type Spotify = { clientId: boolean; connected: boolean; user: string | null; premium: boolean | null; redirect: string };
+  const spState = h("span", { className: "row-desc" });
+  const spInput = h("input", { type: "text", placeholder: "Client ID (32 characters)", ariaLabel: "Spotify Client ID", spellcheck: false, maxLength: 64, autocomplete: "off" });
+  const spRedirect = h("code", { className: "sp-redirect" }, "http://127.0.0.1:43821/callback");
+  const copyRedirect = button("Copy", () => navigator.clipboard.writeText(spRedirect.textContent ?? "").then(() => report("Redirect URI copied"), () => report("Couldn't copy")), "btn small");
+  const spConnect = button("Connect Spotify", async () => {
+    spConnect.disabled = true;
+    spState.textContent = "Finish signing in to Spotify in your browser…";
+    try {
+      drawSpotify(await invoke<Spotify>("spotify_connect"));
+      report("Spotify connected");
+    } catch (e) {
+      report(String(e));
+      drawSpotify(await invoke<Spotify>("spotify_status"));
+    } finally {
+      spConnect.disabled = false;
+    }
+  }, "btn primary");
+  const spDisconnect = button("Disconnect", () => invoke<Spotify>("spotify_disconnect").then((st) => (drawSpotify(st), report("Spotify disconnected")), (e) => report(String(e))));
+  const drawSpotify = (st: Spotify) => {
+    spRedirect.textContent = st.redirect;
+    spState.textContent = st.connected
+      ? `Connected${st.user ? ` as ${st.user}` : ""}.${st.premium === false ? " Playing from the island needs Premium; search and playlists still work." : ""}`
+      : st.clientId
+        ? "Client ID saved. Connect to sign in."
+        : "Not set up yet.";
+    spConnect.hidden = !st.clientId || st.connected;
+    spDisconnect.hidden = !st.connected;
+  };
+  const spForm = h("form", { className: "inline-form" }, spInput, h("button", { type: "submit", className: "btn" }, "Save"));
+  spForm.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      drawSpotify(await invoke<Spotify>("spotify_set_client", { id: spInput.value }));
+      spInput.value = "";
+      report("Client ID saved");
+    } catch (err) {
+      report(String(err));
+    }
+  };
+  invoke<Spotify>("spotify_status").then(drawSpotify, (e) => report(String(e)));
+
   const dictation = dictationSection();
   const p = page("Integrations");
   p.append(
@@ -260,6 +303,17 @@ export function renderFeatures(root: HTMLElement): () => void {
       "Calendar",
       row("Desktop calendar", "Show events from the Windows Calendar app (Outlook, Google, iCloud and Exchange accounts added there). Read-only.", desktopSwitch),
       row("Calendar link", "Or paste a private iCal (.ics) link from Google or Outlook. Both can be on; events are merged.", h("div", { className: "stack" }, calForm, calState)),
+    ),
+    section(
+      "Spotify",
+      row(
+        "1. Create a Spotify app",
+        "On the Spotify developer dashboard: Create app, any name, tick “Web API”. Spotify asks for this so the island can use your account.",
+        button("Open dashboard", () => invoke("open_link", { id: "spotify-dev" }).catch((e) => report(String(e)))),
+      ),
+      row("2. Add this Redirect URI", "In the app's settings, add it exactly as shown, then Save.", h("div", { className: "row-actions" }, spRedirect, copyRedirect)),
+      row("3. Paste the Client ID", "From the app's Basic Information page.", spForm),
+      row("4. Connect", "Search, your playlists and the queue in the Music tab, and ♥ for the song playing. Playing needs Spotify Premium.", h("div", { className: "stack" }, h("div", { className: "row-actions" }, spConnect, spDisconnect), spState)),
     ),
     section(
       "Reminders",

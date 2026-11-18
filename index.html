@@ -25,6 +25,7 @@
             <span class="icon" id="status-icon" hidden></span>
             <span class="title" id="status-text"></span>
             <span class="rec-badge" id="rec-badge" role="status" hidden></span>
+            <button class="timer-badge" id="timer-badge" role="status" title="Focus timer · Click to open" hidden></button>
           </div>
 
           <!-- Reminder banner (state "reminder", reminders.ts): stays until Snooze / Done -->
@@ -175,37 +176,59 @@
                         <div class="player-times"><span id="player-elapsed">0:00</span><span class="spacer"></span><span id="player-remaining">-0:00</span></div>
                       </div>
                       <div class="player-controls">
-                        <button class="media-btn" id="btn-lyrics" data-icon="lyrics" title="Lyrics" aria-pressed="true"></button>
-                        <span class="spacer"></span>
                         <button class="media-btn" data-media="shuffle" id="btn-shuffle" data-icon="shuffle" title="Shuffle" aria-pressed="false" hidden></button>
                         <button class="media-btn big" data-media="prev" data-icon="prev" data-size="22" title="Previous"></button>
                         <button class="media-btn big" data-media="toggle" data-icon="play" data-size="28" title="Play/Pause"></button>
                         <button class="media-btn big" data-media="next" data-icon="next" data-size="22" title="Next"></button>
                         <button class="media-btn" data-media="repeat" id="btn-repeat" data-icon="repeat" title="Repeat" aria-pressed="false" hidden></button>
-                        <span class="spacer"></span>
-                        <button class="media-btn" id="btn-open-player" data-icon="dots" title="Open player"></button>
                       </div>
-                      <!-- the playing app's own volume (Spotify, Chrome...), else the system volume -->
+                      <!-- bottom row: lyrics switch, the playing app's own volume (Spotify, Chrome...; else the system volume), open the player -->
                       <div class="player-volume">
+                        <button class="media-btn" id="btn-lyrics" data-icon="lyrics" title="Lyrics" aria-pressed="true"></button>
+                        <button class="media-btn" id="btn-browse" data-icon="search" title="Search, playlists and queue" aria-pressed="false"></button>
                         <span class="pv-ic" data-icon="volume" data-size="14" aria-hidden="true"></span>
                         <input type="range" class="slider" id="player-volume" min="0" max="100" step="1" aria-label="Player volume" />
                         <span class="pv-val small muted" id="player-volume-val"></span>
+                        <button class="media-btn" id="btn-like" data-icon="heart" title="Save to Liked Songs" aria-pressed="false" hidden></button>
+                        <button class="media-btn" id="btn-open-player" data-icon="dots" title="Open player"></button>
                       </div>
                     </div>
                   </div>
                   <div class="lyrics-panel" id="player-lyric"></div>
+                  <!-- Search · Playlists · Queue (music-browse.ts, Spotify) in place of the lyrics -->
+                  <div class="mb" id="music-browse">
+                    <div class="mb-tabs" role="tablist" aria-label="Browse music">
+                      <button type="button" data-mb="search" class="on">Search</button>
+                      <button type="button" data-mb="playlists">Playlists</button>
+                      <button type="button" data-mb="queue">Queue</button>
+                    </div>
+                    <input id="mb-q" type="text" placeholder="Search Spotify…" autocomplete="off" spellcheck="false" aria-label="Search Spotify" />
+                    <div class="mb-list" id="mb-list"></div>
+                  </div>
                 </div>
               </section>
 
               <!-- Calendar: today's agenda + link editor -->
               <section class="page" id="tab-calendar" hidden>
-                <div class="panel-head">
-                  <span class="panel-title">Today</span>
-                  <button class="link-btn" data-goto="tasks">Tasks</button>
-                  <button class="link-btn agenda-month" data-goto="month">Month</button>
-                  <button class="action-btn" id="btn-agenda-link" data-icon="pencil" data-size="16" title="Calendar link"></button>
+                <div class="cal-split">
+                  <div class="cal-month">
+                    <div class="cal-month-head">
+                      <span class="cal-month-title" id="cal-month-title"></span>
+                      <button class="link-btn" id="cal-today" hidden>Today</button>
+                      <button class="action-btn" id="cal-prev" aria-label="Previous month">&lsaquo;</button>
+                      <button class="action-btn" id="cal-next" aria-label="Next month">&rsaquo;</button>
+                    </div>
+                    <div class="cal-grid" id="cal-grid" role="grid" aria-label="Month"></div>
+                  </div>
+                  <div class="cal-side">
+                    <div class="cal-side-head">
+                      <span class="cal-day-num" id="cal-day-num"></span><div class="cal-day-head"><span class="cal-day-title" id="cal-day-title"></span><span class="cal-day-sub" id="cal-day-sub"></span></div>
+                      <button class="link-btn" data-goto="tasks">Tasks</button>
+                      <button class="action-btn" id="btn-agenda-link" data-icon="pencil" data-size="16" title="Calendar link"></button>
+                    </div>
+                    <div id="agenda-list"></div>
+                  </div>
                 </div>
-                <div id="agenda-list"></div>
                 <form class="location-form" id="cal-form" hidden>
                   <input id="cal-input" placeholder="Paste your calendar's secret iCal link" maxlength="2100" autocomplete="off" spellcheck="false" />
                   <button type="submit" class="btn primary">Save</button>
@@ -245,25 +268,27 @@
 
               <!-- Launcher: full grid -->
               <section class="page" id="tab-launcher" hidden>
-                <div class="panel-head">
-                  <span class="panel-title">Launcher</span>
-                  <span class="muted small">Right-click twice to remove</span>
-                </div>
                 <!-- search: filters the apps below; "yt lofi", "standup" or an address opens a quick link (quicklinks.ts) -->
                 <div class="lq-search">
                   <input id="launcher-search" type="text" placeholder="Search apps, links, or the web…" autocomplete="off" spellcheck="false" aria-label="Search the launcher" />
                   <div class="lq-hint" id="launcher-hint" hidden><span id="launcher-hint-text"></span><button class="lq-save" id="launcher-hint-save" hidden>Save as link</button></div>
                 </div>
                 <!-- #launcher-add stays last: renderApps re-appends it after the apps -->
-                <div class="launcher launcher-grid" id="launcher-grid"><button class="app app-add" id="launcher-add" data-add-app title="Add an app"><span class="app-ic" data-icon="plus" data-size="18"></span><span class="app-name">Add app</span></button></div>
-                <div class="panel-head lq-head"><span class="panel-title">Quick links</span><button class="lq-add" id="ql-add">+ Add link</button></div>
-                <form class="lq-form" id="ql-form" hidden>
-                  <input id="ql-name" type="text" placeholder="Name (Standup)" autocomplete="off" aria-label="Link name" />
-                  <input id="ql-key" type="text" placeholder="Keyword (optional)" autocomplete="off" aria-label="Keyword" />
-                  <input id="ql-url" type="text" placeholder="https://…  ({query} for the search text)" autocomplete="off" spellcheck="false" aria-label="Address" />
-                  <div class="lq-form-actions"><span class="lq-err" id="ql-err"></span><button type="button" class="lq-add" id="ql-cancel">Cancel</button><button type="submit" class="lq-save">Save</button></div>
-                </form>
-                <div class="lq-chips" id="ql-chips"></div>
+                <div class="launcher launcher-grid" id="launcher-grid" title="Right-click an app twice to remove it"><button class="app app-add" id="launcher-add" data-add-app title="Add an app"><span class="app-ic" data-icon="plus" data-size="18"></span><span class="app-name">Add app</span></button></div>
+                <div class="lq-foot">
+                  <div class="lq-row">
+                    <span class="lq-label">Quick links</span>
+                    <div class="lq-chips" id="ql-chips"></div>
+                    <button class="lq-add" id="ql-add">+ Link</button>
+                  </div>
+                  <form class="lq-form" id="ql-form" hidden>
+                    <input id="ql-name" type="text" placeholder="Name (Standup)" autocomplete="off" aria-label="Link name" />
+                    <input id="ql-key" type="text" placeholder="Keyword (optional)" autocomplete="off" aria-label="Keyword" />
+                    <input id="ql-url" type="text" placeholder="https://…  ({query} = search text)" autocomplete="off" spellcheck="false" aria-label="Address" />
+                    <div class="lq-form-actions"><button type="button" class="lq-add" id="ql-cancel">Cancel</button><button type="submit" class="lq-save">Save</button></div>
+                    <span class="lq-err" id="ql-err"></span>
+                  </form>
+                </div>
               </section>
 
               <!-- Weather -->
@@ -309,7 +334,7 @@
                 <div class="panel-head">
                   <span class="panel-title">Next Up</span>
                   <span class="muted small" id="task-count">0 tasks</span>
-                  <button class="link-btn" data-goto="month">Month</button>
+                  <button class="link-btn" data-goto="month">Progress</button>
                 </div>
                 <!-- quick add: category chip cycles on click (panels.ts), Enter adds -->
                 <form id="task-form" class="task-add">
@@ -353,7 +378,7 @@
                     <button class="action-btn" id="rem-new" data-icon="plus" data-size="16" title="New reminder"></button>
                   </div>
                   <div class="rem-cols">
-                    <div class="rem-list" id="rem-upcoming"></div>
+                    <div class="rem-list"><span class="lbl">Upcoming</span><div class="rem-list" id="rem-upcoming"></div></div>
                     <div class="rem-list"><span class="lbl">Done today</span><div class="rem-list" id="rem-done"></div></div>
                   </div>
                 </div>
@@ -432,28 +457,39 @@
 
               <!-- Bluetooth (bluetooth.ts) -->
               <section class="page" id="tab-devices" hidden>
-                <div class="panel-head">
-                  <span class="panel-title">Bluetooth</span>
+                <div class="dev-head">
+                  <span class="panel-title">Devices</span>
                   <button class="bar-btn" id="bt-tab-refresh" data-icon="restart" data-size="14" title="Refresh" aria-label="Refresh Bluetooth devices"></button>
                   <button class="bar-btn" data-action="bluetooth" data-icon="cog" data-size="14" title="Bluetooth settings" aria-label="Open Bluetooth settings"></button>
+                  <span class="dev-bt-label">Bluetooth</span>
                   <button class="bt-switch" id="bt-tab-radio" role="switch" aria-checked="false" aria-label="Bluetooth" disabled></button>
                 </div>
-                <div class="bt-list" id="bt-tab-list"></div>
-                <div class="small bt-err" id="bt-tab-err" hidden></div>
-                <!-- USB and 2.4 GHz devices (peripherals.ts): battery where the device reports it (Logitech) -->
-                <div class="panel-head per-head"><span class="panel-title">Wired &amp; wireless</span></div>
-                <div class="bt-list" id="per-list"></div>
+                <!-- the lists scroll inside this box, never the page -->
+                <div class="dev-scroll">
+                  <div class="dev-label">Bluetooth</div>
+                  <div class="bt-list" id="bt-tab-list"></div>
+                  <div class="small bt-err" id="bt-tab-err" hidden></div>
+                  <!-- USB and 2.4 GHz devices (peripherals.ts): battery where the device reports it (Logitech) -->
+                  <div class="dev-label">Wired &amp; wireless</div>
+                  <div class="bt-list" id="per-list"></div>
+                </div>
               </section>
 
               <!-- Month progress -->
+              <!-- Progress (tab id "month"): how far through today / week / month / year, and your own countdowns -->
               <section class="page" id="tab-month" hidden>
-                <div class="panel-head">
-                  <span class="panel-title" id="month-title">Month Progress</span>
-                  <span class="month-pct" id="month-pct">0%</span>
-                  <button class="action-btn" data-action="datetime" data-icon="open" data-size="16" title="Date &amp; time settings"></button>
+                <div class="pg-split">
+                  <div class="pg-spans" id="pg-spans"></div>
+                  <div class="pg-count">
+                    <div class="pg-head"><span class="pg-title">Countdowns</span><button class="lq-add" id="pg-add">+ Add</button></div>
+                    <form class="pg-form" id="pg-form" hidden>
+                      <input id="pg-name" type="text" placeholder="What (Exam, Trip…)" maxlength="40" autocomplete="off" aria-label="Countdown name" />
+                      <input id="pg-date" type="date" aria-label="Countdown date" />
+                      <button type="submit" class="lq-save">Save</button>
+                    </form>
+                    <div class="pg-list" id="pg-list"></div>
+                  </div>
                 </div>
-                <div class="muted small" id="month-left"></div>
-                <div class="dots" id="month-dots"></div>
               </section>
             </div>
           </div>

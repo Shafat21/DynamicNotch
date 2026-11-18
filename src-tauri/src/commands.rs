@@ -141,6 +141,7 @@ pub fn open_link(id: String) -> Res<()> {
         "releases" => "https://github.com/Shafat21/DynamicNotch/releases",
         "site" => "https://shafat21.online",
         "request" => "https://www.shafat21.online/#contact",
+        "spotify-dev" => "https://developer.spotify.com/dashboard",
         _ => return Err(format!("unknown link {id}")),
     };
     launcher::os::shell_open(url)
@@ -465,6 +466,74 @@ pub async fn reply_to_agent(app: AppHandle, id: String, text: String, image: Opt
         }
     })
     .await
+}
+
+// ---------- Spotify (Music tab: search, playlists, queue, like) ----------
+
+#[tauri::command]
+pub fn spotify_status(app: AppHandle) -> Value {
+    crate::spotify::status(&app)
+}
+
+#[tauri::command]
+pub fn spotify_set_client(app: AppHandle, id: String) -> Res<Value> {
+    crate::spotify::set_client(&app, &id)
+}
+
+/// Waits for the browser sign-in (up to 3 min), so it runs off the main thread.
+#[tauri::command]
+pub async fn spotify_connect(app: AppHandle) -> Res<Value> {
+    blocking(move || crate::spotify::connect(&app)).await
+}
+
+#[tauri::command]
+pub fn spotify_disconnect(app: AppHandle) -> Res<Value> {
+    crate::spotify::disconnect(&app)
+}
+
+#[tauri::command]
+pub async fn spotify_search(app: AppHandle, q: String) -> Res<Value> {
+    blocking(move || crate::spotify::search(&app, &q)).await
+}
+
+#[tauri::command]
+pub async fn spotify_playlists(app: AppHandle) -> Res<Vec<crate::spotify::Playlist>> {
+    blocking(move || crate::spotify::playlists(&app)).await
+}
+
+#[tauri::command]
+pub async fn spotify_playlist_tracks(app: AppHandle, id: String) -> Res<Vec<crate::spotify::Track>> {
+    blocking(move || crate::spotify::playlist_tracks(&app, &id)).await
+}
+
+#[tauri::command]
+pub async fn spotify_queue(app: AppHandle) -> Res<Value> {
+    blocking(move || crate::spotify::queue(&app)).await
+}
+
+#[tauri::command]
+pub async fn spotify_queue_add(app: AppHandle, uri: String) -> Res<()> {
+    blocking(move || crate::spotify::queue_add(&app, &uri)).await
+}
+
+#[tauri::command]
+pub async fn spotify_play(app: AppHandle, uri: Option<String>, context: Option<String>, offset: Option<String>) -> Res<()> {
+    blocking(move || crate::spotify::play(&app, uri.as_deref(), context.as_deref(), offset.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn spotify_current(app: AppHandle) -> Res<Value> {
+    blocking(move || crate::spotify::current(&app)).await
+}
+
+#[tauri::command]
+pub async fn spotify_like(app: AppHandle, id: String, on: bool) -> Res<()> {
+    blocking(move || crate::spotify::like(&app, &id, on)).await
+}
+
+#[tauri::command]
+pub fn spotify_open_search(q: String) -> Res<()> {
+    crate::spotify::open_search(&q)
 }
 
 /// USB and 2.4 GHz dongle devices, with battery where they report it (Devices tab).

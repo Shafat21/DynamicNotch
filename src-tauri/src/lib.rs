@@ -12,6 +12,7 @@ mod fullscreen;
 pub mod hook;
 mod launcher;
 mod quicklinks;
+mod spotify;
 mod peripherals;
 mod menu;
 mod monitors;
@@ -211,6 +212,19 @@ pub fn run() {
             commands::media_volume,
             commands::set_media_volume,
             commands::peripherals,
+            commands::spotify_status,
+            commands::spotify_set_client,
+            commands::spotify_connect,
+            commands::spotify_disconnect,
+            commands::spotify_search,
+            commands::spotify_playlists,
+            commands::spotify_playlist_tracks,
+            commands::spotify_queue,
+            commands::spotify_queue_add,
+            commands::spotify_play,
+            commands::spotify_current,
+            commands::spotify_like,
+            commands::spotify_open_search,
             commands::reply_to_agent,
             commands::bt_set_radio,
             commands::bt_connect,

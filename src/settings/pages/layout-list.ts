@@ -3,7 +3,8 @@ import { icon } from "../icons";
 import { saveLayout, store, type Layout } from "../store";
 import { h, page, toggle } from "../ui";
 
-export function renderLayoutList(root: HTMLElement, title: string, key: keyof Layout, labels: Record<string, string>, hint: string): void {
+/** `descs`: one line under each name saying what that tab or card shows. */
+export function renderLayoutList(root: HTMLElement, title: string, key: keyof Layout, labels: Record<string, string>, hint: string, descs: Record<string, string> = {}): void {
   const items = () => store.look.layout[key];
   const name = (id: string) => labels[id] ?? id;
   const list = h("ol", { className: "reorder", ariaLabel: title });
@@ -17,7 +18,7 @@ export function renderLayoutList(root: HTMLElement, title: string, key: keyof La
           "li",
           { className: "reorder-row", tabIndex: 0, ariaLabel: `${name(it.id)}, position ${i + 1} of ${items().length}. Arrow up or down to move.` },
           grip,
-          h("span", { className: "reorder-name" }, name(it.id)),
+          h("span", { className: "reorder-text" }, h("span", { className: "reorder-name" }, name(it.id)), ...(descs[it.id] ? [h("span", { className: "reorder-desc" }, descs[it.id])] : [])),
           toggle(`Show ${name(it.id)}`, it.visible, (on) => {
             // by id: a save reply may have replaced the item objects since this row was drawn
             items().forEach((x) => x.id === it.id && (x.visible = on));

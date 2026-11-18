@@ -19,7 +19,10 @@ pub const KEY: &str = "calendar_url";
 /// Settings key: "1" = also read the calendars of the OS calendar app.
 pub const DESKTOP_KEY: &str = "calendar_desktop";
 const INTERVAL: Duration = Duration::from_secs(5 * 60);
-/// Last good events of the stored link (yesterday..tomorrow) + a generation bumped by every save/remove.
+/// Events are loaded for this window: a month and a bit back, three months ahead (the month grid in the Calendar tab).
+const BACK_DAYS: u64 = 35;
+const WINDOW_DAYS: u32 = 130;
+/// Last good events of the stored link (BACK_DAYS back .. WINDOW_DAYS) + a generation bumped by every save/remove.
 /// One lock, so "still current? → store → publish" is atomic between `set_calendar_url` and the monitor.
 struct Cache {
     generation: u64,
@@ -47,6 +50,8 @@ struct Payload<'a> {
     fatal: bool,
     today: Vec<&'a Event>,
     tomorrow_first: Option<&'a Event>,
+    /// Every loaded event (the month grid and the picked day's list in the Calendar tab).
+    events: &'a [Event],
 }
 
 pub fn spawn(app: AppHandle) {
@@ -134,19 +139,20 @@ fn payload(configured: bool, error: Option<String>, failed: bool, events: &[Even
         fatal: failed && events.is_empty(),
         today: events.iter().filter(|e| overlaps(e.start, e.end, t0, t1)).collect(),
         tomorrow_first: events.iter().filter(|e| e.start >= t1 && e.start < t2).min_by_key(|e| (e.all_day, e.start)),
+        events,
     };
     serde_json::to_value(p).unwrap_or_default()
 }
 
-/// Fetch and parse the yesterday..tomorrow window (spec §15.5). Second value: a note about unknown time zones.
+/// Fetch and parse the BACK_DAYS..WINDOW_DAYS window (spec §15.5, widened for the month grid). Second value: a note about unknown time zones.
 /// The iCal link (if any) and the desktop calendar (if on), merged and sorted. One source failing is a note;
 /// all failing is an error.
 pub fn load(url: Option<&str>, desktop: bool) -> Result<(Vec<Event>, Option<String>), String> {
-    let start = midnight(&Local, Local::now().date_naive() - Days::new(1)).ok_or("invalid local time")?;
+    let start = midnight(&Local, Local::now().date_naive() - Days::new(BACK_DAYS)).ok_or("invalid local time")?;
     let mut events = Vec::new();
     let (mut notes, mut errors) = (Vec::new(), Vec::new());
     if let Some(url) = url {
-        match fetch(url).and_then(|ics| parse(&ics, start.clone(), 3)) {
+        match fetch(url).and_then(|ics| parse(&ics, start.clone(), WINDOW_DAYS)) {
             Ok((e, unknown)) => {
                 events.extend(e);
                 if !unknown.is_empty() {
@@ -157,7 +163,7 @@ pub fn load(url: Option<&str>, desktop: bool) -> Result<(Vec<Event>, Option<Stri
         }
     }
     if desktop {
-        match super::calendar_desktop::events(start.timestamp_millis(), 3) {
+        match super::calendar_desktop::events(start.timestamp_millis(), i64::from(WINDOW_DAYS)) {
             Ok(e) => events.extend(e),
             Err(e) => errors.push(e),
         }
