@@ -40,6 +40,16 @@ pub fn set_volume(v: f32) -> Result<(), String> {
     .map(drop)
 }
 
+/// shortcut: no per-app volume on Linux yet (PipeWire / Pulse streams are not matched to the media player), so
+/// the Music slider falls back to the system volume; add when someone asks.
+pub fn app_volume(_app: &str) -> Result<Option<f32>, String> {
+    Ok(None)
+}
+
+pub fn set_app_volume(_app: &str, _v: f32) -> Result<bool, String> {
+    Ok(false)
+}
+
 pub fn set_mute(muted: bool) -> Result<(), String> {
     let flag = if muted { "1" } else { "0" };
     if wp() { sh("wpctl", &["set-mute", WP_SINK, flag]) } else { sh("pactl", &["set-sink-mute", PA_SINK, flag]) }.map(drop)
