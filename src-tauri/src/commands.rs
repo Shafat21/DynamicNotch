@@ -468,6 +468,64 @@ pub async fn reply_to_agent(app: AppHandle, id: String, text: String, image: Opt
     .await
 }
 
+// ---------- screenshots (capture.rs, capture.html) ----------
+
+/// Freeze the screen and open the selection overlay. async: it builds a window (wry#583).
+#[tauri::command]
+pub async fn capture_start(app: AppHandle) -> Res<()> {
+    crate::capture::start(&app)
+}
+
+/// The frozen desktop as PNG bytes (binary IPC: a 4K screenshot as JSON would be slow).
+#[tauri::command]
+pub fn capture_image() -> Res<tauri::ipc::Response> {
+    crate::capture::image().map(tauri::ipc::Response::new)
+}
+
+/// The windows that were on screen, front to back, [x, y, w, h] in image pixels (hover to snap to one).
+#[tauri::command]
+pub fn capture_windows() -> Vec<[i32; 4]> {
+    crate::capture::windows()
+}
+
+/// Each monitor, [x, y, w, h, scale %] in image pixels (the toolbar stays on, and is sized for, its monitor).
+#[tauri::command]
+pub fn capture_monitors() -> Vec<[i32; 5]> {
+    crate::capture::monitors()
+}
+
+#[tauri::command]
+pub fn capture_ready(app: AppHandle) -> Res<()> {
+    crate::capture::ready(&app)
+}
+
+#[tauri::command]
+pub fn capture_hotkey(app: AppHandle) -> String {
+    crate::capture::hotkey(&app)
+}
+
+#[tauri::command]
+pub fn set_capture_hotkey(app: AppHandle, hotkey: String) -> Res<String> {
+    crate::capture::set_hotkey(&app, &hotkey)
+}
+
+#[tauri::command]
+pub fn capture_cancel(app: AppHandle) {
+    crate::capture::close(&app);
+}
+
+/// The finished PNG arrives as the raw request body; headers `x-copy` / `x-save` ("1") say what to do with it.
+/// Tells the island (`screenshot` event) so it can say "Copied" / "Saved".
+#[tauri::command]
+pub fn capture_finish(app: AppHandle, request: tauri::ipc::Request<'_>) -> Res<Option<String>> {
+    let tauri::ipc::InvokeBody::Raw(png) = request.body() else { return Err("The screenshot didn't arrive".into()) };
+    let flag = |k: &str| request.headers().get(k).is_some_and(|v| v == "1");
+    let (copy, save) = (flag("x-copy"), flag("x-save"));
+    let saved = crate::capture::finish(&app, png, copy, save)?;
+    let _ = app.emit("screenshot", json!({ "copied": copy, "saved": saved }));
+    Ok(saved)
+}
+
 // ---------- Spotify (Music tab: search, playlists, queue, like) ----------
 
 #[tauri::command]

@@ -213,16 +213,24 @@ pub fn copy(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// (Re)bind the hotkey. The global-shortcut plugin is used only by dictation, hence `unregister_all`.
+/// The plugin shortcut dictation registered last (None: none, or a modifier-only hotkey on the OS hook).
+static BOUND: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// (Re)bind the hotkey. Only dictation's own previous shortcut is dropped: the screenshot hotkey shares the plugin.
 pub fn bind(app: &AppHandle, hk: &Hotkey) -> Result<(), String> {
     let gs = app.global_shortcut();
-    gs.unregister_all().map_err(|e| e.to_string())?;
+    if let Some(old) = BOUND.lock().unwrap().take() {
+        let _ = gs.unregister(old.as_str());
+    }
     if hk.key.is_none() {
         return hotkey_os::set(Some(hk.mods));
     }
     hotkey_os::set(None)?;
-    gs.on_shortcut(hk.shortcut().as_str(), |_, _, e| send(if e.state() == ShortcutState::Pressed { Msg::Press } else { Msg::Release }))
-        .map_err(|e| format!("Couldn't register {}: {e}", hk.canonical()))
+    let sc = hk.shortcut();
+    gs.on_shortcut(sc.as_str(), |_, _, e| send(if e.state() == ShortcutState::Pressed { Msg::Press } else { Msg::Release }))
+        .map_err(|e| format!("Couldn't register {}: {e}", hk.canonical()))?;
+    *BOUND.lock().unwrap() = Some(sc);
+    Ok(())
 }
 
 fn load(app: &AppHandle) -> Settings {

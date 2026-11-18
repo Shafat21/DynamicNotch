@@ -1,0 +1,58 @@
+/* Screenshot overlay: the frozen screen fills the window exactly (1 image px = 1 device px), marks on a canvas above */
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; user-select: none; -webkit-user-select: none; }
+body { font: 13px "Segoe UI", system-ui, sans-serif; color: #f2f2f7; }
+#shot { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; pointer-events: none; image-rendering: pixelated; }
+#ink { position: fixed; inset: 0; width: 100vw; height: 100vh; cursor: crosshair; touch-action: none; }
+body.busy #ink { cursor: progress; }
+
+#mag { position: fixed; z-index: 3; width: 130px; height: 130px; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35), 0 10px 30px rgb(0 0 0 / 0.5); }
+#size { position: fixed; z-index: 2; padding: 2px 7px; border-radius: 6px; background: rgb(10 132 255 / 0.92); color: #fff;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; }
+#hint { position: fixed; z-index: 2; left: 50%; top: 18px; translate: -50% 0; padding: 7px 14px; border-radius: 999px;
+  background: rgb(20 20 24 / 0.88); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 8px 24px rgb(0 0 0 / 0.4); font-size: 12.5px; color: #d0d0d8;
+  pointer-events: none; white-space: nowrap; }
+#hint b { color: #fff; font-weight: 600; }
+
+/* toolbar under the selection, the island's dark glass */
+#bar { position: fixed; z-index: 4; display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 14px;
+  background: rgb(22 22 26 / 0.94); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 12px 32px rgb(0 0 0 / 0.5); backdrop-filter: blur(18px); }
+#bar[hidden] { display: none; }
+.grp { display: flex; align-items: center; gap: 2px; }
+.sep { width: 1px; height: 22px; background: rgb(255 255 255 / 0.12); }
+.tb { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #c7c7cf; cursor: pointer; }
+.tb:hover { background: rgb(255 255 255 / 0.09); color: #fff; }
+.tb.on { background: rgb(10 132 255 / 0.22); color: #4da3ff; }
+.tb.primary { background: #0a84ff; color: #fff; }
+.tb.primary:hover { background: #2a95ff; }
+.sw { width: 18px; height: 18px; margin: 0 2px; padding: 0; border: 0; border-radius: 50%; background: var(--c); cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35); transition: transform 0.12s; }
+.sw:hover { transform: scale(1.15); }
+.sw.on { box-shadow: 0 0 0 2px rgb(22 22 26), 0 0 0 4px var(--c); }
+.tb:focus-visible, .sw:focus-visible { outline: none; box-shadow: inset 0 0 0 1px #4da3ff; }
+
+#text-in { position: fixed; z-index: 5; min-width: 120px; padding: 0 2px; border: 1px dashed rgb(255 255 255 / 0.6); border-radius: 4px;
+  background: rgb(0 0 0 / 0.25); font: 600 18px "Segoe UI", system-ui, sans-serif; outline: none; }
+#text-in[hidden] { display: none; }
+
+/* compact toolbar: about two thirds the earlier size (it was as wide as the island) */
+#bar { gap: 3px; padding: 3px 4px; border-radius: 11px; }
+.grp { gap: 1px; }
+.sep { height: 16px; margin: 0 1px; }
+.tb { width: 26px; height: 26px; border-radius: 7px; }
+.tb svg { width: 15px; height: 15px; }
+.sw { width: 13px; height: 13px; margin: 0 2px; }
+.sw.on { box-shadow: 0 0 0 2px rgb(22 22 26), 0 0 0 3.5px var(--c); }
+#size { font-size: 10.5px; padding: 1px 6px; }
+#hint { font-size: 12px; padding: 5px 12px; top: 14px; }
+
+/* sized per monitor in capture.ts (transform: scale); the origins keep each element where it is placed */
+#bar { transform-origin: 0 0; }
+#size, #mag { transform-origin: 0 0; }
+#hint { transform-origin: 50% 0; }
+/* tooltip under the hovered tool (above when the bar is at the bottom of the screen) */
+#tip { position: absolute; top: calc(100% + 6px); translate: -50% 0; padding: 3px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none;
+  background: rgb(14 14 18 / 0.96); color: #e8e8ee; font-size: 11.5px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 6px 18px rgb(0 0 0 / 0.45); }
+#tip[hidden] { display: none; }
+#bar.tips-up #tip { top: auto; bottom: calc(100% + 6px); }
+

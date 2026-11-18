@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Screenshot</title>
+  </head>
+  <body>
+    <!-- the frozen desktop (capture.rs), the marks drawn over it, and the toolbar under the selection -->
+    <canvas id="shot"></canvas>
+    <canvas id="ink"></canvas>
+    <canvas id="mag" width="130" height="130" hidden></canvas>
+    <div id="size" hidden></div>
+    <div id="hint">Drag to capture an area &nbsp;·&nbsp; <b>Enter</b> whole screen &nbsp;·&nbsp; <b>Esc</b> cancel</div>
+    <div id="bar" role="toolbar" aria-label="Mark up" hidden>
+      <div class="grp" id="tools"></div>
+      <span class="sep"></span>
+      <div class="grp" id="colors"></div>
+      <span class="sep"></span>
+      <div class="grp" id="edits"></div>
+      <span class="sep"></span>
+      <div class="grp" id="outs"></div>
+      <div id="tip" role="tooltip" hidden></div>
+    </div>
+    <input id="text-in" type="text" maxlength="200" autocomplete="off" spellcheck="false" hidden />
+    <script type="module" src="/src/capture/capture.ts"></script>
+  </body>
+</html>

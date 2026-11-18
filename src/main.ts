@@ -631,6 +631,14 @@ function applyLook(p: Look): void {
   ui.look = p;
   renderTabs(p.layout.tabs, ui.tab);
   renderHome(p.layout.home);
+  // top-right buttons: shown / hidden and ordered as in Settings → Top buttons (Settings and collapse stay last)
+  const QUICK: Record<string, string> = { call: "btn-call", pal: "btn-pal-status", shot: "btn-shot", pin: "btn-pin" };
+  (p.layout.quick ?? []).forEach((q, i) => {
+    const b = document.getElementById(QUICK[q.id]);
+    if (!b) return;
+    b.hidden = !q.visible;
+    b.style.order = String(i);
+  });
   applyTheme(p); // after the renders: it also paints the new badges
   fitTabs(); // text size may have changed the tab widths
 }
@@ -893,6 +901,13 @@ function wireInput(): void {
   });
   $("btn-pal-status").onclick = () => openTab("pal");
   $("btn-pin").onclick = () => setPinned(!ui.pinned);
+  // screenshot: collapse first so the open island isn't what you end up selecting around
+  // capture at once (the island is kept out of the shot), and close the island meanwhile
+  $("btn-shot").onclick = () => {
+    invoke("capture_start").catch((e) => showEvent("Screenshot", String(e), 4000));
+    setPinned(false);
+    setState("idle");
+  };
   $("btn-collapse").onclick = () => (ui.state === "prompt" ? dismissPrompt() : setState("idle"));
   document.querySelectorAll<HTMLElement>("[data-add-app]").forEach((b) => {
     b.onclick = () => updateApps(invoke<LauncherApp[]>("pick_app"));
@@ -1076,6 +1091,9 @@ async function boot(): Promise<void> {
 
   await Promise.all([
     listen<boolean>(`hover${sfx}`, (e) => onHover(e.payload)),
+    listen<{ copied: boolean; saved: string | null }>("screenshot", (e) =>
+      showToast({ icon: "camera", title: e.payload.saved ? "Screenshot saved" : "Screenshot copied", text: e.payload.saved ? "Pictures › Screenshots, and on your Shelf" : "Paste it anywhere" }),
+    ),
     listen<{ version: string }>("update", (e) => showToast({ icon: "download", title: `Update ${e.payload.version} available`, text: "Install it in Settings → About", ms: 6000 })),
     listen<{ name: string; kind: string }>("bt-connected", (e) =>
       showToast({ icon: e.payload.kind === "audio" ? "headphones" : e.payload.kind === "input" ? "keyboard" : e.payload.kind === "phone" ? "phone" : "bluetooth", title: e.payload.name, text: "Connected" }),

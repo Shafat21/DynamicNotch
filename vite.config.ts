@@ -8,7 +8,7 @@ export default defineConfig({
     target: "chrome120",
     outDir: "dist",
     emptyOutDir: true,
-    // island + Settings window (created on demand by `open_settings`)
-    rollupOptions: { input: { main: "index.html", settings: "settings.html" } },
+    // island + Settings window (created on demand by `open_settings`) + the screenshot overlay (`capture_start`)
+    rollupOptions: { input: { main: "index.html", settings: "settings.html", capture: "capture.html" } },
   },
 });

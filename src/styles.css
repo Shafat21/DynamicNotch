@@ -1427,3 +1427,6 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 .pg-rm:hover { background: var(--hover); color: var(--text); }
 .pg-empty { padding: 4px 2px; line-height: 1.4; }
 @container pages (max-width: 520px) { .pg-split { grid-template-columns: minmax(0, 1fr); } .pg-count { display: none; } }
+
+/* top-right buttons: their order comes from Settings → Top buttons (main.ts sets `order`); Settings and collapse stay last */
+.quick [data-settings], .quick #btn-collapse { order: 100; }

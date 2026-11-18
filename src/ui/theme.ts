@@ -1,7 +1,7 @@
 // Applies the saved appearance (sticky `appearance` event, spec §22.3) to CSS variables + data attributes.
 export type Theme = { name: string; bgFrom: string; bgTo: string; card: string; accent: string };
 export type LayoutItem = { id: string; visible: boolean };
-export type Layout = { tabs: LayoutItem[]; home: LayoutItem[] };
+export type Layout = { tabs: LayoutItem[]; home: LayoutItem[]; quick?: LayoutItem[] };
 export type Appearance = {
   theme: string; accent: string; iconStyle: string; badgeColors: Record<string, string>; shape: string;
   density: string; radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string; view: "dashboard" | "compact";

@@ -13,6 +13,7 @@ pub mod hook;
 mod launcher;
 mod quicklinks;
 mod spotify;
+mod capture;
 mod peripherals;
 mod menu;
 mod monitors;
@@ -157,6 +158,7 @@ pub fn run() {
             monitors::spawn_all(app.handle().clone());
             bridge::spawn(app.handle().clone());
             dictation::spawn(app.handle().clone());
+            capture::bind_saved(app.handle()); capture::prewarm(app.handle()); // after dictation: it registers the global-shortcut plugin
             notetaker::sweep(app.handle()); // leftover call audio from a crash or kill
             Ok(())
         })
@@ -212,6 +214,15 @@ pub fn run() {
             commands::media_volume,
             commands::set_media_volume,
             commands::peripherals,
+            commands::capture_start,
+            commands::capture_image,
+            commands::capture_windows,
+            commands::capture_monitors,
+            commands::capture_hotkey,
+            commands::set_capture_hotkey,
+            commands::capture_ready,
+            commands::capture_cancel,
+            commands::capture_finish,
             commands::spotify_status,
             commands::spotify_set_client,
             commands::spotify_connect,

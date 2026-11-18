@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Island and Settings windows: core APIs (events, window) only. App features go through our own commands.",
-  "windows": ["main", "island2", "settings"],
+  "windows": ["main", "island2", "settings", "capture"],
   "permissions": ["core:default"]
 }

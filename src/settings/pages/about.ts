@@ -5,7 +5,7 @@ import { button, h, page, report, row, section } from "../ui";
 
 type UpdateInfo = { version: string; notes: string | null; can_install: boolean };
 
-const FEATURES = ["Music & lyrics", "Calendar", "Weather", "Launcher", "Clipboard", "Notes & reminders", "Voice dictation", "Coding agents"];
+const FEATURES = ["Screenshots & markup", "Music, lyrics & Spotify", "Coding agents", "Calendar", "Focus timer", "Launcher & quick links", "Notes & reminders", "Clipboard", "Devices & battery", "Progress & countdowns", "Voice dictation", "Weather", "Both displays"];
 
 export function renderAbout(root: HTMLElement): void {
   const version = h("span", { className: "about-ver" }, "v…");
@@ -22,7 +22,7 @@ export function renderAbout(root: HTMLElement): void {
         "div",
         { className: "about-text" },
         h("div", { className: "about-name" }, "Dynamic Notch Island", version),
-        h("p", { className: "about-tag" }, "A Dynamic Island for Windows and Linux, with Pal, your companion for Claude Code, Codex, Gemini CLI, Cursor and Copilot CLI."),
+        h("p", { className: "about-tag" }, "A Dynamic Island for Windows and Linux: music, screenshots, your calendar and more at the top of the screen, with Pal, your companion for Claude Code, Codex, Gemini CLI, Cursor, Copilot CLI, Antigravity, Command Code and opencode."),
       ),
     ),
     h("div", { className: "about-chips", ariaLabel: "What it does" }, ...FEATURES.map((f) => h("span", {}, f))),

@@ -77,6 +77,7 @@ pub const THEMES: [Theme; 7] = [
 pub const TAB_IDS: &[&str] = &["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard", "sound", "devices", "shelf"];
 pub const HOME_IDS: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "system", "tasks", "notes", "reminders", "sound", "devices", "dictation"];
 // extra grid cards (system, tasks, sound, devices, dictation) start hidden so Home keeps its 4 primary cards without scrolling
+pub const QUICK_IDS: &[&str] = &["call", "pal", "shot", "pin"];
 const HOME_DEFAULT_VISIBLE: &[&str] = &["clock", "pal", "music", "calendar", "launcher", "focus", "notes", "reminders"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -90,6 +91,8 @@ pub struct LayoutItem {
 pub struct Layout {
     pub tabs: Vec<LayoutItem>,
     pub home: Vec<LayoutItem>,
+    /// The island's top-right buttons (Settings and collapse always stay).
+    pub quick: Vec<LayoutItem>,
 }
 
 fn is_hex(s: &str) -> bool {
@@ -150,7 +153,11 @@ fn normalize_list(items: Vec<LayoutItem>, known: &[&str], default_visible: &[&st
 }
 
 pub fn normalize_layout(l: Layout) -> Layout {
-    Layout { tabs: normalize_list(l.tabs, TAB_IDS, TAB_IDS), home: normalize_list(l.home, HOME_IDS, HOME_DEFAULT_VISIBLE) }
+    Layout {
+        tabs: normalize_list(l.tabs, TAB_IDS, TAB_IDS),
+        home: normalize_list(l.home, HOME_IDS, HOME_DEFAULT_VISIBLE),
+        quick: normalize_list(l.quick, QUICK_IDS, QUICK_IDS),
+    }
 }
 
 /// Shallow merge of the provided camelCase fields; a field of the wrong type or an unknown key is ignored.
@@ -234,14 +241,14 @@ mod tests {
     }
     #[test]
     fn layout_normalizes() {
-        let l = normalize_layout(Layout { tabs: vec![LayoutItem { id: "music".into(), visible: true }, LayoutItem { id: "bogus".into(), visible: true }, LayoutItem { id: "music".into(), visible: false }], home: vec![] });
+        let l = normalize_layout(Layout { tabs: vec![LayoutItem { id: "music".into(), visible: true }, LayoutItem { id: "bogus".into(), visible: true }, LayoutItem { id: "music".into(), visible: false }], home: vec![], quick: vec![] });
         assert_eq!(l.tabs[0].id, "music");
         assert_eq!(l.tabs.len(), TAB_IDS.len());
         assert!(l.tabs.iter().all(|t| t.id != "bogus"));
         assert!(l.tabs.iter().find(|t| t.id == "home").unwrap().visible); // appended → its default (visible)
         assert_eq!(l.home.len(), HOME_IDS.len());
         // a stored layout without newer ids gets them appended with their default visibility
-        let old = normalize_layout(Layout { tabs: vec![LayoutItem { id: "home".into(), visible: true }], home: vec![LayoutItem { id: "clock".into(), visible: true }] });
+        let old = normalize_layout(Layout { tabs: vec![LayoutItem { id: "home".into(), visible: true }], home: vec![LayoutItem { id: "clock".into(), visible: true }], quick: vec![] });
         assert!(old.tabs.last().unwrap().visible && old.tabs.last().unwrap().id == "shelf");
         assert!(old.home.iter().find(|h| h.id == "notes").unwrap().visible);
         assert!(old.home.iter().find(|h| h.id == "reminders").unwrap().visible);
@@ -249,6 +256,8 @@ mod tests {
         assert!(!old.home.iter().find(|h| h.id == "dictation").unwrap().visible);
         assert!(!old.home.iter().find(|h| h.id == "devices").unwrap().visible);
         assert!(!old.home.iter().find(|h| h.id == "system").unwrap().visible); // other ids keep their (hidden) default
+        // a layout saved before the top buttons were configurable: all four, shown, in the island's order
+        assert_eq!(old.quick.iter().map(|q| (q.id.as_str(), q.visible)).collect::<Vec<_>>(), [("call", true), ("pal", true), ("shot", true), ("pin", true)]);
     }
     #[test]
     fn every_theme_has_valid_colours() {

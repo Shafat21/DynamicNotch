@@ -4,7 +4,7 @@ import { report } from "./ui";
 
 export type Theme = { name: string; bgFrom: string; bgTo: string; card: string; accent: string };
 export type LayoutItem = { id: string; visible: boolean };
-export type Layout = { tabs: LayoutItem[]; home: LayoutItem[] };
+export type Layout = { tabs: LayoutItem[]; home: LayoutItem[]; quick: LayoutItem[] };
 export type Appearance = {
   theme: string; accent: string; iconStyle: string; shape: string; density: string;
   radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string; view: string;

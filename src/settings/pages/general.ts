@@ -29,6 +29,55 @@ function exemptApps(): HTMLElement {
   return box;
 }
 
+/** Screenshot hotkey: press the combination in the field (or type it, then Enter). Saved and applied at once. */
+function captureHotkey(): HTMLElement {
+  const input = h("input", { type: "text", className: "txt hk-in", placeholder: "Click, then press keys", ariaLabel: "Screenshot hotkey", maxLength: 40, spellcheck: false });
+  const err = h("span", { className: "row-desc hk-err" });
+  const save = async (v: string) => {
+    try {
+      input.value = await invoke<string>("set_capture_hotkey", { hotkey: v });
+      err.textContent = input.value ? "" : "No hotkey: use the camera button in the notch.";
+      input.ariaInvalid = "false";
+      report(input.value ? `Screenshot hotkey: ${input.value}` : "Screenshot hotkey removed");
+    } catch (e) {
+      err.textContent = String(e);
+      input.ariaInvalid = "true";
+    }
+    input.blur();
+  };
+  // keyboard combination → "Ctrl+Shift+S" (the backend validates and may refuse, e.g. a key with no modifier)
+  const keyName = (e: KeyboardEvent): string | null => {
+    const c = e.code;
+    if (/^Key[A-Z]$/.test(c)) return c.slice(3);
+    if (/^Digit\d$/.test(c)) return c.slice(5);
+    if (/^F\d{1,2}$/.test(c)) return c;
+    return ({ PrintScreen: "PrintScreen", Space: "Space", Insert: "Insert", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown", Delete: "Delete" } as Record<string, string>)[c] ?? null;
+  };
+  const combo = (e: KeyboardEvent) => {
+    const k = keyName(e);
+    if (!k) return null;
+    return [e.ctrlKey && "Ctrl", e.shiftKey && "Shift", e.altKey && "Alt", e.metaKey && "Win", k].filter(Boolean).join("+");
+  };
+  input.onkeydown = (e) => {
+    if (e.key === "Escape") return input.blur();
+    if (e.key === "Enter") return e.preventDefault(), void save(input.value);
+    const withMods = e.ctrlKey || e.altKey || e.metaKey || /^F\d{1,2}$/.test(e.code);
+    if (!withMods) return; // plain typing: let them type "PrintScreen" and press Enter
+    const c = combo(e);
+    if (!c) return;
+    e.preventDefault();
+    input.value = c;
+    void save(c);
+  };
+  input.onkeyup = (e) => e.code === "PrintScreen" && void save("PrintScreen"); // Windows sends no keydown for it
+  invoke<string>("capture_hotkey").then((v) => {
+    input.value = v;
+    err.textContent = v ? "" : "No hotkey yet: the camera button in the notch always works.";
+  }, () => {});
+  const clear = button("Clear", () => void save(""), "btn small");
+  return h("div", { className: "stack" }, h("div", { className: "row-actions" }, input, clear), err);
+}
+
 export function renderGeneral(root: HTMLElement): void {
   const s = store.settings;
   const redraw = () => {
@@ -64,6 +113,7 @@ export function renderGeneral(root: HTMLElement): void {
         "Slide away while a game, video or presentation fills the screen.",
         toggle("Hide in fullscreen apps", s.hideFullscreen, (on) => set("hide_fullscreen", on)),
       ),
+      row("Screenshot hotkey", "Press it anywhere to drag an area, mark it up and copy or save it. E.g. Ctrl+Shift+S, or PrintScreen (turn off Windows' own PrintScreen snipping in Settings › Accessibility › Keyboard first).", captureHotkey()),
       row("Keep showing over these apps", "Stay visible even when one of these apps is fullscreen. Add its file name, or pick a running app.", exemptApps()),
       row(
         "Show on both displays",

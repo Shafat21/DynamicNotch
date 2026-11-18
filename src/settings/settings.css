@@ -261,3 +261,9 @@ input[type="search"] { width: 100%; height: 32px; margin-bottom: 8px; }
 .reorder-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .reorder-text .reorder-name { flex: none; }
 .reorder-desc { font-size: 12px; line-height: 1.35; color: var(--muted); }
+
+/* screenshot hotkey recorder */
+.hk-in { width: 170px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; font-variant-numeric: tabular-nums; }
+.hk-in:focus { border-color: var(--accent); }
+.hk-in[aria-invalid="true"] { border-color: #ff6b6b; }
+.hk-err { max-width: 320px; text-align: right; }

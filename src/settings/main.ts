@@ -15,6 +15,7 @@ import { renderFeatures } from "./pages/features";
 import { renderDictation } from "./pages/dictation";
 import { renderAbout } from "./pages/about";
 import { renderRoadmap } from "./pages/roadmap";
+import { renderQuick } from "./pages/quick";
 
 /** A page draws into `root`; it may return a cleanup (e.g. event listeners) run when leaving it. */
 type Render = (root: HTMLElement) => (() => void) | void;
@@ -24,6 +25,7 @@ const PAGES: [id: string, label: string, render: Render][] = [
   ["appearance", "Appearance", renderAppearance],
   ["tabs", "Tabs", renderTabs],
   ["home", "Home", renderHome],
+  ["quick", "Top buttons", renderQuick],
   ["agents", "Agents", renderAgents],
   ["features", "Integrations", renderFeatures],
   ["dictation", "Dictation", renderDictation],
