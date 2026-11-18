@@ -40,8 +40,8 @@ pub fn parse_args(args: impl IntoIterator<Item = String>) -> Args {
 /// Claude Code's name for an agent's event. Claude-style names and unknown ones pass through.
 pub fn event(name: &str) -> &str {
     match name {
-        // Gemini CLI
-        "BeforeAgent" => "UserPromptSubmit",
+        // Gemini CLI; Antigravity's PreInvocation (each agent turn)
+        "BeforeAgent" | "PreInvocation" => "UserPromptSubmit",
         "AfterAgent" => "Stop",
         "BeforeTool" => "PreToolUse",
         "AfterTool" => "PostToolUse",
@@ -108,6 +108,9 @@ pub fn prepare(raw: &[u8], args: &Args, env: &dyn Fn(&str) -> Option<String>, cw
     let raw_event = non_empty(m, "hook_event_name").unwrap_or(&args.event).to_string();
     fields(m, env);
     let mut name = event(&raw_event).to_string();
+    if args.agent == "commandcode" && name == "PreToolUse" {
+        name = "UserPromptSubmit".into(); // it has no prompt event: a tool call means it is working
+    }
     if name == "Stop" && m.get("status").and_then(Value::as_str) == Some("error") {
         name = "StopFailure".into(); // Cursor reports a failed turn as a stop with an error status
     }

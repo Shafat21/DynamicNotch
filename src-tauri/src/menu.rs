@@ -26,6 +26,31 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     )
 }
 
+/// Icon in the taskbar's notification area (the ^ tray): left click opens Settings, right click Settings / Quit.
+/// Its menu items go through `handle` like the island's right-click menu (lib.rs `on_menu_event`).
+pub fn tray(app: &AppHandle) -> tauri::Result<()> {
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let menu = Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(app, "quit", "Quit Dynamic Notch", true, None::<&str>)?,
+        ],
+    )?;
+    let mut tray = TrayIconBuilder::with_id("main").tooltip("Dynamic Notch").menu(&menu).show_menu_on_left_click(false);
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.on_tray_icon_event(|t, e| {
+        if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+            handle(t.app_handle(), "settings");
+        }
+    })
+    .build(app)?;
+    Ok(())
+}
+
 pub fn popup(app: &AppHandle, win: &WebviewWindow) -> tauri::Result<()> {
     win.popup_menu(&build(app)?)
 }

@@ -32,6 +32,7 @@ import { initCompact, ring } from "./compact/compact";
 import { CARDS, type CardId } from "./compact/pager";
 import type { PalMood } from "./mood";
 import { createPal, greet } from "./pal";
+import { notchOutline } from "./notch-outline";
 import { initQuickLinks } from "./quicklinks";
 import { initPalReply } from "./pal-reply";
 import { sfx } from "./island-window";
@@ -131,18 +132,25 @@ function restartAnimation(node: HTMLElement, cls: string): void {
 function geometry(): void {
   const [bw, bh] = targetSize();
   const k = ui.scale;
-  const [w, h] = [bw * k, bh * k];
-  const r = Math.min(bh / 2, look().radius + 14) * k; // island corners follow the card radius
+  // whole pixels: the notch is cut from several mask pieces (body, corners, ears) that meet at these sizes; at a
+  // fractional size (0.85 scale: 171.7 px, 21.25 px ears) both pieces half-cover the shared pixel column and leave
+  // a see-through hairline down the notch
+  const [w, h] = [Math.round(bw * k), Math.round(bh * k)];
+  const r = Math.round(Math.min(bh / 2, look().radius + 14) * k); // island corners follow the card radius
+  const scoop = Math.round(Math.min(r * 1.4, 25 * k));
   shell.style.setProperty("--ui", String(k));
   shell.style.setProperty("--w", `${w}px`);
   shell.style.setProperty("--h", `${h}px`);
   shell.style.setProperty("--r", `${r}px`);
-  shell.style.setProperty("--scoop", `${Math.min(r * 1.4, 25 * k)}px`);
+  shell.style.setProperty("--scoop", `${scoop}px`);
   shell.style.setProperty("--ch", `${look().collapsedH}px`); // read inside the zoomed #view: base px
   shell.dataset.shape = ui.edge === "top" ? look().shape : "pill";
-  // the notch's top edge sits on the screen edge, out of sight: the glow lap skips it (its share of the border-box path)
-  const skip = shell.dataset.shape === "notch" ? w / (2 * (w + h) - (4 - Math.PI) * r) : 0;
-  shell.style.setProperty("--skip", `${(skip * 100).toFixed(1)}%`);
+  // notch: the glow follows the visible outline, ears included (the top edge sits on the screen edge, out of sight)
+  if (shell.dataset.shape === "notch") {
+    const d = notchOutline(w, h, r, scoop);
+    shell.style.setProperty("--trail-path", `path("${d}")`);
+    shell.style.setProperty("--trail-mask", `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><path d='${d}' fill='none' stroke='black' stroke-width='5'/></svg>")`);
+  }
   shell.dataset.edge = ui.edge;
   shell.dataset.view = look().view;
   shell.style.setProperty("--ax", ui.anchor === undefined ? "50%" : `${ui.anchor}px`); // styles.css clamps #shell inside the window

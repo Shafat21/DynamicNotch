@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Session } from "./assistant";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const AGENT: Record<string, string> = { claude: "Claude Code", codex: "Codex", gemini: "Gemini CLI", cursor: "Cursor", copilot: "Copilot CLI" };
+const AGENT: Record<string, string> = { claude: "Claude Code", codex: "Codex", gemini: "Gemini CLI", cursor: "Cursor", copilot: "Copilot CLI", antigravity: "Antigravity", commandcode: "Command Code", opencode: "opencode" };
 let target: Session | null = null;
 let image: string | null = null; // base64 PNG, no data: prefix
 let sending = false;

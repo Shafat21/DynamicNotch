@@ -17,6 +17,20 @@ pub enum Shell {
     Cmd,
 }
 
+/// How an agent's config holds our hooks.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Layout {
+    /// `{"hooks": {"<Event>": [entry, ...]}}`, entries shaped per agent (`Agent::entry`).
+    Hooks,
+    /// Antigravity: a top-level block named after us, `{"dynamic-notch": {"enabled": true, "<Event>": [handler]}}`.
+    Named,
+    /// opencode: no command hooks, a JS plugin file of ours that runs the relay (`plugin_source`).
+    Plugin,
+}
+
+/// Our block's name in a `Layout::Named` file.
+const NAMED_KEY: &str = "dynamic-notch";
+
 pub struct Agent {
     pub id: &'static str,
     pub label: &'static str,
@@ -28,6 +42,7 @@ pub struct Agent {
     pub approvals: bool,
     /// The file is ours alone (removed once our last entry goes).
     own_file: bool,
+    pub layout: Layout,
 }
 
 pub const AGENTS: &[Agent] = &[
@@ -39,6 +54,7 @@ pub const AGENTS: &[Agent] = &[
         events: &[("SessionStart", 10), ("UserPromptSubmit", 10), ("PermissionRequest", 25), ("Stop", 10), ("SessionEnd", 3)],
         approvals: true,
         own_file: false,
+        layout: Layout::Hooks,
     },
     // Claude-style groups with a `*` matcher, timeouts in ms; runs hooks with `powershell -Command` on Windows.
     // AfterModel is left out: it fires on every response chunk.
@@ -49,6 +65,7 @@ pub const AGENTS: &[Agent] = &[
         events: &[("SessionStart", 10_000), ("BeforeAgent", 5_000), ("AfterAgent", 5_000), ("SessionEnd", 10_000)],
         approvals: false,
         own_file: false,
+        layout: Layout::Hooks,
     },
     // `{"version": 1, "hooks": {"<event>": [{"command"}]}}`, camelCase events, no timeouts.
     Agent {
@@ -58,6 +75,7 @@ pub const AGENTS: &[Agent] = &[
         events: &[("sessionStart", 0), ("beforeSubmitPrompt", 0), ("stop", 0), ("sessionEnd", 0)],
         approvals: false,
         own_file: false,
+        layout: Layout::Hooks,
     },
     // A file of our own: entries `{"type":"command","bash","powershell"?,"timeoutSec"}`. The event is not in the payload.
     Agent {
@@ -67,8 +85,68 @@ pub const AGENTS: &[Agent] = &[
         events: &[("sessionStart", 10), ("userPromptSubmitted", 10), ("permissionRequest", 25), ("agentStop", 10), ("sessionEnd", 3)],
         approvals: true,
         own_file: true,
+        layout: Layout::Hooks,
+    },
+    // Google Antigravity (App, IDE and CLI share it): `~/.gemini/config/hooks.json`, a named block of event lists.
+    // No prompt event: PreInvocation (each agent turn) carries lastUserInput. Timeouts left to its default.
+    Agent {
+        id: "antigravity",
+        label: "Antigravity",
+        path: &[".gemini", "config", "hooks.json"],
+        events: &[("SessionStart", 0), ("PreInvocation", 0), ("Stop", 0)],
+        approvals: false,
+        own_file: false,
+        layout: Layout::Named,
+    },
+    // Command Code: Claude-style groups in its settings, timeouts in s. No prompt event: PreToolUse marks it working.
+    Agent {
+        id: "commandcode",
+        label: "Command Code",
+        path: &[".commandcode", "settings.json"],
+        events: &[("SessionStart", 10), ("PreToolUse", 5), ("Stop", 10)],
+        approvals: false,
+        own_file: false,
+        layout: Layout::Hooks,
+    },
+    // opencode: a global plugin of ours; it sends Claude-named events itself (see `plugin_source`).
+    Agent {
+        id: "opencode",
+        label: "opencode",
+        path: &[".config", "opencode", "plugins", "dynamic-notch.js"],
+        events: &[("SessionStart", 0), ("UserPromptSubmit", 0), ("Stop", 0), ("SessionEnd", 0)],
+        approvals: false,
+        own_file: true,
+        layout: Layout::Plugin,
     },
 ];
+
+/// The opencode plugin: on opencode's events it runs the relay (`exe --hook --agent opencode <Event>`) with a
+/// Claude-style JSON body on stdin. Fire and forget; any failure is swallowed so opencode never breaks.
+pub fn plugin_source(exe: &str) -> String {
+    let exe = serde_json::to_string(exe).expect("a string serializes");
+    format!(
+        r#"// Dynamic Notch Island: tells the island what opencode is doing. Added and removed by the island
+// (Settings > Agents); --hook --agent opencode
+import {{ spawn }} from "node:child_process";
+const EXE = {exe};
+const send = (event, sessionId, cwd) => {{
+  try {{
+    const p = spawn(EXE, ["--hook", "--agent", "opencode", event], {{ stdio: ["pipe", "ignore", "ignore"], windowsHide: true }});
+    p.on("error", () => {{}});
+    p.stdin.end(JSON.stringify({{ hook_event_name: event, session_id: sessionId ?? "opencode", cwd }}));
+  }} catch {{}}
+}};
+const sid = (e) => e?.properties?.sessionID ?? e?.properties?.info?.id ?? e?.properties?.id;
+const EVENTS = {{ "session.created": "SessionStart", "session.idle": "Stop", "session.deleted": "SessionEnd", "session.error": "StopFailure" }};
+export const DynamicNotch = async ({{ directory }}) => ({{
+  event: async ({{ event }}) => {{
+    if (EVENTS[event?.type]) send(EVENTS[event.type], sid(event), directory);
+  }},
+  "chat.message": async (input) => send("UserPromptSubmit", input?.sessionID, directory),
+}});
+"#
+    )
+}
 
 pub fn find(id: &str) -> Option<&'static Agent> {
     AGENTS.iter().find(|a| a.id == id)
@@ -123,9 +201,9 @@ impl Agent {
         let args = format!("{} --agent {} {event}", crate::hook::FLAG, self.id);
         let cmd = |shell| command(exe, windows, shell, &args);
         match self.id {
-            "codex" => {
+            "codex" | "commandcode" => {
                 let mut h = json!({"type": "command", "command": cmd(Shell::Cmd), "timeout": timeout});
-                if event == "PermissionRequest" {
+                if self.id == "codex" && event == "PermissionRequest" {
                     h["statusMessage"] = json!("Waiting for your answer in Dynamic Notch Island");
                 }
                 json!({"hooks": [h]})
@@ -146,6 +224,16 @@ impl Agent {
     /// Unexpected layout → error, nothing changed.
     pub fn install(&self, root: &mut Value, exe: &str, windows: bool) -> Result<(), String> {
         self.uninstall(root)?;
+        if self.layout == Layout::Named {
+            let mut block = json!({"enabled": true});
+            for (event, _) in self.events {
+                let args = format!("{} --agent {} {event}", crate::hook::FLAG, self.id);
+                // shortcut: PowerShell like Gemini CLI (same team); confirm once an Antigravity session runs it
+                block[*event] = json!([{"type": "command", "command": command(exe, windows, Shell::PowerShell, &args)}]);
+            }
+            root.as_object_mut().ok_or("not a JSON object")?.insert(NAMED_KEY.into(), block);
+            return Ok(());
+        }
         let obj = root.as_object_mut().ok_or("not a JSON object")?;
         let hooks = obj.entry("hooks").or_insert_with(|| json!({})).as_object_mut().expect("checked by uninstall");
         for (event, timeout) in self.events {
@@ -161,6 +249,12 @@ impl Agent {
     /// Removes our entries (flat, or inside a group's `hooks`); a group / event / `hooks` we emptied goes.
     pub fn uninstall(&self, root: &mut Value) -> Result<(), String> {
         let obj = root.as_object_mut().ok_or("not a JSON object")?;
+        if self.layout == Layout::Named {
+            if obj.get(NAMED_KEY).is_some_and(|b| self.named_is_ours(b)) {
+                obj.shift_remove(NAMED_KEY);
+            }
+            return Ok(());
+        }
         let Some(hooks) = obj.get_mut("hooks") else { return Ok(()) };
         let hooks = hooks.as_object_mut().ok_or("\"hooks\" is not an object")?;
         if let Some((e, _)) = hooks.iter().find(|(_, v)| !v.is_array()) {
@@ -192,13 +286,24 @@ impl Agent {
         Ok(())
     }
 
+    /// A named block whose handlers are our relay for this agent.
+    fn named_is_ours(&self, block: &Value) -> bool {
+        block.as_object().is_some_and(|o| o.values().filter_map(Value::as_array).flatten().any(|h| is_our_entry(h, self.id)))
+    }
+
     pub fn installed(&self, root: &Value) -> bool {
+        if self.layout == Layout::Named {
+            return root.get(NAMED_KEY).is_some_and(|b| self.named_is_ours(b));
+        }
         let ours = |g: &Value| is_our_entry(g, self.id) || g["hooks"].as_array().is_some_and(|i| i.iter().any(|h| is_our_entry(h, self.id)));
         root["hooks"].as_object().is_some_and(|h| h.values().filter_map(Value::as_array).flatten().any(ours))
     }
 
     pub fn installed_at(&self, home: &Path) -> bool {
         let text = std::fs::read_to_string(self.path(home)).ok();
+        if self.layout == Layout::Plugin {
+            return text.is_some_and(|t| t.contains(&format!("{} --agent {}", crate::hook::FLAG, self.id)));
+        }
         text.and_then(|t| serde_json::from_str::<Value>(&t).ok()).is_some_and(|v| self.installed(&v))
     }
 
@@ -237,7 +342,7 @@ mod tests {
 
     #[test]
     fn every_agent_installs_idempotently_and_uninstalls_to_the_original() {
-        for a in AGENTS {
+        for a in AGENTS.iter().filter(|a| a.layout == Layout::Hooks) {
             let user = json!({"command": "notify-send hi", "type": "command"});
             let original = json!({"theme": "dark", "hooks": {a.events[0].0: [{"hooks": [user.clone()]}], "Other": [user.clone()]}});
             let mut v = original.clone();
@@ -283,6 +388,48 @@ mod tests {
         a.uninstall(&mut v).unwrap();
         assert!(a.file_is_empty(&v));
         assert!(!find("codex").unwrap().file_is_empty(&json!({})));
+    }
+
+    #[test]
+    fn antigravity_gets_a_named_block_and_leaves_others_alone() {
+        let a = find("antigravity").unwrap();
+        let theirs = json!({"lint": {"enabled": true, "PreToolUse": {"matcher": "*", "hooks": [{"type": "command", "command": "lint"}]}}});
+        let mut v = theirs.clone();
+        a.install(&mut v, WIN, true).unwrap();
+        a.install(&mut v, WIN, true).unwrap();
+        assert!(a.installed(&v));
+        assert_eq!(v["dynamic-notch"]["enabled"], true);
+        let stop = v["dynamic-notch"]["Stop"][0]["command"].as_str().unwrap();
+        assert!(stop.starts_with("& '") && stop.ends_with("--hook --agent antigravity Stop"));
+        assert_eq!(v["lint"], theirs["lint"]);
+        a.uninstall(&mut v).unwrap();
+        assert_eq!(v, theirs);
+        // a block named like ours that someone else wrote stays
+        let mut other = json!({"dynamic-notch": {"Stop": [{"type": "command", "command": "echo hi"}]}});
+        a.uninstall(&mut other).unwrap();
+        assert!(other.get("dynamic-notch").is_some());
+    }
+
+    #[test]
+    fn command_code_uses_claude_style_groups() {
+        let a = find("commandcode").unwrap();
+        let mut v = json!({});
+        a.install(&mut v, WIN, true).unwrap();
+        let h = &v["hooks"]["PreToolUse"][0]["hooks"][0];
+        assert_eq!((h["type"].as_str(), h["timeout"].as_u64()), (Some("command"), Some(5)));
+        assert!(h["command"].as_str().unwrap().ends_with("--hook --agent commandcode PreToolUse"));
+        assert!(h.get("statusMessage").is_none());
+    }
+
+    #[test]
+    fn opencode_plugin_runs_the_relay_with_the_exe_quoted_safely() {
+        let src = plugin_source(r#"C:\Program Files\Dynamic Notch Island\dynamic-notch.exe"#);
+        assert!(src.contains(r#"const EXE = "C:\\Program Files\\Dynamic Notch Island\\dynamic-notch.exe";"#));
+        assert!(src.contains("--hook --agent opencode"), "installed_at looks for this marker");
+        for ev in ["session.created", "session.idle", "session.deleted", "chat.message"] {
+            assert!(src.contains(ev), "{ev}");
+        }
+        assert!(plugin_source(r#"C:\a"b\x.exe"#).contains(r#""C:\\a\"b\\x.exe""#)); // JSON-escaped, never breaks the JS
     }
 
     #[test]

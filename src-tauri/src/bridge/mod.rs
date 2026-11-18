@@ -300,14 +300,19 @@ pub fn set_agent(app: &AppHandle, id: &str, on: bool) -> Result<(), String> {
     let path = agent.path(&app.path().home_dir().map_err(|e| e.to_string())?);
     if on {
         let trust = if id == "codex" { "\n\nCodex asks you to review and trust new hooks once (/hooks)." } else { "" };
-        let ok = app
-            .dialog()
-            .message(format!(
-                "Add Dynamic Notch Island hooks to\n{}\n\nEvents: {}{trust}\n\nThe current file is backed up to {}.dynamicnotch.bak.",
+        let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+        let text = if agent.layout == agents::Layout::Plugin {
+            format!("Add a Dynamic Notch Island plugin at\n{}\n\nRestart {} to load it.", path.display(), agent.label)
+        } else {
+            format!(
+                "Add Dynamic Notch Island hooks to\n{}\n\nEvents: {}{trust}\n\nThe current file is backed up to {name}.dynamicnotch.bak.",
                 path.display(),
                 agent.event_names(),
-                path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
-            ))
+            )
+        };
+        let ok = app
+            .dialog()
+            .message(text)
             .title(format!("Connect {}", agent.label))
             .buttons(MessageDialogButtons::OkCancel)
             .blocking_show();
@@ -315,11 +320,23 @@ pub fn set_agent(app: &AppHandle, id: &str, on: bool) -> Result<(), String> {
             return Ok(());
         }
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        if agent.layout == agents::Layout::Plugin {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&path, agents::plugin_source(&exe.to_string_lossy())).map_err(|e| format!("{}: {e}", path.display()))?;
+            publish_status(app);
+            return Ok(());
+        }
         let mut failed = None;
         install::write_settings(&path, |s| failed = agent.install(s, &exe.to_string_lossy(), cfg!(windows)).err())?;
         if let Some(e) = failed {
             publish_status(app);
             return Err(format!("{}: {e}; no hooks were added.", path.display()));
+        }
+    } else if agent.layout == agents::Layout::Plugin {
+        if agent.installed_at(&app.path().home_dir().map_err(|e| e.to_string())?) {
+            std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))?; // ours alone
         }
     } else if path.exists() {
         let mut failed = None;

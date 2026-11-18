@@ -151,6 +151,7 @@ pub fn run() {
 
             let handle = app.handle().clone();
             app.on_menu_event(move |_, event| menu::handle(&handle, event.id().as_ref()));
+            menu::tray(app.handle())?;
 
             monitors::spawn_all(app.handle().clone());
             bridge::spawn(app.handle().clone());

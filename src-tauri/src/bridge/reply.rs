@@ -12,6 +12,9 @@ fn names(agent: &str) -> &'static [&'static str] {
         "gemini" => &["gemini", "gemini-cli"],
         "cursor" => &["cursor-agent"],
         "copilot" => &["copilot"],
+        "opencode" => &["opencode"],
+        "commandcode" => &["command-code"], // its `cmd` command would also match cmd.exe
+        "antigravity" => &["antigravity"],
         _ => &[],
     }
 }
