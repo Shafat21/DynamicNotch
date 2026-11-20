@@ -10,7 +10,7 @@ const DESCS: Record<string, string> = {
   music: "The song playing in any app: controls, volume, synced lyrics, and Spotify search, playlists and queue.",
   calendar: "A month grid with your events; pick a day to see what's on. Needs your calendar (Integrations).",
   pal: "Your coding agents (Claude Code, Codex, Gemini…): what each session is doing, and a box to message it.",
-  timer: "A focus timer with 15 / 25 / 45 / 60 min presets. It also shows in the notch while it runs.",
+  timer: "A focus timer with 15 / 25 / 45 / 60 min presets, and your alarms (once or on chosen days).",
   launcher: "Your apps, a search box and quick links: type “yt lofi” or paste an address and press Enter.",
   weather: "Today's weather and the next hours for your city (set in Integrations).",
   system: "Live CPU, memory, GPU and battery use.",

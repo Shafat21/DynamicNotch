@@ -267,3 +267,26 @@ input[type="search"] { width: 100%; height: 32px; margin-bottom: 8px; }
 .hk-in:focus { border-color: var(--accent); }
 .hk-in[aria-invalid="true"] { border-color: #ff6b6b; }
 .hk-err { max-width: 320px; text-align: right; }
+
+/* ---------- full-width, responsive pages: sections are cards, rows wrap their control under the text when narrow ---------- */
+#content { container: content / inline-size; padding: 24px clamp(16px, 3vw, 40px) 40px; }
+.page { max-width: 1180px; margin: 0 auto; }
+.section { margin-top: 18px; padding: 4px 18px; border-radius: 14px; background: color-mix(in srgb, var(--card) 45%, transparent); box-shadow: inset 0 0 0 1px var(--line); }
+.section > h2 { margin: 12px 0 2px; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; }
+.section > .row:last-child { border-bottom: 0; }
+.row { gap: 20px; padding: 13px 0; }
+.row-text { flex: 1 1 280px; max-width: 620px; }
+.row > :last-child { flex-shrink: 1; min-width: 0; max-width: 100%; }
+.row .inline-form input, .row input.txt { min-width: 0; }
+.inline-form input { width: clamp(160px, 28cqi, 340px); }
+/* lists (Tabs, Home, Top buttons) and the About hero span the width too */
+.reorder { max-width: none; }
+@container content (max-width: 640px) {
+  .row { flex-wrap: wrap; gap: 8px; }
+  .row-text { flex-basis: 100%; max-width: none; }
+  .row > :last-child { margin-left: auto; }
+  .stack { align-items: flex-start; }
+  .section { padding: 2px 12px; }
+  .hk-err { text-align: left; }
+}
+@container content (min-width: 1000px) { .row-text { max-width: 680px; } }

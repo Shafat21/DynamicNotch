@@ -35,6 +35,7 @@ import { createPal, greet } from "./pal";
 import { notchOutline } from "./notch-outline";
 import { initQuickLinks } from "./quicklinks";
 import { initPalReply } from "./pal-reply";
+import { initAlarms } from "./alarm";
 import { initMusicBrowse, refreshLike } from "./music-browse";
 import { sfx } from "./island-window";
 import { fitDock, initTasks, renderApps, renderMonth, renderTasks, type LauncherApp, type Task } from "./panels";
@@ -923,6 +924,18 @@ function wireInput(): void {
       if (ui.state === "idle") refresh();
     },
   );
+  // alarms live in the Timer tab: when one rings the island opens there and stays open until it is answered
+  initAlarms({
+    ring: () => {
+      setPinned(true);
+      openTab("timer");
+      if (ui.state !== "hover") setState("hover");
+    },
+    stopped: () => {
+      setPinned(false);
+      if (!ui.hovering) setState("idle");
+    },
+  });
   $("timer-badge").onclick = (e) => {
     e.stopPropagation();
     openTab("timer");

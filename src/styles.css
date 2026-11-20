@@ -1430,3 +1430,45 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 
 /* top-right buttons: their order comes from Settings → Top buttons (main.ts sets `order`); Settings and collapse stay last */
 .quick [data-settings], .quick #btn-collapse { order: 100; }
+
+/* ---------- Timer tab: focus timer on the left, alarms (alarm.ts) on the right ---------- */
+#tab-timer:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--gap); height: 100%; min-height: 0; }
+#tab-timer .tm-view { gap: calc(var(--gap) * 1.5); padding: 8px calc(var(--gap) * 1.5); }
+.al-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; box-sizing: border-box;
+  border-radius: var(--radius-xl); background: var(--card-bg); box-shadow: inset 0 0 0 1px var(--line); }
+.al-head { flex: none; display: flex; align-items: center; gap: 6px; }
+.al-title { flex: 1; font-size: var(--t11); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.al-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 4px; }
+.al-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px 4px 8px; border-radius: var(--radius-md); background: var(--inset); }
+.al-row.off .al-time, .al-row.off .al-sub { opacity: 0.45; }
+.al-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.al-time { font-size: var(--t16); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; line-height: 1.15; }
+.al-sub { max-width: 100%; font-size: var(--t11); color: var(--muted); }
+.al-empty { padding: 4px 2px; line-height: 1.4; }
+/* add / edit form */
+.al-form { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.al-form[hidden] { display: none; }
+.al-form-row { display: flex; gap: 6px; min-width: 0; }
+.al-in-time { flex: none; width: 104px; height: var(--control-sm); color-scheme: dark; font-variant-numeric: tabular-nums; }
+.al-in-label { flex: 1; min-width: 0; height: var(--control-sm); font-size: var(--t12); }
+.al-days { display: flex; gap: 3px; }
+.al-day { flex: 1; min-width: 0; height: 22px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--inset); color: var(--muted); font-size: var(--t11); font-weight: 600; }
+.al-day:hover { color: var(--text); }
+.al-day.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.al-actions { display: flex; align-items: center; gap: 4px; }
+.al-actions .spacer { flex: 1; }
+.al-del { color: var(--destructive-text); }
+/* ringing: the card takes the panel, the rest steps back */
+.al-ring { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--warning) 16%, var(--inset)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 45%, transparent); }
+.al-ring[hidden] { display: none; }
+.al-ring-ic { flex: none; display: grid; place-items: center; color: var(--warning); animation: al-shake 0.9s ease-in-out infinite; }
+.al-ring-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.al-ring-time { font-size: var(--t20); font-weight: 800; font-variant-numeric: tabular-nums; }
+.al-ring-label { font-size: var(--t12); color: var(--muted); }
+.al-ring .btn { flex: none; height: var(--control); padding: 0 10px; font-size: var(--t12); }
+.al-panel.ringing .al-list, .al-panel.ringing .al-form, .al-panel.ringing .al-head .lq-add { display: none; }
+@keyframes al-shake { 0%, 100% { rotate: 0deg; } 20% { rotate: -14deg; } 40% { rotate: 12deg; } 60% { rotate: -8deg; } 80% { rotate: 5deg; } }
+@media (prefers-reduced-motion: reduce) { .al-ring-ic { animation: none; } }
+/* narrow island: the alarms take the tab only while one rings, otherwise the timer stays */
+@container pages (max-width: 560px) { #tab-timer:not([hidden]) { grid-template-columns: minmax(0, 1fr); } .al-panel:not(.ringing) { display: none; } #tab-timer:has(.al-panel.ringing) .tm-view { display: none; } }
