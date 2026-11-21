@@ -524,7 +524,11 @@ pub fn capture_dir(app: AppHandle) -> Res<String> {
 /// Save screenshots in `dir`; empty = back to Pictures/Screenshots. Returns the folder now in use.
 #[tauri::command]
 pub fn set_capture_dir(app: AppHandle, dir: String) -> Res<String> {
-    crate::capture::set_save_dir(&app, &dir)?;
+    // reset only: a folder is chosen through the native picker (choose_capture_dir), never as a path from the page
+    if !dir.trim().is_empty() {
+        return Err("Use Change… to pick a folder".into());
+    }
+    crate::capture::set_save_dir(&app, "")?;
     capture_dir(app)
 }
 

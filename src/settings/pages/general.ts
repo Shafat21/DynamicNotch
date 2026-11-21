@@ -33,7 +33,7 @@ function exemptApps(): HTMLElement {
 /** Screenshot sound: a Test button and the on / off switch (read from the app, which plays the sound itself). */
 function shutterControl(): HTMLElement {
   const fail = (e: unknown) => report(String(e));
-  const sw = toggle("Screenshot sound", true, (on) => void setShutter(on).then(() => on && testShutter(), fail));
+  const sw = toggle("Screenshot sound", true, (on) => void setShutter(on).then(async () => { if (on) await testShutter(); }, fail));
   void shutterOn().then((on) => (sw.checked = on), () => {});
   return h("div", { className: "row-actions" }, button("Test", () => void testShutter().catch(fail), "btn small"), sw);
 }
