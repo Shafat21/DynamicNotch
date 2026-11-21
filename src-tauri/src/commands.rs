@@ -500,6 +500,53 @@ pub fn capture_ready(app: AppHandle) -> Res<()> {
 }
 
 #[tauri::command]
+pub fn capture_sound(app: AppHandle) -> bool {
+    crate::capture::sound_on(&app)
+}
+
+#[tauri::command]
+pub fn set_capture_sound(app: AppHandle, on: bool) -> Res<()> {
+    crate::capture::set_sound(&app, on)
+}
+
+/// Settings → General "Test": plays the shutter (also when the sound is switched off, so you can hear what it is).
+#[tauri::command]
+pub fn test_capture_sound() {
+    crate::capture::shutter();
+}
+
+/// Where screenshots are saved right now (Settings → General): the chosen folder, else Pictures/Screenshots.
+#[tauri::command]
+pub fn capture_dir(app: AppHandle) -> Res<String> {
+    crate::capture::save_dir(&app).map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Save screenshots in `dir`; empty = back to Pictures/Screenshots. Returns the folder now in use.
+#[tauri::command]
+pub fn set_capture_dir(app: AppHandle, dir: String) -> Res<String> {
+    crate::capture::set_save_dir(&app, &dir)?;
+    capture_dir(app)
+}
+
+/// Native folder picker, then `set_capture_dir`. Cancelling keeps the current folder.
+#[tauri::command]
+pub async fn choose_capture_dir(app: AppHandle) -> Res<String> {
+    let handle = app.clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || handle.dialog().file().blocking_pick_folder()).await.map_err(err)?;
+    if let Some(p) = picked.and_then(|p| p.into_path().ok()) {
+        crate::capture::set_save_dir(&app, &p.to_string_lossy())?;
+    }
+    capture_dir(app)
+}
+
+#[tauri::command]
+pub fn open_capture_dir(app: AppHandle) -> Res<()> {
+    let dir = crate::capture::save_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(err)?;
+    launcher::os::shell_open(&dir.to_string_lossy())
+}
+
+#[tauri::command]
 pub fn capture_hotkey(app: AppHandle) -> String {
     crate::capture::hotkey(&app)
 }

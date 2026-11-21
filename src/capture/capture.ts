@@ -74,7 +74,7 @@ function buildBar(): void {
   );
   $("edits").replaceChildren(button("tb", "undo", "Undo (Ctrl+Z)", undo), button("tb", "redo", "Redo (Ctrl+Y)", redo), button("tb", "crop", "Select again", reselect));
   const copy = button("tb primary", "copy", "Copy (Enter)", () => finish(true, false));
-  const save = button("tb", "download", "Save to Pictures › Screenshots (Ctrl+S)", () => finish(true, true));
+  const save = button("tb", "download", "Save to your screenshots folder (Ctrl+S)", () => finish(true, true));
   $("outs").replaceChildren(copy, save, button("tb", "close", "Cancel (Esc)", cancel));
   setTool(tool);
   setColor(color);
@@ -333,11 +333,22 @@ window.onkeydown = (e) => {
   if (t && !e.ctrlKey) setTool(t[0]);
 };
 
+/** Windows and monitors as Rust sent them (image pixels); `fit` turns them into CSS px with the current scale. */
+let rawWins: [number, number, number, number][] = [];
+let rawMons: [number, number, number, number, number][] = [];
+
 function fit(): void {
   const dpr = window.devicePixelRatio || 1;
+  // a window that was resized while hidden can still report a 0 or stale size until it is shown: fit again then
+  if (innerWidth < 2 || innerHeight < 2) return;
   ink.width = Math.round(innerWidth * dpr);
   ink.height = Math.round(innerHeight * dpr);
   scale = img.width / innerWidth || dpr;
+  const css = ([x, y, w, h]: [number, number, number, number]): Rect => ({ x: x / scale, y: y / scale, w: w / scale, h: h / scale });
+  wins = rawWins.map(css);
+  mons = rawMons.map((m) => ({ ...css([m[0], m[1], m[2], m[3]]), scale: m[4] / 100 }));
+  const k0 = uiScale(monitorOf(last, mons, whole())); // until a selection exists: the monitor under the cursor
+  $("size").style.transform = $("mag").style.transform = $("hint").style.transform = `scale(${k0})`;
   draw();
   if (sel) placeBar();
 }
@@ -361,13 +372,13 @@ async function load(): Promise<void> {
   $("hint").innerHTML = "Drag to capture an area &nbsp;·&nbsp; <b>Enter</b> whole screen &nbsp;·&nbsp; <b>Esc</b> cancel"; // static text
   $("text-in").hidden = true;
   setTool("arrow");
+  rawWins = await invoke<[number, number, number, number][]>("capture_windows").catch(() => []);
+  rawMons = await invoke<[number, number, number, number, number][]>("capture_monitors").catch(() => []);
   fit();
-  const css = ([x, y, w, h]: [number, number, number, number]): Rect => ({ x: x / scale, y: y / scale, w: w / scale, h: h / scale });
-  wins = (await invoke<[number, number, number, number][]>("capture_windows").catch(() => [])).map(css);
-  mons = (await invoke<[number, number, number, number, number][]>("capture_monitors").catch(() => [])).map((m) => ({ ...css([m[0], m[1], m[2], m[3]]), scale: m[4] / 100 }));
-  const k0 = uiScale(monitorOf(last, mons, whole())); // until a selection exists: the monitor under the cursor
-  $("size").style.transform = $("mag").style.transform = $("hint").style.transform = `scale(${k0})`;
   await invoke("capture_ready"); // Rust shows the window only now: no white flash
+  // the layout size is only reliable once the window is visible: measure again then (and once more after it settles)
+  requestAnimationFrame(fit);
+  window.setTimeout(fit, 150);
 }
 
 async function boot(): Promise<void> {

@@ -1104,9 +1104,9 @@ async function boot(): Promise<void> {
 
   await Promise.all([
     listen<boolean>(`hover${sfx}`, (e) => onHover(e.payload)),
-    listen<{ copied: boolean; saved: string | null }>("screenshot", (e) =>
-      showToast({ icon: "camera", title: e.payload.saved ? "Screenshot saved" : "Screenshot copied", text: e.payload.saved ? "Pictures › Screenshots, and on your Shelf" : "Paste it anywhere" }),
-    ),
+    listen<{ copied: boolean; saved: string | null }>("screenshot", (e) => {
+      showToast({ icon: "camera", title: e.payload.saved ? "Screenshot saved" : "Screenshot copied", text: e.payload.saved ? "In your screenshots folder, and on your Shelf" : "Paste it anywhere" });
+    }),
     listen<{ version: string }>("update", (e) => showToast({ icon: "download", title: `Update ${e.payload.version} available`, text: "Install it in Settings → About", ms: 6000 })),
     listen<{ name: string; kind: string }>("bt-connected", (e) =>
       showToast({ icon: e.payload.kind === "audio" ? "headphones" : e.payload.kind === "input" ? "keyboard" : e.payload.kind === "phone" ? "phone" : "bluetooth", title: e.payload.name, text: "Connected" }),

@@ -788,59 +788,6 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 @keyframes turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 
-/* timer tab */
-#tab-timer:not([hidden]) { display: flex; align-items: center; justify-content: center; }
-.tm-view {
-  width: 100%; max-width: 500px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: center; gap: 28px;
-  padding: 12px 20px; box-sizing: border-box;
-  border-radius: var(--radius-xl); background: var(--card-bg); box-shadow: inset 0 0 0 1px var(--line);
-}
-.tm-dial {
-  position: relative; width: 142px; height: 142px; flex: none;
-  display: grid; place-items: center; border-radius: 50%; cursor: pointer;
-  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 10%, transparent), var(--inset) 75%);
-  transition: transform 0.2s var(--ease), background 0.25s;
-}
-.tm-view.running .tm-dial {
-  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--warning) 16%, transparent), var(--inset) 75%);
-}
-.tm-dial:hover { transform: scale(1.02); }
-.tm-dial:active { transform: scale(0.98); }
-.tm-svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
-.tm-track { fill: none; stroke: var(--track); stroke-width: 6; }
-.tm-arc {
-  fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round;
-  transition: stroke-dashoffset 0.35s var(--ease), stroke 0.25s;
-}
-.tm-view.running .tm-arc { stroke: var(--warning); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--warning) 45%, transparent)); }
-.tm-center {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px; pointer-events: none;
-}
-.tm-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: var(--t11); font-weight: 600; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.05em;
-}
-.tm-badge .focus-ic { display: grid; color: var(--accent); }
-.tm-view.running .tm-badge, .tm-view.running .tm-badge .focus-ic { color: var(--warning); }
-[data-icons="badges"] .tm-badge .focus-ic { width: 18px; height: 18px; border-radius: 5px; }
-[data-icons="badges"] .tm-badge .focus-ic svg { width: 11px; height: 11px; }
-.tm-time { font-size: calc(32px * var(--text-scale)); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
-.tm-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.tm-head { display: flex; flex-direction: column; gap: 2px; }
-.tm-title { font-size: var(--t16); font-weight: 600; letter-spacing: -0.01em; }
-.tm-presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.tm-preset { min-width: 46px; justify-content: center; font-variant-numeric: tabular-nums; font-weight: 600; }
-.tm-actions { display: flex; align-items: center; gap: 8px; }
-.tm-play { min-width: 96px; height: var(--control-lg); border-radius: var(--radius-md); }
-.tm-view.running .tm-play { background: var(--warning); color: #1f1300; }
-.tm-view.running .tm-play:hover { background: color-mix(in srgb, var(--warning) 88%, #fff); }
-.tm-play-ic { display: grid; }
-.tm-step { display: inline-flex; gap: 4px; }
-.tm-minus, .tm-plus { width: auto; min-width: 34px; height: var(--control-lg); padding: 0 8px; font-size: var(--t12); font-weight: 600; font-variant-numeric: tabular-nums; }
-.tm-reset { width: var(--control-lg); height: var(--control-lg); margin-left: auto; }
 
 /* launcher tab: tiles = tinted icon badge + name */
 .launcher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 4px 6px; overflow: visible; }
@@ -1083,13 +1030,6 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 
 /* ---------- responsive: other pages ---------- */
 @container pages (max-width: 640px) { .music.lyrics { grid-template-columns: 1fr; } .music .lyrics-panel { display: none; } }
-@container pages (max-height: 145px) {
-  .tm-view { padding: 8px 14px; gap: 18px; }
-  .tm-dial { width: 108px; height: 108px; }
-  .tm-time { font-size: calc(24px * var(--text-scale)); }
-  .tm-side { gap: 6px; }
-  .tm-sub { display: none; }
-}
 
 /* launcher search + quick links (quicklinks.ts) */
 .lq-search { margin-bottom: 10px; }
@@ -1289,18 +1229,6 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 @container pages (max-height: 190px) { .cal-month { padding: 6px 8px 4px; } .cal-day { font-size: var(--t11); } }
 @container pages (max-width: 520px) { .cal-split { grid-template-columns: minmax(0, 1fr); } .cal-side { display: none; } }
 
-/* ---------- Timer tab: the card fills the page (no blank margins); the dial follows the page height, the controls take the rest ---------- */
-#tab-timer:not([hidden]) { display: block; }
-.tm-view { max-width: none; width: 100%; height: 100%; margin: 0; gap: calc(var(--gap) * 2); padding: 10px calc(var(--gap) * 2); justify-content: flex-start; }
-.tm-dial { width: auto; height: min(100%, 150px); aspect-ratio: 1; }
-.tm-side { justify-content: center; gap: 8px; }
-.tm-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.tm-preset { min-width: 0; width: 100%; }
-.tm-actions { gap: 6px; }
-.tm-play { flex: 1; min-width: 96px; justify-content: center; }
-.tm-reset { margin-left: 0; flex: none; }
-@container pages (max-height: 145px) { .tm-view { padding: 6px calc(var(--gap) * 1.5); } .tm-dial { width: auto; height: min(100%, 120px); } .tm-side { gap: 5px; } }
-@container pages (max-width: 460px) { .tm-view { gap: var(--gap); } .tm-sub { display: none; } }
 
 /* ---------- Launcher tab: search on top, the apps in the middle (scrolls inside, never the page), quick links pinned below ---------- */
 #tab-launcher:not([hidden]) { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; overflow: hidden; }
@@ -1431,44 +1359,135 @@ button.card:hover, .card[role="button"]:hover { background: color-mix(in srgb, v
 /* top-right buttons: their order comes from Settings → Top buttons (main.ts sets `order`); Settings and collapse stay last */
 .quick [data-settings], .quick #btn-collapse { order: 100; }
 
-/* ---------- Timer tab: focus timer on the left, alarms (alarm.ts) on the right ---------- */
-#tab-timer:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--gap); height: 100%; min-height: 0; }
-#tab-timer .tm-view { gap: calc(var(--gap) * 1.5); padding: 8px calc(var(--gap) * 1.5); }
-.al-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; box-sizing: border-box;
-  border-radius: var(--radius-xl); background: var(--card-bg); box-shadow: inset 0 0 0 1px var(--line); }
+/* ---------- Timer tab: focus timer (focus.ts) on the left, alarms (alarm.ts) on the right. Never scrolls: the one
+   grid row is the page height, both cards fill it and shrink their insides on short pages. ---------- */
+#tab-timer:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: var(--gap); height: 100%; min-height: 0; overflow: hidden; }
+.tm-view, .al-panel { min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box; border-radius: var(--radius-xl); background: var(--card-bg); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* focus timer: dial | title, length, controls */
+.tm-view { display: flex; align-items: center; gap: calc(var(--gap) * 1.5); padding: 10px calc(var(--gap) * 1.25); }
+.tm-dial { position: relative; flex: none; height: min(100%, 140px); max-width: 40%; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; cursor: pointer; transition: transform 0.2s var(--ease); }
+.tm-dial:hover { transform: scale(1.02); }
+.tm-dial:active { transform: scale(0.98); }
+.tm-dial:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.tm-svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.tm-track { fill: color-mix(in srgb, var(--inset) 70%, transparent); stroke: var(--track); stroke-width: 5; }
+.tm-arc { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.35s var(--ease), stroke 0.25s; }
+.tm-view.running .tm-arc { stroke: var(--warning); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--warning) 50%, transparent)); }
+.tm-view.paused .tm-arc { stroke: color-mix(in srgb, var(--accent) 55%, var(--muted)); }
+.tm-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none; }
+.tm-time { order: -1; font-size: calc(30px * var(--text-scale)); font-weight: 700; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.tm-badge { display: inline-flex; align-items: center; gap: 4px; font-size: calc(var(--t11) * 0.9); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.tm-badge .focus-ic { display: grid; color: var(--accent); }
+.tm-view.running .tm-badge, .tm-view.running .tm-badge .focus-ic { color: var(--warning); }
+[data-icons="badges"] .tm-badge .focus-ic { width: 16px; height: 16px; border-radius: 5px; }
+[data-icons="badges"] .tm-badge .focus-ic svg { width: 10px; height: 10px; }
+.tm-side { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.tm-head { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tm-title { font-size: var(--t15); font-weight: 700; letter-spacing: -0.01em; }
+.tm-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* length: one segmented control */
+.tm-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 2px; border-radius: var(--radius-full); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); }
+.tm-preset { min-width: 0; height: calc(var(--control-sm) - 2px); justify-content: center; padding: 0; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--muted); font-size: var(--t12); font-weight: 600; font-variant-numeric: tabular-nums; transition: background 0.15s, color 0.15s; }
+.tm-preset:hover { background: transparent; color: var(--text); }
+.tm-preset.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 0 0 1px var(--line); }
+/* controls: Start | −5 +5 | reset */
+.tm-actions { display: flex; align-items: center; gap: 6px; }
+.tm-play { flex: 1; min-width: 0; height: var(--control-lg); justify-content: center; gap: 6px; border-radius: var(--radius-full); font-weight: 700; }
+.tm-play-ic { display: grid; }
+.tm-view.running .tm-play { background: var(--warning); color: #1f1300; }
+.tm-view.running .tm-play:hover { background: color-mix(in srgb, var(--warning) 88%, #fff); }
+.tm-step { flex: none; display: inline-flex; padding: 2px; border-radius: var(--radius-full); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); }
+.tm-minus, .tm-plus { width: auto; min-width: 32px; height: calc(var(--control-lg) - 4px); padding: 0 8px; border: 0; border-radius: var(--radius-full); font-size: var(--t12); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tm-reset { flex: none; width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-full); }
+
+/* alarms: list, or the add / edit form, or the ringing card */
+.al-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; }
 .al-head { flex: none; display: flex; align-items: center; gap: 6px; }
-.al-title { flex: 1; font-size: var(--t11); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-.al-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 4px; }
-.al-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px 4px 8px; border-radius: var(--radius-md); background: var(--inset); }
+.al-title { flex: 1; font-size: calc(var(--t11) * 0.9); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.al-head .lq-add { padding: 2px 9px; border: 0; border-radius: var(--radius-full); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600; }
+.al-head .lq-add:hover { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+.al-list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
+.al-row { flex: none; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px 4px 10px; border-radius: var(--radius-lg); background: var(--inset); transition: background 0.15s; }
+.al-row:hover { background: var(--hover); }
 .al-row.off .al-time, .al-row.off .al-sub { opacity: 0.45; }
-.al-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
-.al-time { font-size: var(--t16); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; line-height: 1.15; }
+.al-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.al-time { font-size: var(--t16); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.15; }
 .al-sub { max-width: 100%; font-size: var(--t11); color: var(--muted); }
-.al-empty { padding: 4px 2px; line-height: 1.4; }
-/* add / edit form */
-.al-form { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.al-row .bt-switch { width: 34px; height: 20px; }
+.al-row .bt-switch::after { width: 14px; height: 14px; }
+.al-row .bt-switch[aria-checked="true"]::after { translate: 14px 0; }
+.al-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 4px; line-height: 1.4; }
+
+/* the form takes the whole panel while open */
+.al-form { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
 .al-form[hidden] { display: none; }
-.al-form-row { display: flex; gap: 6px; min-width: 0; }
-.al-in-time { flex: none; width: 104px; height: var(--control-sm); color-scheme: dark; font-variant-numeric: tabular-nums; }
-.al-in-label { flex: 1; min-width: 0; height: var(--control-sm); font-size: var(--t12); }
+.al-panel:has(.al-form:not([hidden])) :is(.al-head, .al-list) { display: none; }
+.al-form-row { display: flex; justify-content: center; min-width: 0; }
+.al-form .al-in-label { width: 100%; box-sizing: border-box; height: var(--control-sm); padding: 0 10px; border: 0; border-radius: var(--radius-md); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); font-size: var(--t12); }
+.al-form .al-in-label:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--ring), 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent); }
 .al-days { display: flex; gap: 3px; }
-.al-day { flex: 1; min-width: 0; height: 22px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--inset); color: var(--muted); font-size: var(--t11); font-weight: 600; }
+.al-day { flex: 1; min-width: 0; height: 22px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: var(--t11); font-weight: 700; transition: background 0.15s, color 0.15s; }
 .al-day:hover { color: var(--text); }
-.al-day.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
-.al-actions { display: flex; align-items: center; gap: 4px; }
+.al-day.on { background: var(--accent); box-shadow: none; color: #0b0d16; }
+.al-actions { display: flex; align-items: center; gap: 6px; }
 .al-actions .spacer { flex: 1; }
+.al-actions .btn { height: var(--control-sm); padding: 0 12px; font-size: var(--t12); border-radius: var(--radius-full); }
 .al-del { color: var(--destructive-text); }
-/* ringing: the card takes the panel, the rest steps back */
-.al-ring { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--warning) 16%, var(--inset)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 45%, transparent); }
+
+/* time picker: big hour : minute (type, wheel, arrow keys; the small arrows show on hover) and AM / PM */
+.tp { display: flex; align-items: center; gap: 4px; }
+.tp-colon { font-size: var(--t22); font-weight: 700; color: var(--muted); line-height: 1; padding-bottom: 2px; }
+.tp-field { display: flex; flex-direction: column; align-items: center; border-radius: var(--radius-md); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; transition: box-shadow 0.15s; }
+.tp-field:focus-within { box-shadow: inset 0 0 0 1px var(--ring), 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent); }
+.tp .tp-in { width: 2ch; height: calc(var(--t22) + 4px); padding: 0 10px; box-sizing: content-box; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: center; color: var(--text); font-size: var(--t22); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; outline: none; caret-color: var(--accent); }
+.tp .tp-in:focus-visible { box-shadow: none; border: 0; }
+.tp-in::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+/* ▲ above the number, ▼ below it */
+.tp-steps { display: contents; }
+.tp-step { align-self: stretch; height: 14px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); opacity: 0.6; transition: opacity 0.15s, background 0.15s; }
+.tp-step.up { order: -1; }
+.tp-field:hover .tp-step, .tp-field:focus-within .tp-step { opacity: 1; }
+.tp-step:hover { background: var(--hover); color: var(--text); }
+.tp-step:active { background: var(--active); }
+.tp-ap { display: flex; flex-direction: column; gap: 2px; margin-left: 4px; padding: 2px; border-radius: var(--radius-md); background: var(--inset); box-shadow: inset 0 0 0 1px var(--line); }
+.tp-half { padding: 0 7px; height: calc((var(--t22) + 32px - 6px) / 2); border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--muted); font-size: calc(var(--t11) * 0.9); font-weight: 700; line-height: 1; }
+.tp-half:hover { color: var(--text); }
+.tp-half.on { background: var(--accent); color: #0b0d16; }
+
+/* ringing: the card takes the panel */
+.al-ring { flex: 1; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--warning) 14%, var(--inset)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 45%, transparent); }
 .al-ring[hidden] { display: none; }
 .al-ring-ic { flex: none; display: grid; place-items: center; color: var(--warning); animation: al-shake 0.9s ease-in-out infinite; }
 .al-ring-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
-.al-ring-time { font-size: var(--t20); font-weight: 800; font-variant-numeric: tabular-nums; }
+.al-ring-time { font-size: var(--t22); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .al-ring-label { font-size: var(--t12); color: var(--muted); }
-.al-ring .btn { flex: none; height: var(--control); padding: 0 10px; font-size: var(--t12); }
-.al-panel.ringing .al-list, .al-panel.ringing .al-form, .al-panel.ringing .al-head .lq-add { display: none; }
+.al-ring .btn { flex: none; height: var(--control); padding: 0 12px; font-size: var(--t12); border-radius: var(--radius-full); }
+.al-panel.ringing :is(.al-head, .al-list, .al-form) { display: none; }
 @keyframes al-shake { 0%, 100% { rotate: 0deg; } 20% { rotate: -14deg; } 40% { rotate: 12deg; } 60% { rotate: -8deg; } 80% { rotate: 5deg; } }
 @media (prefers-reduced-motion: reduce) { .al-ring-ic { animation: none; } }
-/* narrow island: the alarms take the tab only while one rings, otherwise the timer stays */
+
+/* short pages drop the small print, then tighten; narrow ones keep only the timer unless an alarm rings */
+@container pages (max-height: 175px) {
+  .tm-sub { display: none; }
+  .tm-side { gap: 6px; }
+  .al-panel { padding: 6px 8px; gap: 4px; }
+  .al-row { padding: 2px 6px 2px 10px; }
+  .al-time { font-size: var(--t15); }
+  .al-form { gap: 4px; }
+}
+@container pages (max-height: 145px) {
+  .tm-view { padding: 4px 10px; gap: var(--gap); }
+  .tm-time { font-size: calc(24px * var(--text-scale)); }
+  .tm-preset { height: 20px; font-size: var(--t11); }
+  .tm-play, .tm-reset { height: var(--control); }
+  .tm-reset { width: var(--control); }
+  .tm-minus, .tm-plus { height: calc(var(--control) - 4px); }
+  .al-day { height: 18px; }
+  .tp .tp-in, .tp-colon { font-size: var(--t16); }
+  .tp .tp-in { height: calc(var(--t16) + 2px); }
+  .tp-step { height: 11px; }
+  .tp-half { height: calc((var(--t16) + 24px - 6px) / 2); }
+}
 @container pages (max-width: 560px) { #tab-timer:not([hidden]) { grid-template-columns: minmax(0, 1fr); } .al-panel:not(.ringing) { display: none; } #tab-timer:has(.al-panel.ringing) .tm-view { display: none; } }

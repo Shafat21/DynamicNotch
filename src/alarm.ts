@@ -147,16 +147,108 @@ function draw(): void {
   );
 }
 
+// ---------- time picker: our own (the browser's time input pops up a clunky native list) ----------
+type TimePicker = { el: HTMLElement; get(): string; set(t: string): void; focus(): void };
+let picker: TimePicker | null = null;
+
+/** 12-hour picker: hour and minute fields (type digits, ↑ ↓, the mouse wheel, or the small arrows) and AM / PM. */
+function timePicker(): TimePicker {
+  let h12 = 7, min = 0, pm = false;
+  const root = el("div", "tp");
+
+  const field = (label: string, lo: number, hi: number, read: () => number, write: (n: number) => void, next?: () => void) => {
+    const box = el("div", "tp-field");
+    const input = el("input", "tp-in");
+    Object.assign(input, { type: "text", inputMode: "numeric", maxLength: 2, autocomplete: "off" });
+    input.setAttribute("aria-label", label);
+    const draw = () => (input.value = String(read()).padStart(2, "0"));
+    const bump = (d: number) => {
+      const span = hi - lo + 1;
+      write((((read() - lo + d) % span) + span) % span + lo);
+      draw();
+    };
+    const arrow = (cls: string, name: string, d: number) => {
+      const b = el("button", `tp-step ${cls}`);
+      b.type = "button";
+      b.tabIndex = -1;
+      b.setAttribute("aria-label", `${label} ${d > 0 ? "up" : "down"}`);
+      b.innerHTML = icon(name, 9); // static SVG
+      b.onclick = () => bump(d);
+      return b;
+    };
+    const commit = () => {
+      const n = Number(input.value);
+      if (input.value !== "" && n >= lo && n <= hi) write(n);
+      draw();
+    };
+    input.onfocus = () => input.select();
+    input.oninput = () => {
+      input.value = input.value.replace(/\D/g, "").slice(0, 2);
+      if (input.value.length === 2) {
+        commit();
+        next?.();
+      }
+    };
+    input.onblur = commit;
+    input.onwheel = (e) => (e.preventDefault(), bump(e.deltaY < 0 ? 1 : -1));
+    input.onkeydown = (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") (e.preventDefault(), bump(e.key === "ArrowUp" ? 1 : -1));
+    };
+    const arrows = el("div", "tp-steps");
+    arrows.append(arrow("up", "chevronUp", 1), arrow("down", "chevronDown", -1));
+    box.append(input, arrows);
+    return { box, input, draw };
+  };
+
+  const minute = field("Minute", 0, 59, () => min, (n) => (min = n));
+  const hour = field("Hour", 1, 12, () => h12, (n) => (h12 = n), () => minute.input.focus());
+  const ap = el("div", "tp-ap");
+  const half = (text: string, on: boolean) => {
+    const b = el("button", "tp-half", text);
+    b.type = "button";
+    b.onclick = () => {
+      pm = on;
+      drawAp();
+    };
+    return b;
+  };
+  const am = half("AM", false), pmBtn = half("PM", true);
+  const drawAp = () => {
+    am.classList.toggle("on", !pm);
+    pmBtn.classList.toggle("on", pm);
+    am.setAttribute("aria-pressed", String(!pm));
+    pmBtn.setAttribute("aria-pressed", String(pm));
+  };
+  ap.append(am, pmBtn);
+  root.append(hour.box, el("span", "tp-colon", ":"), minute.box, ap);
+  root.setAttribute("role", "group");
+  root.setAttribute("aria-label", "Alarm time");
+
+  return {
+    el: root,
+    get: () => `${String((h12 % 12) + (pm ? 12 : 0)).padStart(2, "0")}:${String(min).padStart(2, "0")}`,
+    set: (t) => {
+      const [h, m] = t.split(":").map(Number);
+      pm = h >= 12;
+      h12 = h % 12 || 12;
+      min = m;
+      hour.draw();
+      minute.draw();
+      drawAp();
+    },
+    focus: () => hour.input.focus(),
+  };
+}
+
 function openForm(a: Alarm | null): void {
   editing = a;
   const form = document.getElementById("al-form") as HTMLFormElement;
   form.hidden = false;
-  const time = form.querySelector<HTMLInputElement>(".al-in-time")!;
-  time.value = a?.time ?? "07:00";
+  picker!.set(a?.time ?? "07:00");
   form.querySelector<HTMLInputElement>(".al-in-label")!.value = a?.label ?? "";
   form.querySelectorAll<HTMLButtonElement>(".al-day").forEach((b) => b.classList.toggle("on", !!a?.days.includes(Number(b.dataset.day))));
   form.querySelector<HTMLButtonElement>(".al-del")!.hidden = !a;
-  time.focus();
+  picker!.focus();
 }
 
 function build(host: HTMLElement): void {
@@ -172,9 +264,7 @@ function build(host: HTMLElement): void {
   const form = el("form", "al-form");
   form.id = "al-form";
   form.hidden = true;
-  const time = el("input", "al-in-time");
-  Object.assign(time, { type: "time", name: "time", required: true });
-  time.setAttribute("aria-label", "Alarm time");
+  picker = timePicker();
   const label = el("input", "al-in-label");
   Object.assign(label, { type: "text", name: "label", maxLength: 40, placeholder: "Label (optional)", autocomplete: "off" });
   label.setAttribute("aria-label", "Alarm label");
@@ -188,26 +278,25 @@ function build(host: HTMLElement): void {
     b.onclick = () => b.classList.toggle("on");
     days.append(b);
   }
-  const del = el("button", "al-del lq-add", "Delete");
+  const del = el("button", "btn al-del", "Delete");
   del.type = "button";
   del.onclick = () => {
     if (editing) save(load().filter((a) => a.id !== editing!.id));
     form.hidden = true;
   };
-  const cancel = el("button", "lq-add", "Cancel");
+  const cancel = el("button", "btn", "Cancel");
   cancel.type = "button";
   cancel.onclick = () => (form.hidden = true);
-  const ok = el("button", "lq-save", "Save");
+  const ok = el("button", "btn primary", "Save");
   ok.type = "submit";
   const actions = el("div", "al-actions");
   actions.append(del, el("span", "spacer"), cancel, ok);
-  form.append(el("div", "al-form-row"), days, actions);
-  form.firstElementChild!.append(time, label);
+  form.append(el("div", "al-form-row"), label, days, actions);
+  form.firstElementChild!.append(picker.el);
   form.onsubmit = (e) => {
     e.preventDefault();
-    if (!time.value) return time.focus();
     const picked = [...days.querySelectorAll<HTMLElement>(".al-day.on")].map((b) => Number(b.dataset.day));
-    const fields = { time: time.value, label: label.value.trim(), days: picked, on: true, snoozeUntil: null, last: undefined };
+    const fields = { time: picker!.get(), label: label.value.trim(), days: picked, on: true, snoozeUntil: null, last: undefined };
     const list = load();
     save(editing ? list.map((a) => (a.id === editing!.id ? { ...a, ...fields } : a)) : [...list, { id: Date.now(), ...fields }]);
     form.hidden = true;

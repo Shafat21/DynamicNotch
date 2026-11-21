@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { patchAppearance, setGeneral, store } from "../store";
+import { setShutter, shutterOn, testShutter } from "../../shutter";
 import { button, h, page, report, row, section, segmented, select, toggle, type Choice } from "../ui";
 
 export const OPEN_ON: [string, string][] = [["home", "Home"], ["last", "Last used tab"]];
@@ -27,6 +28,34 @@ function exemptApps(): HTMLElement {
   invoke<string[]>("running_apps").then((l) => running.replaceChildren(...l.map((n) => h("option", { value: n })))).catch(() => {});
   box.append(chips, h("div", { className: "row-actions" }, input, button("Add", () => save(input.value, true), "btn small"), running));
   return box;
+}
+
+/** Screenshot sound: a Test button and the on / off switch (read from the app, which plays the sound itself). */
+function shutterControl(): HTMLElement {
+  const fail = (e: unknown) => report(String(e));
+  const sw = toggle("Screenshot sound", true, (on) => void setShutter(on).then(() => on && testShutter(), fail));
+  void shutterOn().then((on) => (sw.checked = on), () => {});
+  return h("div", { className: "row-actions" }, button("Test", () => void testShutter().catch(fail), "btn small"), sw);
+}
+
+/** Screenshot folder: shown in full, with Change… (native folder picker), Open and Reset (back to Pictures › Screenshots). */
+function captureFolder(): HTMLElement {
+  const path = h("code", { className: "sp-redirect cap-dir" }, "…");
+  const show = (p: string) => ((path.textContent = p), (path.title = p));
+  const fail = (e: unknown) => report(String(e));
+  invoke<string>("capture_dir").then(show, fail);
+  return h(
+    "div",
+    { className: "stack" },
+    path,
+    h(
+      "div",
+      { className: "row-actions" },
+      button("Change…", () => void invoke<string>("choose_capture_dir").then(show, fail), "btn small"),
+      button("Open", () => void invoke("open_capture_dir").catch(fail), "btn small"),
+      button("Reset", () => void invoke<string>("set_capture_dir", { dir: "" }).then((p) => (show(p), report("Back to Pictures › Screenshots")), fail), "btn small"),
+    ),
+  );
 }
 
 /** Screenshot hotkey: press the combination in the field (or type it, then Enter). Saved and applied at once. */
@@ -114,6 +143,12 @@ export function renderGeneral(root: HTMLElement): void {
         toggle("Hide in fullscreen apps", s.hideFullscreen, (on) => set("hide_fullscreen", on)),
       ),
       row("Screenshot hotkey", "Press it anywhere to drag an area, mark it up and copy or save it. E.g. Ctrl+Shift+S, or PrintScreen (turn off Windows' own PrintScreen snipping in Settings › Accessibility › Keyboard first).", captureHotkey()),
+      row(
+        "Screenshot sound",
+        "A camera shutter when a screenshot is copied or saved.",
+        shutterControl(),
+      ),
+      row("Screenshot folder", "Where “Save” puts screenshots. Default: Pictures › Screenshots in your user folder (Windows and Linux).", captureFolder()),
       row("Keep showing over these apps", "Stay visible even when one of these apps is fullscreen. Add its file name, or pick a running app.", exemptApps()),
       row(
         "Show on both displays",

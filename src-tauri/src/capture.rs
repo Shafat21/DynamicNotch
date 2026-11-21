@@ -85,7 +85,8 @@ pub fn image() -> Result<Vec<u8>, String> {
 pub fn ready(app: &AppHandle) -> Result<(), String> {
     let w = app.get_webview_window(LABEL).ok_or("No screenshot in progress")?;
     w.show().map_err(|e| e.to_string())?;
-    w.set_focus().map_err(|e| e.to_string())
+    let _ = w.set_focus(); // Windows may refuse focus to a background app: the overlay still works with the mouse, so never cancel over it
+    Ok(())
 }
 
 /// Hide the overlay (kept for the next capture) and drop the frozen image.
@@ -95,6 +96,105 @@ pub fn close(app: &AppHandle) {
         let _ = w.hide();
     }
     OPEN.store(false, Ordering::SeqCst);
+}
+
+// ---------- shutter sound ----------
+
+const SOUND_KEY: &str = "capture_sound";
+
+/// A camera shutter as a 16-bit mono WAV in memory: a low thunk under two short bursts of high-passed noise (click,
+/// clack), scaled to a clear volume. Made here (no sound file) and played with the Windows sound API, so it doesn't
+/// depend on a webview being allowed to play audio (a page without a recent click gets no sound).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn shutter_wav() -> Vec<u8> {
+    const RATE: u32 = 44_100;
+    let n_total = RATE as usize / 5; // 0.2 s
+    let mut s = vec![0f32; n_total];
+    let mut seed = 0x9E37_79B9u32;
+    let mut noise = || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        (seed >> 8) as f32 / 8_388_608.0 - 1.0 // 24 bits → -1..1
+    };
+    // (start s, length s, high-pass coefficient)
+    for (start, len, hp) in [(0.0f32, 0.05f32, 0.12f32), (0.075, 0.075, 0.2)] {
+        let a = (start * RATE as f32) as usize;
+        let n = ((len * RATE as f32) as usize).min(n_total - a);
+        let mut lp = 0f32;
+        for i in 0..n {
+            let env = (1.0 - i as f32 / n as f32).powi(3);
+            let x = noise();
+            lp += (x - lp) * hp;
+            s[a + i] += (x - lp) * env; // x - lp = what is above the cut-off: a click, not a hiss
+        }
+    }
+    for (i, v) in s.iter_mut().take(2_200).enumerate() {
+        let t = i as f32 / RATE as f32;
+        *v += (std::f32::consts::TAU * 160.0 * t).sin() * (1.0 - i as f32 / 2_200.0).powi(2) * 0.9; // 50 ms body under the first click
+    }
+    let peak = s.iter().fold(0f32, |m, v| m.max(v.abs())).max(1e-6);
+    let data: Vec<u8> = s.iter().flat_map(|v| (((v / peak) * 0.85 * 32767.0) as i16).to_le_bytes()).collect();
+    let mut w = Vec::with_capacity(44 + data.len());
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36 + data.len() as u32).to_le_bytes());
+    w.extend_from_slice(b"WAVEfmt ");
+    w.extend_from_slice(&16u32.to_le_bytes());
+    w.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    w.extend_from_slice(&1u16.to_le_bytes()); // mono
+    w.extend_from_slice(&RATE.to_le_bytes());
+    w.extend_from_slice(&(RATE * 2).to_le_bytes()); // bytes per second
+    w.extend_from_slice(&2u16.to_le_bytes()); // block align
+    w.extend_from_slice(&16u16.to_le_bytes()); // bits
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    w.extend_from_slice(&data);
+    w
+}
+
+/// Settings → General: is the shutter on (default yes)?
+pub fn sound_on(app: &AppHandle) -> bool {
+    app.state::<crate::AppState>().db.lock().unwrap().get(SOUND_KEY).ok().flatten().as_deref() != Some("0")
+}
+
+pub fn set_sound(app: &AppHandle, on: bool) -> Result<(), String> {
+    app.state::<crate::AppState>().db.lock().unwrap().set(SOUND_KEY, if on { "1" } else { "0" }).map_err(|e| e.to_string())
+}
+
+/// Play the shutter now (without waiting for it to end).
+pub fn shutter() {
+    os::shutter();
+}
+
+// ---------- where screenshots are saved ----------
+
+const DIR_KEY: &str = "capture_dir";
+
+/// Pictures/Screenshots: the user's Pictures folder (Windows: `C:\Users\you\Pictures`; Linux: the XDG pictures
+/// directory, usually `~/Pictures`), else `~/Pictures`. None when not even a home folder is known.
+pub fn default_dir(pictures: Option<std::path::PathBuf>, home: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    pictures.or_else(|| home.map(|h| h.join("Pictures"))).map(|p| p.join("Screenshots"))
+}
+
+/// The folder screenshots are saved to: the one chosen in Settings → General, else the default.
+pub fn save_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let chosen = app.state::<crate::AppState>().db.lock().unwrap().get(DIR_KEY).ok().flatten().filter(|s| !s.trim().is_empty());
+    if let Some(c) = chosen {
+        return Ok(std::path::PathBuf::from(c));
+    }
+    let p = app.path();
+    default_dir(p.picture_dir().ok(), p.home_dir().ok()).ok_or_else(|| "Couldn't find your Pictures folder. Choose a folder in Settings → General.".to_string())
+}
+
+/// Save screenshots in `dir` (an absolute path, created when missing); empty = back to the default folder.
+pub fn set_save_dir(app: &AppHandle, dir: &str) -> Result<(), String> {
+    let dir = dir.trim();
+    if !dir.is_empty() {
+        let p = std::path::Path::new(dir);
+        if !p.is_absolute() {
+            return Err("Pick a full folder path".into());
+        }
+        std::fs::create_dir_all(p).map_err(|e| format!("Can't use that folder: {e}"))?;
+    }
+    app.state::<crate::AppState>().db.lock().unwrap().set(DIR_KEY, dir).map_err(|e| e.to_string())
 }
 
 /// `png`: the finished image from the page. `copy` puts it on the clipboard, `save` writes it to
@@ -110,8 +210,8 @@ pub fn finish(app: &AppHandle, png: &[u8], copy: bool, save: bool) -> Result<Opt
         if !save {
             return Ok(None);
         }
-        let dir = app.path().picture_dir().map_err(|e| e.to_string())?.join("Screenshots");
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let dir = save_dir(app)?;
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Can't use the screenshots folder {}: {e}", dir.display()))?;
         let path = dir.join(file_name(chrono::Local::now()));
         std::fs::write(&path, png).map_err(|e| format!("Saving failed: {e}"))?;
         let text = path.to_string_lossy().into_owned();
@@ -125,7 +225,14 @@ pub fn finish(app: &AppHandle, png: &[u8], copy: bool, save: bool) -> Result<Opt
         }
         Ok(Some(text))
     })();
-    close(app);
+    // only a finished shot closes the overlay: on a failure (clipboard busy, disk full) it stays so the page can say
+    // what went wrong, instead of vanishing with nothing copied
+    if result.is_ok() {
+        if sound_on(app) {
+            shutter();
+        }
+        close(app);
+    }
     result
 }
 
@@ -225,6 +332,8 @@ mod os {
     pub fn copy(_png: &[u8]) -> Result<(), String> {
         Err("Copying screenshots works on Windows for now".into())
     }
+
+    pub fn shutter() {}
 }
 
 #[cfg(windows)]
@@ -244,6 +353,15 @@ mod os {
     use windows::Win32::UI::WindowsAndMessaging::{
         GetSystemMetrics, SetWindowDisplayAffinity, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
     };
+
+    /// Plays the shutter WAV from memory with the Windows sound API, asynchronously.
+    pub fn shutter() {
+        use windows::core::PCWSTR;
+        use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
+        static WAV: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new(); // must outlive the playback
+        let wav = WAV.get_or_init(super::shutter_wav);
+        let _ = unsafe { PlaySoundW(PCWSTR(wav.as_ptr().cast()), None, SND_MEMORY | SND_ASYNC | SND_NODEFAULT) };
+    }
 
     fn islands(app: &AppHandle) -> Vec<HWND> {
         crate::window::ISLANDS.iter().filter_map(|l| app.get_webview_window(l)).filter_map(|w| w.hwnd().ok()).map(|h| HWND(h.0 as _)).collect()
@@ -283,6 +401,8 @@ mod os {
 
     /// The overlay window, made once and kept hidden; building a webview is most of a cold start's delay.
     fn overlay(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
+        static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(()); // the start-up warm-up and a first press can race
+        let _one = BUILD.lock().unwrap();
         if let Some(w) = app.get_webview_window(LABEL) {
             return Ok(w);
         }
@@ -312,8 +432,8 @@ mod os {
 
     /// Freeze the desktop and show the overlay over it (hidden until the page has drawn it, see `ready`).
     pub fn start(app: &AppHandle) -> Result<(), String> {
-        if OPEN.swap(true, Ordering::SeqCst) {
-            return Ok(()); // already selecting
+        if OPEN.swap(true, Ordering::SeqCst) && app.get_webview_window(LABEL).and_then(|w| w.is_visible().ok()) == Some(true) {
+            return Ok(()); // already selecting. A flag left over with no overlay on screen (a capture that never finished) is stale: start again
         }
         let r = run(app);
         if r.is_err() {
@@ -456,6 +576,26 @@ mod tests {
         assert_eq!(to_image((-2000, -8, 100, 1088), -1920, 0, 3840, 1080), Some([0, 0, 2020, 1080])); // maximised: cut
         assert_eq!(to_image((5000, 0, 6000, 500), -1920, 0, 3840, 1080), None); // off screen
         assert_eq!(to_image((0, 0, 10, 500), 0, 0, 1920, 1080), None); // a sliver
+    }
+
+    #[test]
+    fn the_shutter_is_a_valid_loud_wav() {
+        let w = shutter_wav();
+        assert_eq!((&w[..4], &w[8..12]), (&b"RIFF"[..], &b"WAVE"[..]));
+        let data = &w[44..];
+        assert_eq!(u32::from_le_bytes(w[40..44].try_into().unwrap()) as usize, data.len()); // the header says how long the data is
+        assert_eq!(data.len(), 44_100 / 5 * 2); // 0.2 s of 16-bit mono
+        let peak = data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]).unsigned_abs()).max().unwrap();
+        assert!(peak > 20_000, "too quiet: peak {peak}");
+    }
+
+    #[test]
+    fn default_folder_is_pictures_screenshots_with_a_home_fallback() {
+        use std::path::PathBuf;
+        let p = |s: &str| Some(PathBuf::from(s));
+        assert_eq!(default_dir(p("/home/a/Pictures"), p("/home/a")), p("/home/a/Pictures/Screenshots"));
+        assert_eq!(default_dir(None, p("/home/a")), p("/home/a/Pictures/Screenshots")); // no XDG pictures dir known
+        assert_eq!(default_dir(None, None), None);
     }
 
     #[test]
