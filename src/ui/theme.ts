@@ -4,7 +4,7 @@ export type LayoutItem = { id: string; visible: boolean };
 export type Layout = { tabs: LayoutItem[]; home: LayoutItem[]; quick?: LayoutItem[] };
 export type Appearance = {
   theme: string; accent: string; iconStyle: string; badgeColors: Record<string, string>; shape: string;
-  density: string; radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string; view: "dashboard" | "compact";
+  density: string; radius: number; textScale: number; cardOpacity: number; tabLabels: string; openOn: string; view: "dashboard" | "compact"; borderFx: string;
   collapsedW: number; collapsedH: number; openW: number; openH: number;
 };
 export type Look = { appearance: Appearance; layout: Layout; theme: Theme };
@@ -14,7 +14,7 @@ const items = (ids: string[], hidden: string[] = []) => ids.map((id) => ({ id, v
 export const DEFAULT_LOOK: Look = {
   appearance: {
     theme: "Midnight", accent: "", iconStyle: "line", badgeColors: {}, shape: "pill", density: "comfortable",
-    radius: 20, textScale: 1, cardOpacity: 0.75, tabLabels: "always", openOn: "home", view: "dashboard", collapsedW: 180, collapsedH: 40, openW: 760, openH: 260,
+    radius: 20, textScale: 1, cardOpacity: 0.75, tabLabels: "always", openOn: "home", view: "dashboard", borderFx: "on", collapsedW: 180, collapsedH: 40, openW: 760, openH: 260,
   },
   layout: {
     tabs: items(["home", "music", "calendar", "pal", "timer", "launcher", "weather", "system", "tasks", "month", "notes", "reminders", "clipboard", "sound", "devices", "shelf"]),
@@ -44,7 +44,7 @@ export function applyTheme({ appearance: a, theme: t }: Look): void {
     "--radius": `${a.radius}px`, "--gap": `${gap}px`, "--pad": pad, "--text-scale": String(a.textScale),
   };
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
-  Object.assign(root.dataset, { icons: a.iconStyle, labels: a.tabLabels });
+  Object.assign(root.dataset, { icons: a.iconStyle, labels: a.tabLabels, borderFx: a.borderFx });
   paintBadges(a);
 }
 

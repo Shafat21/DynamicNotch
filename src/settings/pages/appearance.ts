@@ -81,6 +81,7 @@ export function renderAppearance(root: HTMLElement): void {
       seg("Shape", "A floating pill or a notch joined to the top edge.", "shape", [["pill", "Pill"], ["notch", "Notch"]]),
       seg("Density", "Spacing inside cards.", "density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["airy", "Airy"]]),
       seg("Tab labels", "Text next to the tab icons.", "tabLabels", [["always", "Always"], ["active", "Active tab"], ["never", "Never"]]),
+      seg("Border animation", "The glowing border around the island while music or sound plays.", "borderFx", [["on", "On"], ["off", "Off"]]),
       seg("Open on", "Which tab the island shows when you hover it.", "openOn", OPEN_ON),
     ),
     section(

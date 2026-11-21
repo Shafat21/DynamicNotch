@@ -166,7 +166,7 @@ function geometry(): void {
 }
 
 const sizeChanged = () => {
-  const [w, h] = targetSize().map((v) => v * ui.scale);
+  const [w, h] = targetSize().map((v) => Math.round(v * ui.scale)); // same rounding as geometry(), else every refresh re-morphs
   return shell.style.getPropertyValue("--w") !== `${w}px` || shell.style.getPropertyValue("--h") !== `${h}px`;
 };
 

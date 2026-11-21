@@ -25,6 +25,8 @@ pub struct Appearance {
     pub open_h: f64,
     /// "dashboard" (tab bar + pages) or "compact" (the compact notch: one card at a time).
     pub view: String,
+    /// "on" / "off": the border animation around the island while music or sound plays.
+    pub border_fx: String,
 }
 
 impl Default for Appearance {
@@ -46,6 +48,7 @@ impl Default for Appearance {
             open_w: 760.0,
             open_h: 260.0,
             view: "dashboard".into(),
+            border_fx: "on".into(),
         }
     }
 }
@@ -127,6 +130,7 @@ pub fn sanitize(a: Appearance) -> Appearance {
         tab_labels: one_of(a.tab_labels, &["always", "active", "never"], &d.tab_labels),
         open_on: one_of(a.open_on, &["home", "last"], &d.open_on),
         view: one_of(a.view, &["dashboard", "compact"], &d.view),
+        border_fx: one_of(a.border_fx, &["on", "off"], &d.border_fx),
         collapsed_w: clamp(a.collapsed_w, 140.0, 320.0, d.collapsed_w),
         collapsed_h: clamp(a.collapsed_h, 28.0, 48.0, d.collapsed_h),
         open_w: clamp(a.open_w, 560.0, 1000.0, d.open_w),
@@ -212,6 +216,14 @@ pub fn save(db: &Db, a: &Appearance, l: &Layout) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn border_fx_defaults_on_and_rejects_unknown() {
+        let d = Appearance::default();
+        assert_eq!(d.border_fx, "on");
+        assert_eq!(merge_patch(&d, &json!({"borderFx": "weird"})).border_fx, "on");
+        assert_eq!(merge_patch(&d, &json!({"borderFx": "off"})).border_fx, "off");
+    }
 
     #[test]
     fn view_defaults_and_rejects_unknown() {
