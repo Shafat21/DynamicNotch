@@ -32,6 +32,7 @@ pub fn show_settings(app: &AppHandle) -> tauri::Result<()> {
         return w.set_focus();
     }
     tauri::WebviewWindowBuilder::new(app, "settings", tauri::WebviewUrl::App("settings.html".into()))
+        .additional_browser_args(crate::window::BROWSER_ARGS)
         .title("Dynamic Notch Island Settings")
         .inner_size(900.0, 640.0)
         .min_inner_size(760.0, 520.0)

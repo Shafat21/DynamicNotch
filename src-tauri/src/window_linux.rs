@@ -8,18 +8,13 @@ use super::Rect;
 use crate::AppState;
 use gtk::cairo::{RectangleInt, Region};
 use gtk::prelude::WidgetExt;
-use tauri::{AppHandle, Manager, Monitor, WebviewWindow};
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 pub fn setup(app: &AppHandle, win: &WebviewWindow) -> tauri::Result<()> {
     super::place(app)?;
     input_region(win, None); // nothing takes clicks until the page reports where the island is
     win.show()?;
     super::place(app) // X11 window managers may move a window when it is mapped
-}
-
-/// Below the top panel (GNOME's top bar, KDE's panel).
-pub fn top_y(m: &Monitor) -> i32 {
-    m.work_area().position.y
 }
 
 pub fn set_hit_rect(app: &AppHandle, label: &str, rect: Rect) {

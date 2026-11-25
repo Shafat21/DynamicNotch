@@ -8,6 +8,11 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition};
 
+/// WebView2 flags for every window (they share one browser process, so they must match `tauri.conf.json`):
+/// Tauri's defaults, plus the GPU and network services inside the browser process instead of 2 extra processes
+/// (~60 MB). Crashpad stays: the WebView2 runtime always starts it. Ignored on Linux (WebKitGTK).
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --in-process-gpu --enable-features=NetworkServiceInProcess2";
+
 #[cfg(windows)]
 #[path = "window_windows.rs"]
 mod os;
@@ -109,8 +114,6 @@ fn place_on(app: &AppHandle, label: &str, i: usize, s: &crate::db::Settings, mon
     let pill = if side { (40.0, 120.0) } else { (180.0, 40.0) };
     let work = (wa.position.x as f64, wa.position.y as f64, wa.size.width as f64, wa.size.height as f64);
     let (x, y, anchor) = placement::window_pos(p, work, (w * sf, h * sf), (pill.0 * ui * sf, pill.1 * ui * sf));
-    // the top edge hangs from the monitor's very top (over a top taskbar), as before
-    let y = if p.edge == Edge::Top { os::top_y(m) as f64 } else { y };
     // move first, so the logical size below uses the target monitor's scale factor
     win.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))?;
     win.set_size(LogicalSize::new(w, h))?;
@@ -132,5 +135,14 @@ mod tests {
         let r = Rect { x: 10.0, y: 0.0, w: 100.0, h: 40.0 };
         assert!(r.contains(10.0, 0.0) && r.contains(110.0, 40.0) && r.contains(50.0, 20.0));
         assert!(!r.contains(9.9, 20.0) && !r.contains(50.0, 40.1));
+    }
+}
+
+#[cfg(test)]
+mod browser_args_tests {
+    #[test]
+    fn conf_uses_the_same_webview2_flags() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(conf["app"]["windows"][0]["additionalBrowserArgs"], super::BROWSER_ARGS);
     }
 }

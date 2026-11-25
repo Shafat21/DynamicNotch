@@ -3,7 +3,7 @@
 use super::{evt, Rect, ISLANDS};
 use crate::AppState;
 use std::{collections::HashMap, thread, time::Duration};
-use tauri::{AppHandle, Emitter, Manager, Monitor, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 /// Top-centre of the chosen monitor; clicks pass through until the cursor reaches the island.
 pub fn setup(app: &AppHandle, win: &WebviewWindow) -> tauri::Result<()> {
@@ -12,11 +12,6 @@ pub fn setup(app: &AppHandle, win: &WebviewWindow) -> tauri::Result<()> {
     win.show()?;
     spawn(app.clone());
     Ok(())
-}
-
-/// The island hangs from the very top of the monitor (over the taskbar if it is on top).
-pub fn top_y(m: &Monitor) -> i32 {
-    m.position().y
 }
 
 /// `label`: which island window the rect belongs to (each page reports its own).

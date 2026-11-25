@@ -89,11 +89,11 @@ pub fn ready(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Hide the overlay (kept for the next capture) and drop the frozen image.
+/// Close the overlay and drop the frozen image: the webview exists only while a screenshot is being taken.
 pub fn close(app: &AppHandle) {
     *SHOT.lock().unwrap() = None;
     if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.hide();
+        let _ = w.destroy();
     }
     OPEN.store(false, Ordering::SeqCst);
 }
@@ -317,10 +317,7 @@ pub fn bind_saved(app: &AppHandle) {
 }
 
 #[cfg(windows)]
-pub use os::{prewarm, start};
-
-#[cfg(not(windows))]
-pub fn prewarm(_app: &AppHandle) {}
+pub use os::start;
 
 #[cfg(not(windows))]
 pub fn start(_app: &AppHandle) -> Result<(), String> {
@@ -399,15 +396,16 @@ mod os {
         Ok(buf)
     }
 
-    /// The overlay window, made once and kept hidden; building a webview is most of a cold start's delay.
+    /// The overlay window, made for each screenshot (hidden until the page has drawn it) and destroyed by `close`.
     fn overlay(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
-        static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(()); // the start-up warm-up and a first press can race
+        static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(()); // two quick presses can race
         let _one = BUILD.lock().unwrap();
         if let Some(w) = app.get_webview_window(LABEL) {
             return Ok(w);
         }
         WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("capture.html".into()))
             .title("Screenshot")
+            .additional_browser_args(crate::window::BROWSER_ARGS)
             .decorations(false)
             .resizable(false)
             .always_on_top(true)
@@ -417,17 +415,6 @@ mod os {
             .focused(false)
             .build()
             .map_err(|e| e.to_string())
-    }
-
-    /// App start: make the overlay now, so the first screenshot is as quick as the rest.
-    pub fn prewarm(app: &AppHandle) {
-        let app = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(3)); // after the islands are up
-            if let Err(e) = overlay(&app) {
-                eprintln!("screenshot overlay: {e}");
-            }
-        });
     }
 
     /// Freeze the desktop and show the overlay over it (hidden until the page has drawn it, see `ready`).

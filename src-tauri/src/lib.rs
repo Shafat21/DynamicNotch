@@ -158,7 +158,7 @@ pub fn run() {
             monitors::spawn_all(app.handle().clone());
             bridge::spawn(app.handle().clone());
             dictation::spawn(app.handle().clone());
-            capture::bind_saved(app.handle()); capture::prewarm(app.handle()); // after dictation: it registers the global-shortcut plugin
+            capture::bind_saved(app.handle()); // after dictation: it registers the global-shortcut plugin
             notetaker::sweep(app.handle()); // leftover call audio from a crash or kill
             Ok(())
         })
